@@ -1,0 +1,338 @@
+---
+description: This rule provides comprehensive best practices for using Kustomize and Helm for managing Kubernetes applications, covering configuration, organization, security, and deployment.
+globs: kustomization.yaml,*.yaml,*.yml,Chart.yaml,values.yaml
+---
+# Kustomize and Helm Best Practices
+
+This document outlines a collection of guidelines, style suggestions, and tips for effectively using Kustomize and Helm to manage Kubernetes configurations and applications. It emphasizes clarity, maintainability, security, and efficient deployment.
+
+## 1. Kustomize Best Practices
+
+Kustomize is a native Kubernetes configuration management tool that lets you customize raw, template-free YAML files for multiple purposes, leaving the original YAML untouched.
+
+### 1.1 Kustomization File Structure and Organization
+
+- **Base Kustomizations:**
+  - Create `base` directories for common, reusable configurations that define the core application. These should contain the foundational deployments, services, configmaps, etc., that are common across environments.
+  - Keep `base` configurations as generic as possible, avoiding environment-specific values.
+  - Example: `config/kustomize/base/kustomization.yaml`, `config/kustomize/base/deployment.yaml`, `config/kustomize/base/service.yaml`
+
+- **Overlay Kustomizations:**
+  - Create `overlays` directories for environment-specific customizations (e.g., `dev`, `staging`, `prod`).
+  - Each overlay should reference a `base` and then apply specific patches, strategic merge patches, or resource modifications for that environment.
+  - Example: `config/kustomize/overlays/dev/kustomization.yaml`, `config/kustomize/overlays/prod/kustomization.yaml`
+
+- **Directory Naming:**
+  - Use clear, descriptive directory names for `base` and `overlays` (e.g., `application-name/base`, `application-name/overlays/environment-name`).
+
+Example Project Structure:
+
+my-kubernetes-project/
+├── config/
+│   └── kustomize/
+│       ├── base/
+│       │   ├── kustomization.yaml
+│       │   ├── deployment.yaml
+│       │   ├── service.yaml
+│       │   └── configmap.yaml
+│       └── overlays/
+│           ├── dev/
+│           │   ├── kustomization.yaml
+│           │   ├── k8s-patches/
+│           │   │   └── replica-count.yaml # patch to change replica count
+│           │   └── new-resource.yaml # dev-specific resource
+│           └── prod/
+│               ├── kustomization.yaml
+│               ├── k8s-patches/
+│               │   └── hpa-prod.yaml # HPA for prod
+│               └── secrets.yaml # Prod-specific secrets (handled securely)
+└── README.md
+
+### 1.2 Resource References and Patches
+
+- **Referencing Resources:**
+  - In `kustomization.yaml`, always list all resources explicitly using their file paths.
+  - Prefer relative paths for resources within the same `base` or `overlay`.
+
+- **Strategic Merge Patches:**
+  - Use strategic merge patches (`patchesStrategicMerge`) for modifying existing fields within resources. This is ideal for adding labels, annotations, or changing simple field values.
+  - Ensure the patch file contains only the fields you intend to modify, along with the `apiVersion`, `kind`, `metadata.name`, and `metadata.namespace` to identify the target resource.
+
+- **JSON Patches (JSONPatch):**
+  - Use JSON patches (`patchesJson6902`) for more complex modifications, such as adding, removing, or replacing array elements, or making precise changes to nested structures that strategic merge patches can't handle.
+  - JSON patches are more verbose but offer finer-grained control.
+
+- **Patching from Overlays:**
+  - Overlays should apply patches to resources defined in their base. Avoid duplicating entire resource definitions in overlays if a patch suffices.
+
+### 1.3 Generators and Transformers
+
+- **ConfigMapGenerator and SecretGenerator:**
+  - Use `configMapGenerator` and `secretGenerator` to create ConfigMaps and Secrets from files or literal values. This ensures that changes to source files automatically trigger updates to the ConfigMaps/Secrets, generating new, unique names for them and allowing for rolling updates of dependent deployments.
+  - Avoid directly defining ConfigMaps and Secrets with fixed names if their content changes frequently, as this can lead to stale data in pods unless carefully managed.
+
+- **NamePrefix/NameSuffix:**
+  - Use `namePrefix` or `nameSuffix` in `kustomization.yaml` to easily add a prefix or suffix to all generated resource names. This is useful for distinguishing resources across environments (e.g., `dev-my-app`, `prod-my-app`).
+
+- **CommonLabels/CommonAnnotations:**
+  - Leverage `commonLabels` and `commonAnnotations` to automatically apply labels and annotations to all resources managed by a kustomization. This is excellent for applying environment labels, team labels, or common monitoring annotations.
+
+### 1.4 Immutability and Versioning
+
+- **Immutable Configuration:**
+  - Aim for immutable configuration where possible. When a ConfigMap or Secret generated by `configMapGenerator`/`secretGenerator` changes, Kustomize generates a new name. This allows for controlled rolling updates and avoids accidental in-place modifications that might not propagate correctly.
+
+- **Version Control:**
+  - Store all Kustomize `base` and `overlay` configurations in version control (e.g., Git).
+  - Use Git tags or branches to manage different versions of your configurations.
+
+### 1.5 Advanced Kustomize Features
+
+- **Components:**
+  - For reusable sets of transformations or resources that are not full `bases`, consider Kustomize components. They allow sharing transformations across multiple bases or overlays without duplicating code.
+
+- **Crds:**
+  - Define Custom Resource Definitions (CRDs) in your base Kustomization if they are part of your application's core.
+
+- **Remote Bases:**
+  - Kustomize allows referencing remote Git repositories as bases. While powerful, use this cautiously. Ensure the remote repository is stable and versioned to prevent unexpected changes. For production, consider vendoring remote bases or using a GitOps approach that controls the exact commit.
+
+### 1.6 Kustomize Anti-Patterns
+
+- **Duplicating Resources:**
+  - Avoid copying and pasting entire resource YAMLs between overlays. Use patches and generators to customize resources from a single base.
+
+- **Overly Complex Patches:**
+  - If a patch becomes very large or complex, consider if the base structure is too rigid or if a different Kustomize feature (like a component or a more targeted strategic merge) would be better.
+
+- **Mixing Environment-Specific Data in Base:**
+  - Do not include environment-specific values (e.g., production replica counts) directly in your `base` kustomization. These belong in overlays.
+
+- **Using Kustomize for Templating:**
+  - Kustomize is for customization, not templating. If you need extensive variable substitution or complex conditional logic, Helm might be a better fit, or consider combining Kustomize with a separate templating engine before Kustomize.
+
+## 2. Helm Best Practices
+
+Helm is a package manager for Kubernetes that helps you define, install, and upgrade even the most complex Kubernetes applications. Helm Charts are packages of pre-configured Kubernetes resources.
+
+### 2.1 Chart Structure and Organization
+
+- **Chart.yaml:**
+  - Clearly define `name`, `version`, `apiVersion`, `appVersion`, and `description`.
+  - Use semantic versioning for `version`.
+  - Add maintainers and sources for better discoverability and support.
+
+- **values.yaml:**
+  - This is the primary mechanism for users to configure your chart.
+  - Provide sensible defaults for all configurable parameters.
+  - Organize `values.yaml` logically with clear comments for each parameter, explaining its purpose and valid options.
+  - Group related values under logical headings.
+
+- **templates/ Directory:**
+  - Contains Kubernetes manifest templates.
+  - Separate concerns into different files (e.g., `templates/deployment.yaml`, `templates/service.yaml`, `templates/configmap.yaml`).
+  - Use `_helpers.tpl` for reusable Go template functions and partials.
+
+- **charts/ Directory:**
+  - For managing chart dependencies. Use `dependencies` in `Chart.yaml` and `helm dependency update` to manage them. Avoid manually placing charts in this directory.
+
+- **charts/README.md:**
+  - Provide comprehensive documentation on how to use, configure, and install your chart. Include examples for `helm install` and `values.yaml` overrides.
+
+```text
+Example Chart Structure:
+
+my-helm-chart/
+├── Chart.yaml
+├── values.yaml
+├── templates/
+│   ├── _helpers.tpl
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   ├── configmap.yaml
+│   └── ingress.yaml
+├── charts/ # (managed by helm dependency update)
+├── crds/ # (if your chart manages CRDs)
+└── README.md
+```
+
+### 2.2 Templating and Variables
+
+- **Go Template Syntax:**
+  - Understand basic Go template syntax (`{{ .Values.myValue }}`, `{{ include "my-chart.fullname" . }}`, `{{- if .Values.enabled }}`)
+  - Use `{{-` and `-}}` to trim whitespace for cleaner generated YAML.
+
+- **Dot Notation (`.`) Context:**
+  - Be mindful of the current context (`.`). Use `$` to refer to the root context when nested.
+  - `{{ .Release.Name }}`: The name of the release.
+  - `{{ .Release.Namespace }}`: The namespace of the release.
+  - `{{ .Chart.Name }}`: The chart's name.
+  - `{{ .Chart.Version }}`: The chart's version.
+
+- **Functions and Pipelines:**
+  - Leverage built-in Helm functions (e.g., `quote`, `default`, `tpl`, `nindent`, `toYaml`).
+  - Use pipelines (`|`) for chaining functions.
+
+- **Conditional Logic:**
+  - Use `{{- if .Values.myToggle }}` and `{{- end }}` to conditionally render blocks of YAML based on `values.yaml`.
+
+- **Iterating (`range`):**
+  - Use `{{- range $key, $value := .Values.myList }}` to iterate over lists or maps in `values.yaml`.
+
+### 2.3 Values Management
+
+- **Sensible Defaults:**
+  - Every configurable parameter in `values.yaml` should have a sensible default that allows the chart to work out-of-the-box.
+
+- **Schema Validation (Helm 3.5+):**
+  - Use `values.schema.json` to define a JSON schema for your `values.yaml`. This provides strong validation and better user experience when configuring the chart.
+
+- **Overriding Values:**
+  - Educate users on how to override values using `--set`, `--set-string`, `--set-file`, or `-f values.yaml`.
+  - For production deployments, strongly recommend using dedicated `values.yaml` files for each environment, managed in version control.
+
+- **Sensitive Data:**
+  - **NEVER** store sensitive data (passwords, API keys) directly in `values.yaml`.
+  - Use Kubernetes Secrets with external secret management solutions (e.g., Vault, Azure Key Vault, AWS Secrets Manager, Google Secret Manager) or tools like `helm secrets` (SOPS) to encrypt secrets at rest and decrypt them at deployment time.
+  - If using `helm secrets`, document clearly how users should manage their secrets files.
+
+### 2.4 Chart Dependencies
+
+- **`Chart.yaml` `dependencies`:**
+  - Declare all external chart dependencies in `Chart.yaml`'s `dependencies` section.
+  - Specify `repository` and `version` for each dependency.
+  - Use `alias` if you need to install the same chart multiple times with different configurations.
+
+- **`helm dependency update`:**
+  - Always use `helm dependency update` to fetch and manage chart dependencies. Do not manually modify the `charts/` directory.
+
+- **Subchart Values:**
+  - Configure subcharts by nesting their values under their name in the parent `values.yaml` (e.g., `my-subchart: { replicaCount: 2 }`).
+
+### 2.5 Release Management and Upgrades
+
+- **Immutable Releases:**
+  - Treat Helm releases as immutable. When updating, create a new release version rather than modifying an existing one in place manually.
+
+- **Upgrade Strategy:**
+  - Document your chart's upgrade strategy. Consider `crd-install` hooks for CRDs.
+  - Test upgrades thoroughly from previous versions to ensure smooth transitions.
+
+- **Hooks:**
+  - Use Helm hooks (e.g., `pre-install`, `post-install`, `pre-upgrade`, `post-upgrade`, `pre-delete`, `post-delete`) for actions before or after main manifest deployment.
+  - Use hooks sparingly and only when necessary, as they can complicate the release lifecycle.
+
+- **Rollbacks:**
+  - Ensure your chart supports safe rollbacks. Test rollback scenarios.
+
+### 2.6 Chart Testing
+
+- **Linting:**
+  - Use `helm lint` regularly to check for common issues and best practice violations in your chart.
+
+- **Unit Tests (`helm test`):**
+  - Write `helm test` manifests to run simple tests against your deployed application (e.g., check if a service is reachable, if a pod is running). These run inside the cluster.
+
+- **Integration Tests:**
+  - Beyond `helm test`, use dedicated integration testing frameworks (e.g., Testify, Terratest with Go) to deploy your chart to a real cluster and verify its behavior.
+
+- **Chart Template Testing (`helm template`):**
+  - Use `helm template --debug --dry-run` to inspect the rendered Kubernetes manifests without deploying them. This is crucial for debugging template logic.
+  - Consider using tools like `kubeval` or `conftest` to validate the generated YAML against Kubernetes schemas or custom policies.
+
+### 2.7 Helm Anti-Patterns
+
+- **Over-Templating:**
+  - Avoid excessive use of `if/else` conditions and complex template logic that makes the chart difficult to read and maintain. Simplify where possible.
+
+- **Hardcoding Values:**
+  - Do not hardcode values directly into Kubernetes manifests within `templates/`. All configurable values should come from `values.yaml`.
+
+- **Large `values.yaml`:**
+  - If your `values.yaml` becomes excessively large and unwieldy, consider splitting the chart into multiple, smaller subcharts or breaking down the application into separate deployments.
+
+- **Secrets in `values.yaml`:**
+  - As stated, never commit sensitive information directly into `values.yaml`.
+
+- **Ignoring `helm lint` and `helm test`:**
+  - These tools are invaluable for catching errors early. Integrate them into your CI/CD pipeline.
+
+- **Manual `charts/` Management:**
+  - Rely on `helm dependency update` for managing subcharts.
+
+## 3. General Best Practices (Applicable to both Kustomize and Helm)
+
+### 3.1 Naming Conventions
+
+- **Resource Names:**
+  - Use consistent, descriptive, and lowercase names for Kubernetes resources (e.g., `my-app-deployment`, `my-app-service`).
+  - Follow Kubernetes naming conventions where applicable.
+
+- **Labels and Annotations:**
+  - Use labels consistently for identification, filtering, and organizational purposes (e.g., `app: my-app`, `env: dev`, `tier: frontend`).
+  - Use annotations for non-identifying metadata (e.g., `kubernetes.io/change-cause`, `prometheus.io/scrape: "true"`).
+
+### 3.2 Immutability
+
+- **Immutable Containers:**
+  - Build container images that are immutable. Any changes require building and deploying a new image.
+
+- **Immutable Infrastructure:**
+  - For higher environments, aim for immutable infrastructure where changes are applied by deploying entirely new resources rather than in-place modifications.
+
+### 3.3 Security
+
+- **Least Privilege:**
+  - Apply the principle of least privilege to service accounts, roles, and role bindings. Grant only the necessary permissions.
+
+- **Secrets Management:**
+  - Never hardcode secrets in YAML files, Kustomize patches, or Helm values. Use Kubernetes Secrets combined with external secret management tools or encryption tools.
+
+- **Pod Security Standards (PSS):**
+  - Adhere to Pod Security Standards to restrict pod capabilities, especially in production.
+
+- **Image Scanning:**
+  - Integrate container image scanning into your CI/CD pipeline to identify vulnerabilities early.
+
+- **Network Policies:**
+  - Implement Kubernetes Network Policies to control traffic flow between pods and to/from external endpoints.
+
+### 3.4 GitOps Workflow
+
+- **Single Source of Truth:**
+  - Your Git repository should be the single source of truth for your desired cluster state.
+
+- **Automated Reconciliation:**
+  - Use GitOps tools (e.g., Argo CD, Flux CD) to automatically synchronize the cluster state with the Git repository.
+
+- **Pull Request Driven:**
+  - All changes to the cluster should go through a pull request review process.
+
+### 3.5 Documentation
+
+- **Clear READMEs:**
+  - Every Kustomize base, overlay, and Helm chart should have a comprehensive `README.md` explaining its purpose, how to use it, configuration options, and any dependencies.
+
+- **Architecture Diagrams:**
+  - Include diagrams to illustrate the application's architecture and how it interacts with Kubernetes components.
+
+- **Troubleshooting Guide:**
+  - Provide common troubleshooting steps and known issues.
+
+### 3.6 CI/CD Integration
+
+- **Automated Validation:**
+  - Integrate `kustomize build --dry-run`, `helm lint`, and `helm template` into your CI pipeline to validate configurations before deployment.
+
+- **Automated Deployment:**
+  - Automate the deployment process using CI/CD pipelines or GitOps tools.
+
+- **Testing:**
+  - Incorporate unit, integration, and end-to-end tests into your CI/CD pipeline to ensure the correctness and stability of your deployments.
+
+## Bibliography
+
+- Kustomize Documentation: [https://kustomize.io/docs/](https://kustomize.io/docs/)
+- Helm Documentation: [https://helm.sh/docs/](https://helm.sh/docs/)
+- Kubernetes Best Practices: [https://kubernetes.io/docs/concepts/configuration/overview/](https://kubernetes.io/docs/concepts/configuration/overview/)
+- Helm Chart Best Practices: [https://helm.sh/docs/chart_best_practices/](https://helm.sh/docs/chart_best_practices/)

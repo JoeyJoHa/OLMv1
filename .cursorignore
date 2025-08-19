@@ -1,0 +1,107 @@
+# Dependencies and build artifacts
+node_modules/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Environment and configuration files
+.env*
+*.config.js
+*.config.ts
+*.config.json
+
+# Generated files
+coverage/
+.nyc_output/
+*.log
+*.pid
+*.seed
+
+# Cache directories
+.cache/
+.parcel-cache/
+.npm/
+.eslintcache/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Large binary files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.iso
+*.img
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Docker and container files
+Dockerfile*
+docker-compose*.yml
+
+# Kubernetes manifests (if they're large or auto-generated)
+*.kubeconfig
+
+# Helm charts (if they're large)
+charts/*.tgz
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Rust
+target/
+
+# Documentation build outputs
+docs/_build/
+docs/site/
+
+# Test outputs
+test-results/
+junit.xml
+coverage.xml
+
+# Local development files
+.local/
+local/
