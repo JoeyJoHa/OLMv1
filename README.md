@@ -56,3 +56,161 @@ sequenceDiagram
         OC->>API: Update CR Status
     end
 ```
+
+## Commands
+
+Using ‘jq’ or 'yq' tool to parse the output, and ‘opm’ or ‘curl’ to interact with the container registry image or the ClusterCatalog(Expose the service with a passthrough route)
+**Note:** Most of the command are shown with opm, however interaction with catalogd using the same filter should work as well.
+
+1. Get all available packages within a catalogd or image catalog.
+
+```bash
+opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
+  | jq -s '.[] | select( .schema == "olm.package") | .name'
+
+#Openshift Route
+curl -k https://catalogd.apps.example.com/catalogs/openshift-redhat-operators/api/v1/all \
+  | jq -s '.[] | select( .schema == "olm.package") | .name'
+```
+
+2. Query available channels for an operator.
+
+```bash
+opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
+  | jq -s '.[] | select( .schema == "olm.channel") | select( .package == "quay-operator") | .name'
+```
+
+3. Querry available versions for each channel.
+
+```bash
+opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
+  | jq -s '.[] | select(.schema == "olm.channel") | select(.package == "quay-operator") | 
+  { 
+    "Channel": .name,
+    "Versions": [.entries[].name] | sort
+  }
+'
+```
+
+4. Query spefific bundle using package and package version filters.
+
+```bash
+opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
+  | jq -s '.[] 
+  | select( .schema == "olm.bundle" and any(.properties[] ; .type == "olm.package" and .value.packageName == "quay-operator" and .value.version == "3.10.13"))'
+```
+
+5. Query to see if the operator is comptaible with OLMv1 (InstallMode == AllNamespaces)
+
+```bash
+opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 | jq -s '.[] | select( .schema == "olm.bundle" and any(.properties[] ; .type == "olm.package" and .value.packageName == "quay-operator" and .value.version == "3.10.13")) | {name, image, SupportAllNamespaces: (.properties[] | select(.type == "olm.csv.metadata").value.installModes[] | select(.type == "AllNamespaces").supported)
+```
+
+6.Query the required permissions by the opearator.
+**Note:** clusterPermissions and permissions should be reviewed.
+
+For Quay .spec.clusterPermissions doesn't exist.
+
+```bash
+opm render registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
+  | jq -r '.properties[] | select(.type == "olm.bundle.object") | .value.data' \
+  | base64 -d \
+  | jq 'select(.kind == "ClusterServiceVersion") | .spec.install.spec.permissions[].rules[]' \
+  | jq -s '.'
+```
+
+Export into a YAML:
+
+```bash
+opm render registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
+  | jq -r '.properties[] | select(.type == "olm.bundle.object") | .value.data' \
+  | base64 -d \
+  | jq -s 'map(select(.kind == "ClusterServiceVersion")) | .[].spec.install.spec.permissions[].rules[]' \
+  | jq -s '.' \
+  | yq -P '{"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role", "metadata": {"name": "example", "namespace": "example-ns"}, "rules": .}'
+```
+
+*Output:*
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: example
+  namespace: example-ns
+rules:
+  - apiGroups:
+      - quay.redhat.com
+    resources:
+      - quayregistries
+      - quayregistries/status
+    verbs:
+      - '*'
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - '*'
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+      - secrets
+      - configmaps
+      - serviceaccounts
+      - persistentvolumeclaims
+      - events
+    verbs:
+      - '*'
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - roles
+      - rolebindings
+    verbs:
+      - '*'
+  - apiGroups:
+      - route.openshift.io
+    resources:
+      - routes
+      - routes/custom-host
+    verbs:
+      - '*'
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - '*'
+  - apiGroups:
+      - objectbucket.io
+    resources:
+      - objectbucketclaims
+    verbs:
+      - '*'
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - prometheusrules
+      - servicemonitors
+    verbs:
+      - '*'
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - '*'
+```
