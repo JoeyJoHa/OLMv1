@@ -23,14 +23,16 @@ rules:
 - apiGroups: [rbac.authorization.k8s.io]
   resources: [clusterroles]
   verbs: [get, update, patch, delete]
-  resourceNames: ["quay-operator.v3.10-enbc1sr2haaygnpivaju01incsum9p8ynj8ubtzb53u"] # After the operator is installed, the controller cluster role name will be available. (oc get clusterrole | grep quay)
+#  resourceNames: [<controller cluster role name 1>] # After the operator is installed, the controller cluster role name will be available. (oc get clusterrole | grep quay)
+#  resourceNames: ["quay-operator.v3.10-enbc1sr2haaygnpivaju01incsum9p8ynj8ubtzb53u"] # After the operator is installed, the controller cluster role name will be available. (oc get clusterrole | grep quay)
 - apiGroups: [rbac.authorization.k8s.io]
   resources: [clusterrolebindings]
   verbs: [create, list, watch]
 - apiGroups: [rbac.authorization.k8s.io]
   resources: [clusterrolebindings]
   verbs: [get, update, patch, delete]
-  resourceNames: ["quay-operator.v3.10-enbc1sr2haaygnpivaju01incsum9p8ynj8ubtzb53u"] # After the operator is installed, the controller cluster role binding name will be available. (oc get clusterrolebinding | grep quay)
+#  resourceNames: [<controller cluster rolebinding name 1>] # After the operator is installed, the controller cluster role binding name will be available. (oc get clusterrolebinding | grep quay)
+#  resourceNames: ["quay-operator.v3.10-enbc1sr2haaygnpivaju01incsum9p8ynj8ubtzb53u"] # After the operator is installed, the controller cluster role binding name will be available. (oc get clusterrolebinding | grep quay)
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
