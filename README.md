@@ -169,9 +169,6 @@ oc get crd | grep quay.redhat.com
 
 # Verify operator deployment
 oc get deployment -n quay-operator
-
-# Check service account permissions
-oc auth can-i --as=system:serviceaccount:quay-operator:quay-operator-installer --list -n quay-operator
 ```
 
 ### Cleanup Process
