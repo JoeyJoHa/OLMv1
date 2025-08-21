@@ -57,13 +57,13 @@ sequenceDiagram
     participant FBC as File-Based Catalogs
     participant Registry as Container Registry
     participant NS as installNamespace
-    
+
     Note over Admin,API: Admin Creates Security Resources
     Admin->>API: Create Custom Role, RoleBinding
     Admin->>API: Create ServiceAccount
     Admin->>API: Bind ServiceAccount to Role
     Admin->>API: Apply ClusterExtension Manifest
-    
+
     Note over API,NS: OLMv1 Declarative Deployment Flow
     API->>OC: CR Created/Updated Event
     Note over OC: Controller Detects New CR
@@ -73,12 +73,12 @@ sequenceDiagram
     CD->>OC: Provide Bundle Metadata
     OC->>Registry: Pull Operator Bundle Image
     Registry->>OC: Return Bundle Container
-    
+
     Note over OC: Controller Uses ServiceAccount
     OC->>NS: Install CRDs
     OC->>NS: Deploy Operator Components
     OC->>NS: Deploy Operator Deployment
-    
+
     Note over NS: Operator Bundle Active
     loop Continuous Operation
         OC->>NS: Monitor Bundle Status
@@ -227,7 +227,7 @@ opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
 
 ```bash
 opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
-  | jq -s '.[] | select(.schema == "olm.channel") | select(.package == "quay-operator") | 
+  | jq -s '.[] | select(.schema == "olm.channel") | select(.package == "quay-operator") |
   { 
     "Channel": .name,
     "Versions": [.entries[].name] | sort
@@ -251,8 +251,8 @@ opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
 ```bash
 opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
   | jq -s '.[] | select(.schema == "olm.bundle" and any(.properties[] ; .type == "olm.package" and .value.packageName == "quay-operator" and .value.version == "3.10.13")) | {
-    name, 
-    image, 
+    name,
+    image,
     SupportAllNamespaces: (.properties[] | select(.type == "olm.csv.metadata").value.installModes[] | select(.type == "AllNamespaces").supported)
   }'
 ```
