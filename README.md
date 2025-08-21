@@ -7,6 +7,8 @@
 - [Key Components](#key-components)
 - [Deployment Flow](#deployment-flow)
 - [Sequence Diagram](#sequence-diagram)
+- [Project Structure](#project-structure)
+- [Deployment Process](#deployment-process)
 - [Command Reference](#command-reference)
   - [Package Discovery](#package-discovery)
   - [Channel Information](#channel-information)
@@ -14,7 +16,6 @@
   - [Bundle Filtering](#bundle-filtering)
   - [OLMv1 Compatibility](#olmv1-compatibility)
   - [Permission Analysis](#permission-analysis)
-- [Examples](#examples)
 
 ## Overview
 
@@ -86,6 +87,113 @@ sequenceDiagram
     end
 ```
 
+## Project Structure
+
+This project provides a structured approach for deploying OLMv1 operators with proper security and RBAC configuration:
+
+```tree
+OLMv1/
+├── README.md                           # This documentation
+├── quay-operator-csv.json              # Quay operator CSV analysis data
+├── Manifests/                          # Manual deployment YAML files
+│   ├── 00-namespace.yaml               # Namespace definition
+│   ├── 01-serviceaccount.yaml          # Service account for operator
+│   ├── 02-clusterrole.yaml             # Cluster role with least privilege
+│   ├── 03-clusterrolebinding.yaml      # Cluster role binding
+│   └── 04-clusterextension.yaml        # OLMv1 ClusterExtension
+├── .git/                               # Git repository
+├── .gitignore                          # Git ignore patterns
+├── .cursor/                            # Cursor IDE configuration
+└── .cursorignore                       # Cursor ignore patterns
+```
+
+## Deployment Process
+
+### Step-by-Step Deployment
+
+#### 1. Create Project/Namespace
+
+```bash
+# Create new project for the operator or apply namespace manifest.
+oc new-project quay-operator
+
+# Or use existing project
+oc project quay-operator
+```
+
+#### 2. Deploy Resources
+
+```bash
+
+# Deploy service account
+oc apply -f Manifests/01-serviceaccount.yaml
+
+# Deploy cluster role with least privilege
+oc apply -f Manifests/02-clusterrole.yaml
+
+# Create cluster role binding
+oc apply -f Manifests/03-clusterrolebinding.yaml
+```
+
+#### 3. Deploy Operator via ClusterExtension
+
+```bash
+# Apply the ClusterExtension manifest
+oc apply -f Manifests/04-clusterextension.yaml
+
+# Verify ClusterExtension creation
+oc get clusterextension quay-operator -n quay-operator
+
+# Check ClusterExtension status
+oc describe clusterextension quay-operator -n quay-operator
+```
+
+#### 4. Monitor Deployment Progress
+
+```bash
+# Watch operator deployment
+oc get pods -n quay-operator -w
+
+# Check operator logs
+oc logs -n quay-operator -l app.kubernetes.io/name=quay-operator
+
+# Monitor ClusterExtension status
+oc get clusterextension quay-operator -n quay-operator -o yaml
+```
+
+#### 5. Verify Installation
+
+```bash
+# Check if CRDs are installed
+oc get crd | grep quay.redhat.com
+
+# Verify operator deployment
+oc get deployment -n quay-operator
+
+# Check service account permissions
+oc auth can-i --as=system:serviceaccount:quay-operator:quay-operator-installer --list -n quay-operator
+```
+
+### Cleanup Process
+
+#### Remove Operator
+
+```bash
+# Delete ClusterExtension
+oc delete clusterextension quay-operator -n quay-operator
+
+# Wait for operator removal
+oc get pods -n quay-operator
+
+# Remove RBAC resources
+oc delete -f Manifests/03-clusterrolebinding.yaml
+oc delete -f Manifests/02-clusterrole.yaml
+oc delete -f Manifests/01-serviceaccount.yaml
+
+# Remove namespace (optional)
+oc delete project quay-operator
+```
+
 ## Command Reference
 
 This section provides practical commands for interacting with OLMv1 catalogs and analyzing operator bundles. Most commands use the `opm` tool, but equivalent `catalogd` interactions are also shown.
@@ -151,6 +259,8 @@ opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
 
 ### Permission Analysis
 
+**Note**: When analyzing operator permissions, always review both `clusterPermissions` and `permissions` sections. The Quay operator example above only shows `permissions` as it doesn't include `clusterPermissions`.
+
 **Query required permissions for an operator:**
 
 ```bash
@@ -172,96 +282,3 @@ opm render registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e
   | jq -s '.' \
   | yq -P '{"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role", "metadata": {"name": "example", "namespace": "example-ns"}, "rules": .}'
 ```
-
-## Examples
-
-### Generated Role Output
-
-The permission analysis command generates a Kubernetes Role resource. Here's an example output for the Quay operator:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: example
-  namespace: example-ns
-rules:
-  - apiGroups:
-      - quay.redhat.com
-    resources:
-      - quayregistries
-      - quayregistries/status
-    verbs:
-      - '*'
-  - apiGroups:
-      - apps
-    resources:
-      - deployments
-    verbs:
-      - '*'
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-      - services
-      - secrets
-      - configmaps
-      - serviceaccounts
-      - persistentvolumeclaims
-      - events
-    verbs:
-      - '*'
-  - apiGroups:
-      - ""
-    resources:
-      - namespaces
-    verbs:
-      - get
-      - watch
-      - list
-      - update
-      - patch
-  - apiGroups:
-      - rbac.authorization.k8s.io
-    resources:
-      - roles
-      - rolebindings
-    verbs:
-      - '*'
-  - apiGroups:
-      - route.openshift.io
-    resources:
-      - routes
-      - routes/custom-host
-    verbs:
-      - '*'
-  - apiGroups:
-      - autoscaling
-    resources:
-      - horizontalpodautoscalers
-    verbs:
-      - '*'
-  - apiGroups:
-      - objectbucket.io
-    resources:
-      - objectbucketclaims
-    verbs:
-      - '*'
-  - apiGroups:
-      - monitoring.coreos.com
-    resources:
-      - prometheusrules
-      - servicemonitors
-    verbs:
-      - '*'
-  - apiGroups:
-      - batch
-    resources:
-      - jobs
-    verbs:
-      - '*'
-```
-
----
-
-**Note**: When analyzing operator permissions, always review both `clusterPermissions` and `permissions` sections. The Quay operator example above only shows `permissions` as it doesn't include `clusterPermissions`.

@@ -1,0 +1,70 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: quay-operator-installer-clusterrole
+rules:
+- apiGroups: [olm.operatorframework.io] # For clusters that use OwnerReferencesPermissionEnforcement, the installer service account must be able to update finalizers on the ClusterExtension
+  resources: [clusterextensions/finalizers]
+  verbs: [update]
+  resourceNames: [quay-operator]
+  # Manage Quay CRDs
+- apiGroups: [apiextensions.k8s.io]
+  resources: [customresourcedefinitions]
+  verbs: [create, list, watch]
+- apiGroups: [apiextensions.k8s.io]
+  resources: [customresourcedefinitions]
+  verbs: [get, update, patch, delete]
+  # Scoped to the Quay CRDs in the bundle
+  resourceNames: [quayregistries.quay.redhat.com]
+# ClusterRoles and ClusterRoleBindings
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterroles]
+  verbs: [create, list, watch]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterroles]
+  verbs: [get, update, patch, delete]
+  resourceNames: ["quay-operator.v3.10-enbc1sr2haaygnpivaju01incsum9p8ynj8ubtzb53u"] # After the operator is installed, the controller cluster role name will be available. (oc get clusterrole | grep quay)
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterrolebindings]
+  verbs: [create, list, watch]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterrolebindings]
+  verbs: [get, update, patch, delete]
+  resourceNames: ["quay-operator.v3.10-enbc1sr2haaygnpivaju01incsum9p8ynj8ubtzb53u"] # After the operator is installed, the controller cluster role binding name will be available. (oc get clusterrolebinding | grep quay)
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: quay-operator-installer-rbac-clusterrole
+rules:
+  - apiGroups: ["quay.redhat.com"]
+    resources: ["quayregistries", "quayregistries/status"]
+    verbs: ["*"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "secrets", "serviceaccounts", "configmaps", "persistentvolumeclaims", "events"]
+    verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "watch", "list", "update", "patch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["*"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes", "routes/custom-host"]
+    verbs: ["*"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["*"]
+  - apiGroups: ["objectbucket.io"]
+    resources: ["objectbucketclaims"]
+    verbs: ["*"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheusrules", "servicemonitors"]
+    verbs: ["*"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["*"]

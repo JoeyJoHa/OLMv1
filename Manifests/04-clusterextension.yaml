@@ -12,5 +12,5 @@ spec:
         - stable-3.10
       packageName: quay-operator
       upgradeConstraintPolicy: CatalogProvided
-      version: 3.10.13
+      version: 3.10.13 #Version pinning
     sourceType: Catalog
