@@ -94,7 +94,10 @@ This project provides a structured approach for deploying OLMv1 operators with p
 ```tree
 OLMv1/
 ├── README.md                           # This documentation
-├── quay-operator-csv.json              # Quay operator CSV analysis data
+├── bundle/                             # Operator bundle files
+│   ├── ClusterServiceVersion.json      # Quay operator CSV
+│   ├── Service.json                    # Quay operator service
+│   └── CustomResourceDefinition.json   # Quay operator CRD
 ├── Manifests/                          # Manual deployment YAML files
 │   ├── 00-namespace.yaml               # Namespace definition
 │   ├── 01-serviceaccount.yaml          # Service account for operator

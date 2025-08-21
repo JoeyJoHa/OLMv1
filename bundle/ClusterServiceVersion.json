@@ -1,0 +1,480 @@
+{
+  "apiVersion": "operators.coreos.com/v1alpha1",
+  "kind": "ClusterServiceVersion",
+  "metadata": {
+    "annotations": {
+      "alm-examples": "[\n  {\n    \"apiVersion\": \"quay.redhat.com/v1\",\n    \"kind\": \"QuayRegistry\",\n    \"metadata\": {\n      \"name\": \"example-registry\"\n    },\n    \"spec\": {\n      \"components\": [\n        {\"kind\": \"clair\", \"managed\": true},\n        {\"kind\": \"postgres\", \"managed\": true},\n        {\"kind\": \"objectstorage\", \"managed\": true},\n        {\"kind\": \"redis\", \"managed\": true},\n        {\"kind\": \"horizontalpodautoscaler\", \"managed\": true},\n        {\"kind\": \"route\", \"managed\": true},\n        {\"kind\": \"mirror\", \"managed\": true},\n        {\"kind\": \"monitoring\", \"managed\": true},\n        {\"kind\": \"tls\", \"managed\": true},\n        {\"kind\": \"quay\", \"managed\": true},\n        {\"kind\": \"clairpostgres\", \"managed\": true}\n      ]\n    }\n  }\n]",
+      "capabilities": "Full Lifecycle",
+      "categories": "Integration & Delivery",
+      "containerImage": "registry.redhat.io/quay/quay-operator-rhel8@sha256:570151f46eb68e05dca59eddaa2943c28ae0681e2acc79bde35a3b46036ac2f7",
+      "createdAt": "2021-04-23T10:04:00Z",
+      "description": "Opinionated deployment of Red Hat on Kubernetes.",
+      "features.operators.openshift.io/disconnected": "true",
+      "features.operators.openshift.io/fips-compliant": "true",
+      "features.operators.openshift.io/proxy-aware": "true",
+      "features.operators.openshift.io/tls-profiles": "false",
+      "features.operators.openshift.io/token-auth-aws": "false",
+      "features.operators.openshift.io/token-auth-azure": "false",
+      "features.operators.openshift.io/token-auth-gcp": "false",
+      "olm.skipRange": ">=3.7.x <3.10.13",
+      "operators.openshift.io/infrastructure-features": "[\"disconnected\", \"proxy-aware\", \"fips\"]",
+      "operators.openshift.io/valid-subscription": "[\"OpenShift Platform Plus\", \"Red Hat Quay\"]",
+      "quay-version": "v3.10.13",
+      "repository": "https://github.com/quay/quay-operator",
+      "support": "Project Quay",
+      "tectonic-visibility": "ocs"
+    },
+    "labels": {
+      "operatorframework.io/arch.amd64": "supported",
+      "operatorframework.io/arch.ppc64le": "supported",
+      "operatorframework.io/arch.s390x": "supported",
+      "operatorframework.io/os.linux": "supported"
+    },
+    "name": "quay-operator.v3.10.13",
+    "namespace": "placeholder"
+  },
+  "spec": {
+    "customresourcedefinitions": {
+      "owned": [
+        {
+          "description": "Represents a full Quay registry installation.",
+          "displayName": "Quay Registry",
+          "kind": "QuayRegistry",
+          "name": "quayregistries.quay.redhat.com",
+          "resources": [
+            {
+              "kind": "Deployment"
+            },
+            {
+              "kind": "ReplicaSet"
+            },
+            {
+              "kind": "Pod"
+            },
+            {
+              "kind": "Secret"
+            },
+            {
+              "Kind": "Job"
+            },
+            {
+              "kind": "ConfigMap"
+            },
+            {
+              "kind": "ServiceAccount"
+            },
+            {
+              "kind": "PersistentVolumeClaim"
+            },
+            {
+              "kind": "Ingress"
+            },
+            {
+              "kind": "Route"
+            },
+            {
+              "kind": "Role"
+            },
+            {
+              "kind": "Rolebinding"
+            },
+            {
+              "kind": "HorizontalPodAutoscaler"
+            },
+            {
+              "kind": "ServiceMonitor"
+            },
+            {
+              "kind": "PrometheusRule"
+            }
+          ],
+          "specDescriptors": [
+            {
+              "description": "Name of the Quay config secret containing base configuration and custom SSL certificates.",
+              "displayName": "Config Bundle Secret",
+              "path": "configBundleSecret",
+              "x-descriptors": [
+                "urn:alm:descriptor:io.kubernetes:Secret"
+              ]
+            },
+            {
+              "description": "Declares how the Operator should handle supplemental Quay services.",
+              "displayName": "Components",
+              "path": "components",
+              "x-descriptors": [
+                "urn:alm:descriptor:com.tectonic.ui:advanced"
+              ]
+            },
+            {
+              "description": "The unique name of this type of component.",
+              "displayName": "Kind",
+              "path": "components[0].kind"
+            },
+            {
+              "description": "Indicates whether lifecycle of this component is managed by the Operator or externally.",
+              "displayName": "Managed",
+              "path": "components[0].managed"
+            }
+          ],
+          "statusDescriptors": [
+            {
+              "description": "The currently installed version of all Quay components.",
+              "displayName": "Current Version",
+              "path": "currentVersion"
+            },
+            {
+              "description": "Observed conditions of Quay components.",
+              "displayName": "Conditions",
+              "path": "conditions",
+              "x-descriptors": [
+                "urn:alm:descriptor:io.kubernetes.conditions"
+              ]
+            },
+            {
+              "description": "Externally accessible URL for container pull/push and web frontend.",
+              "displayName": "Registry Endpoint",
+              "path": "registryEndpoint",
+              "x-descriptors": [
+                "urn:alm:descriptor:org.w3:link"
+              ]
+            }
+          ],
+          "version": "v1"
+        }
+      ]
+    },
+    "description": "The Red Hat Quay Operator deploys and manages a production-ready\n[Red Hat Quay](https://www.openshift.com/products/quay) private container registry.\nThis operator provides an opinionated installation and configuration of Red Hat Quay.\nAll components required, including Clair, database, and storage, are provided in an\noperator-managed fashion. Each component may optionally be self-managed.\n\n## Operator Features\n\n* Automated installation of Red Hat Quay\n* Provisions instance of Redis\n* Provisions PostgreSQL to support both Quay and Clair\n* Installation of Clair for container scanning and integration with Quay\n* Provisions and configures RHOCS for supported registry object storage\n* Enables and configures Quay's registry mirroring feature\n\n## Prerequisites\n\nBy default, the Red Hat Quay operator expects RHOCS to be installed on the cluster to\nprovide the _ObjectBucketClaim_ API for object storage. For instructions installing and\nconfiguring the RHOCS Operator, see the \"Enabling OpenShift Container Storage\" in the\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html-single/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index#enabling_openshift_container_storage).\n\n## Simplified Deployment\n\nThe following example provisions a fully operator-managed deployment of Red Hat Quay,\nincluding all services necessary for production:\n\n```\napiVersion: quay.redhat.com/v1\nkind: QuayRegistry\nmetadata:\n  name: my-registry\n```\n\n## Documentation\n\nSee the\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index)\nfor more complex deployment scenarios and information.",
+    "displayName": "Red Hat Quay",
+    "icon": [
+      {
+        "base64data": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDM4IDM4Ij48ZGVmcz48c3R5bGU+LnV1aWQtMjNhM2I1ZTctNzc1NC00OTQ0LWJhMjgtZWU2NWE5NjFkZGI1e2ZpbGw6I2UwMDt9LnV1aWQtYWU1ZDVlZjMtYjIwYi00MDE5LWE0ZTctZWRhY2ZhZWE0YzBme2ZpbGw6I2ZmZjt9LnV1aWQtMjI4OTNjYTEtMDk4Yi00YTJhLTlkNDUtM2NiYzViOTg2OWEwe2ZpbGw6IzRkNGQ0ZDt9PC9zdHlsZT48L2RlZnM+PGcgaWQ9InV1aWQtMTZkZjUyMDYtY2E2NC00MWRkLWI1N2UtNTVjNjYzNzBjYjk5Ij48cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIHJ4PSI5IiByeT0iOSIvPjxwYXRoIGNsYXNzPSJ1dWlkLTIyODkzY2ExLTA5OGItNGEyYS05ZDQ1LTNjYmM1Yjk4NjlhMCIgZD0ibTI4LDIuMjVjNC4yNzMzNiwwLDcuNzUsMy40NzY2NCw3Ljc1LDcuNzV2MThjMCw0LjI3MzM2LTMuNDc2NjQsNy43NS03Ljc1LDcuNzVIMTBjLTQuMjczMzYsMC03Ljc1LTMuNDc2NjQtNy43NS03Ljc1VjEwYzAtNC4yNzMzNiwzLjQ3NjY0LTcuNzUsNy43NS03Ljc1aDE4bTAtMS4yNUgxMEM1LjAyOTQ0LDEsMSw1LjAyOTQzLDEsMTB2MThjMCw0Ljk3MDU3LDQuMDI5NDQsOSw5LDloMThjNC45NzA1NiwwLDktNC4wMjk0Myw5LTlWMTBjMC00Ljk3MDU3LTQuMDI5NDQtOS05LTloMFoiLz48L2c+PGcgaWQ9InV1aWQtNzI4Njg1MGItMWY3NC00MTZjLWE5MDEtMWQ1OTAzYmU3NTkyIj48cGF0aCBjbGFzcz0idXVpZC0yM2EzYjVlNy03NzU0LTQ5NDQtYmEyOC1lZTY1YTk2MWRkYjUiIGQ9Im0xNS40OTk1MSwyOS41MjQ5Yy0uMTAzMDMsMC0uMjA3MDMtLjAyNTM5LS4zMDMyMi0uMDc4NjEtLjMwMTc2LS4xNjc0OC0uNDEwMTYtLjU0ODM0LS4yNDI2OC0uODUwMWwzLjUtNi4yOTk4Yy4xNjY5OS0uMzAxNzYuNTQ1NDEtLjQxMDY0Ljg1MDEtLjI0MjY4LjMwMTc2LjE2NzQ4LjQxMDE2LjU0ODM0LjI0MjE5Ljg1MDFsLTMuNDk5NTEsNi4yOTk4Yy0uMTE0MjYuMjA1NTctLjMyNzE1LjMyMTI5LS41NDY4OC4zMjEyOVoiLz48cGF0aCBjbGFzcz0idXVpZC1hZTVkNWVmMy1iMjBiLTQwMTktYTRlNy1lZGFjZmFlYTRjMGYiIGQ9Im0xNS41MDA0OSwyOS41MjQ5Yy0uMjE5NzMsMC0uNDMyNjItLjExNTcyLS41NDY4OC0uMzIxMjlsLTUuNS05Ljg5OTljLS4xMDQ5OC0uMTg4OTYtLjEwNDk4LS40MTg0NiwwLS42MDc0Mmw1LjUtOS44OTk5Yy4xNjg0Ni0uMzAxMjcuNTQ4ODMtLjQwOTE4Ljg1MDEtLjI0MjY4LjMwMTc2LjE2NzQ4LjQxMDE2LjU0ODM0LjI0MjY4Ljg1MDFsLTUuMzMxNTQsOS41OTYxOSw1LjMzMTU0LDkuNTk2MTljLjE2NzQ4LjMwMTc2LjA1OTA4LjY4MjYyLS4yNDI2OC44NTAxLS4wOTYxOS4wNTMyMi0uMjAwNjguMDc4NjEtLjMwMzIyLjA3ODYxWiIvPjxwYXRoIGNsYXNzPSJ1dWlkLTIzYTNiNWU3LTc3NTQtNDk0NC1iYTI4LWVlNjVhOTYxZGRiNSIgZD0ibTIyLjQ5OTAyLDI5LjUyNDljLS4xMDI1NCwwLS4yMDYwNS0uMDI1MzktLjMwMjczLS4wNzg2MS0uMzAxNzYtLjE2NzQ4LS40MTAxNi0uNTQ4MzQtLjI0MjE5LS44NTAxbDUuNS05Ljg5OTljLjE2NjAyLS4zMDE3Ni41NDU5LS40MTA2NC44NDk2MS0uMjQyNjguMzAxNzYuMTY3NDguNDEwMTYuNTQ4MzQuMjQyMTkuODUwMWwtNS41LDkuODk5OWMtLjExMzI4LjIwNTU3LS4zMjcxNS4zMjEyOS0uNTQ2ODguMzIxMjlaIi8+PHBhdGggY2xhc3M9InV1aWQtMjNhM2I1ZTctNzc1NC00OTQ0LWJhMjgtZWU2NWE5NjFkZGI1IiBkPSJtMTkuMDAwOTgsMTYuMDI0OWMtLjIyMDIxLDAtLjQzMzExLS4xMTU3Mi0uNTQ3MzYtLjMyMTI5bC0zLjUtNi4yOTk4Yy0uMTY3NDgtLjMwMTc2LS4wNTkwOC0uNjgyNjIuMjQyNjgtLjg1MDFzLjY4MjEzLS4wNTkwOC44NTAxLjI0MjY4bDMuNDk5NTEsNi4yOTk4Yy4xNjc5Ny4zMDE3Ni4wNTk1Ny42ODI2Mi0uMjQyMTkuODUwMS0uMDk2NjguMDUzMjItLjIwMDIuMDc4NjEtLjMwMjczLjA3ODYxWiIvPjxwYXRoIGNsYXNzPSJ1dWlkLWFlNWQ1ZWYzLWIyMGItNDAxOS1hNGU3LWVkYWNmYWVhNGMwZiIgZD0ibTIyLjUwMDk4LDI5LjUyNDljLS4yMTk3MywwLS40MzI2Mi0uMTE1NzItLjU0Njg4LS4zMjEyOWwtNS41MDA0OS05Ljg5OTljLS4xMDQ5OC0uMTg4OTYtLjEwNDk4LS40MTg0NiwwLS42MDc0Mmw1LjUwMDQ5LTkuODk5OWMuMTY2MDItLjMwMTc2LjU0NTktLjQxMDE2Ljg0OTYxLS4yNDI2OC4zMDE3Ni4xNjc0OC40MTAxNi41NDgzNC4yNDIxOS44NTAxbC01LjMzMTA1LDkuNTk2MTksNS4zMzEwNSw5LjU5NjE5Yy4xNjc5Ny4zMDE3Ni4wNTk1Ny42ODI2Mi0uMjQyMTkuODUwMS0uMDk2NjguMDUzMjItLjIwMDIuMDc4NjEtLjMwMjczLjA3ODYxWiIvPjxwYXRoIGNsYXNzPSJ1dWlkLTIzYTNiNWU3LTc3NTQtNDk0NC1iYTI4LWVlNjVhOTYxZGRiNSIgZD0ibTI4LjAwMDk4LDE5LjYyNWMtLjIxOTczLDAtLjQzMjYyLS4xMTU3Mi0uNTQ2ODgtLjMyMTI5bC01LjUtOS44OTk5Yy0uMTY3OTctLjMwMTc2LS4wNTk1Ny0uNjgyNjIuMjQyMTktLjg1MDEuMzAzNzEtLjE2NzQ4LjY4MTY0LS4wNTkwOC44NDk2MS4yNDI2OGw1LjUsOS44OTk5Yy4xNjc5Ny4zMDE3Ni4wNTk1Ny42ODI2Mi0uMjQyMTkuODUwMS0uMDk2NjguMDUzMjItLjIwMDIuMDc4NjEtLjMwMjczLjA3ODYxWiIvPjwvZz48L3N2Zz4=",
+        "mediatype": "image/svg+xml"
+      }
+    ],
+    "install": {
+      "spec": {
+        "deployments": [
+          {
+            "name": "quay-operator.v3.10.13",
+            "spec": {
+              "replicas": 1,
+              "selector": {
+                "matchLabels": {
+                  "name": "quay-operator-alm-owned"
+                }
+              },
+              "template": {
+                "metadata": {
+                  "labels": {
+                    "name": "quay-operator-alm-owned"
+                  },
+                  "name": "quay-operator-alm-owned"
+                },
+                "spec": {
+                  "containers": [
+                    {
+                      "command": [
+                        "/workspace/manager",
+                        "--namespace=$(WATCH_NAMESPACE)"
+                      ],
+                      "env": [
+                        {
+                          "name": "MY_POD_NAMESPACE",
+                          "valueFrom": {
+                            "fieldRef": {
+                              "fieldPath": "metadata.namespace"
+                            }
+                          }
+                        },
+                        {
+                          "name": "MY_POD_NAME",
+                          "valueFrom": {
+                            "fieldRef": {
+                              "fieldPath": "metadata.name"
+                            }
+                          }
+                        },
+                        {
+                          "name": "WATCH_NAMESPACE",
+                          "valueFrom": {
+                            "fieldRef": {
+                              "fieldPath": "metadata.annotations['olm.targetNamespaces']"
+                            }
+                          }
+                        },
+                        {
+                          "name": "QUAY_VERSION",
+                          "valueFrom": {
+                            "fieldRef": {
+                              "fieldPath": "metadata.annotations['quay-version']"
+                            }
+                          }
+                        },
+                        {
+                          "name": "QUAY_DEFAULT_BRANDING",
+                          "value": "redhat"
+                        },
+                        {
+                          "name": "RELATED_IMAGE_COMPONENT_QUAY",
+                          "value": "registry.redhat.io/quay/quay-rhel8@sha256:c419e8483f719725561bf79869a3bb59a32caf39eb8081108edaac8e4ba97978"
+                        },
+                        {
+                          "name": "RELATED_IMAGE_COMPONENT_CLAIR",
+                          "value": "registry.redhat.io/quay/clair-rhel8@sha256:66d045bbe1df3b027bfc022160d82d11a8b76be19b240a5fe3b45854be5ad338"
+                        },
+                        {
+                          "name": "RELATED_IMAGE_COMPONENT_BUILDER",
+                          "value": "registry.redhat.io/quay/quay-builder-rhel8@sha256:2cd9ed9f0f9c38cb62945a612cd18a6e2fbcf67641f96e431f453b39749c4306"
+                        },
+                        {
+                          "name": "RELATED_IMAGE_COMPONENT_BUILDER_QEMU",
+                          "value": "registry.redhat.io/quay/quay-builder-qemu-rhcos-rhel8@sha256:c17c2e4b6484e3a23bc984ee0f4554d64b94334112e32db9529ac7434c4f88d5"
+                        },
+                        {
+                          "name": "RELATED_IMAGE_COMPONENT_POSTGRES",
+                          "value": "registry.redhat.io/rhel8/postgresql-13@sha256:9e97652657552847c47ee598cb04e80e52e9e6881c05760a9055fe48348979ed"
+                        },
+                        {
+                          "name": "RELATED_IMAGE_COMPONENT_POSTGRES_PREVIOUS",
+                          "value": "registry.redhat.io/rhel8/postgresql-10@sha256:eec360a32519d45c885efbfc6539dc5ff74447e1aceeb5115d1aa30b40c52aeb"
+                        },
+                        {
+                          "name": "RELATED_IMAGE_COMPONENT_REDIS",
+                          "value": "registry.redhat.io/rhel8/redis-6@sha256:e1b804064692cf4958ba09364f4fb986f0a462ca7ef84c32c02e088db30d58a6"
+                        }
+                      ],
+                      "image": "registry.redhat.io/quay/quay-operator-rhel8@sha256:570151f46eb68e05dca59eddaa2943c28ae0681e2acc79bde35a3b46036ac2f7",
+                      "name": "quay-operator"
+                    }
+                  ],
+                  "serviceAccountName": "quay-operator"
+                }
+              }
+            }
+          }
+        ],
+        "permissions": [
+          {
+            "rules": [
+              {
+                "apiGroups": [
+                  "quay.redhat.com"
+                ],
+                "resources": [
+                  "quayregistries",
+                  "quayregistries/status"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              },
+              {
+                "apiGroups": [
+                  "apps"
+                ],
+                "resources": [
+                  "deployments"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              },
+              {
+                "apiGroups": [
+                  ""
+                ],
+                "resources": [
+                  "pods",
+                  "services",
+                  "secrets",
+                  "configmaps",
+                  "serviceaccounts",
+                  "persistentvolumeclaims",
+                  "events"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              },
+              {
+                "apiGroups": [
+                  ""
+                ],
+                "resources": [
+                  "namespaces"
+                ],
+                "verbs": [
+                  "get",
+                  "watch",
+                  "list",
+                  "update",
+                  "patch"
+                ]
+              },
+              {
+                "apiGroups": [
+                  "rbac.authorization.k8s.io"
+                ],
+                "resources": [
+                  "roles",
+                  "rolebindings"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              },
+              {
+                "apiGroups": [
+                  "route.openshift.io"
+                ],
+                "resources": [
+                  "routes",
+                  "routes/custom-host"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              },
+              {
+                "apiGroups": [
+                  "autoscaling"
+                ],
+                "resources": [
+                  "horizontalpodautoscalers"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              },
+              {
+                "apiGroups": [
+                  "objectbucket.io"
+                ],
+                "resources": [
+                  "objectbucketclaims"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              },
+              {
+                "apiGroups": [
+                  "monitoring.coreos.com"
+                ],
+                "resources": [
+                  "prometheusrules",
+                  "servicemonitors"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              },
+              {
+                "apiGroups": [
+                  "batch"
+                ],
+                "resources": [
+                  "jobs"
+                ],
+                "verbs": [
+                  "*"
+                ]
+              }
+            ],
+            "serviceAccountName": "quay-operator"
+          }
+        ]
+      },
+      "strategy": "deployment"
+    },
+    "installModes": [
+      {
+        "supported": true,
+        "type": "OwnNamespace"
+      },
+      {
+        "supported": true,
+        "type": "SingleNamespace"
+      },
+      {
+        "supported": true,
+        "type": "MultiNamespace"
+      },
+      {
+        "supported": true,
+        "type": "AllNamespaces"
+      }
+    ],
+    "keywords": [
+      "open source",
+      "containers",
+      "registry"
+    ],
+    "labels": {
+      "alm-owner-quay-operator": "quay-operator",
+      "operated-by": "quay-operator"
+    },
+    "links": [
+      {
+        "name": "Source Code",
+        "url": "https://github.com/quay/quay-operator"
+      }
+    ],
+    "maintainers": [
+      {
+        "email": "support@redhat.com",
+        "name": "Red Hat"
+      }
+    ],
+    "maturity": "stable",
+    "provider": {
+      "name": "Red Hat"
+    },
+    "relatedImages": [
+      {
+        "image": "registry.redhat.io/quay/quay-operator-rhel8@sha256:570151f46eb68e05dca59eddaa2943c28ae0681e2acc79bde35a3b46036ac2f7",
+        "name": "quay-operator-rhel8-570151f46eb68e05dca59eddaa2943c28ae0681e2acc79bde35a3b46036ac2f7-annotation"
+      },
+      {
+        "image": "registry.redhat.io/quay/quay-operator-rhel8@sha256:570151f46eb68e05dca59eddaa2943c28ae0681e2acc79bde35a3b46036ac2f7",
+        "name": "quay-operator"
+      },
+      {
+        "image": "registry.redhat.io/quay/quay-rhel8@sha256:c419e8483f719725561bf79869a3bb59a32caf39eb8081108edaac8e4ba97978",
+        "name": "component_quay"
+      },
+      {
+        "image": "registry.redhat.io/quay/clair-rhel8@sha256:66d045bbe1df3b027bfc022160d82d11a8b76be19b240a5fe3b45854be5ad338",
+        "name": "component_clair"
+      },
+      {
+        "image": "registry.redhat.io/quay/quay-builder-rhel8@sha256:2cd9ed9f0f9c38cb62945a612cd18a6e2fbcf67641f96e431f453b39749c4306",
+        "name": "component_builder"
+      },
+      {
+        "image": "registry.redhat.io/quay/quay-builder-qemu-rhcos-rhel8@sha256:c17c2e4b6484e3a23bc984ee0f4554d64b94334112e32db9529ac7434c4f88d5",
+        "name": "component_builder_qemu"
+      },
+      {
+        "image": "registry.redhat.io/rhel8/postgresql-13@sha256:9e97652657552847c47ee598cb04e80e52e9e6881c05760a9055fe48348979ed",
+        "name": "component_postgres"
+      },
+      {
+        "image": "registry.redhat.io/rhel8/postgresql-10@sha256:eec360a32519d45c885efbfc6539dc5ff74447e1aceeb5115d1aa30b40c52aeb",
+        "name": "component_postgres_previous"
+      },
+      {
+        "image": "registry.redhat.io/rhel8/redis-6@sha256:e1b804064692cf4958ba09364f4fb986f0a462ca7ef84c32c02e088db30d58a6",
+        "name": "component_redis"
+      }
+    ],
+    "replaces": "quay-operator.v3.10.12",
+    "selector": {
+      "matchLabels": {
+        "alm-owner-quay-operator": "quay-operator",
+        "operated-by": "quay-operator"
+      }
+    },
+    "version": "3.10.13"
+  }
+}
