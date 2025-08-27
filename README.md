@@ -1,5 +1,7 @@
 # Operator Lifecycle Manager V1 (OLMv1)
 
+> **Disclaimer**: This documentation contains AI-generated content.
+
 ## Table of Contents
 
 - [Overview](#overview)
