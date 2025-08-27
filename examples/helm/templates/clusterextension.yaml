@@ -6,8 +6,9 @@ metadata:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
     app.kubernetes.io/component: cluster-extension
   annotations:
-    "helm.sh/hook": pre-install,pre-upgrade,post-delete
-    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "5"
+
 spec:
   namespace: {{ .Values.namespace }}
   serviceAccount:
