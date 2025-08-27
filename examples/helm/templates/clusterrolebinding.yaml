@@ -5,9 +5,6 @@ metadata:
   name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleBinding.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": post-delete
-    "helm.sh/hook-weight": "5"
 subjects:
   - kind: ServiceAccount
     name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.serviceAccount.name }}
@@ -25,9 +22,6 @@ metadata:
   name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleBindingRBAC.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": post-delete
-    "helm.sh/hook-weight": "5"
 subjects:
   - kind: ServiceAccount
     name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.serviceAccount.name }}

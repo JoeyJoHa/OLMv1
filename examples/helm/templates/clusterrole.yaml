@@ -5,9 +5,6 @@ metadata:
   name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRole.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": post-delete
-    "helm.sh/hook-weight": "5"
 rules:
   {{- if .Values.clusterRole.customRules }}
   {{- toYaml .Values.clusterRole.customRules | nindent 2 }}
@@ -26,9 +23,6 @@ metadata:
   name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleRBAC.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": post-delete
-    "helm.sh/hook-weight": "5"
 rules:
   {{- if .Values.clusterRoleRBAC.customRules }}
   {{- toYaml .Values.clusterRoleRBAC.customRules | nindent 4 }}
