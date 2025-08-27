@@ -1,0 +1,32 @@
+{{- if .Values.role.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.role.name }}
+  labels:
+    {{- include "operator-olm-v1.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-role
+rules:
+  {{- if .Values.role.customRules }}
+  {{- toYaml .Values.role.customRules | nindent 2 }}
+  {{- else }}
+  # Default minimal permissions for OLMv1 operator installation
+  - apiGroups: [olm.operatorframework.io]
+    resources: [clusterextensions/finalizers]
+    verbs: [update]
+  {{- end }}
+{{- end }}
+---
+{{- if .Values.roleRBAC.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.roleRBAC.name }}
+  labels:
+    {{- include "operator-olm-v1.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-role-rbac
+rules:
+  {{- if .Values.roleRBAC.customRules }}
+  {{- toYaml .Values.roleRBAC.customRules | nindent 4 }}
+  {{- end }}
+{{- end }}

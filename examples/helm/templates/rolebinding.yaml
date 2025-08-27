@@ -1,8 +1,8 @@
-{{- if .Values.clusterRoleBinding.create }}
-kind: ClusterRoleBinding
+{{- if .Values.roleBinding.create }}
+kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleBinding.name }}
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.roleBinding.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
 subjects:
@@ -11,15 +11,15 @@ subjects:
     namespace: {{ .Values.namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRole.name }}
+  kind: Role
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.role.name }}
 {{- end }}
 ---
-{{- if .Values.clusterRoleBindingRBAC.create }}
+{{- if .Values.roleBindingRBAC.create }}
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleBindingRBAC.name }}
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.roleBindingRBAC.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
 subjects:
@@ -28,7 +28,7 @@ subjects:
     namespace: {{ .Values.namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleRBAC.name }}
+  kind: Role
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.roleRBAC.name }}
 {{- end }}
 

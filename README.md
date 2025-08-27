@@ -109,6 +109,8 @@ OLMv1/
 │   │       ├── clusterextension.yaml
 │   │       ├── clusterrole.yaml
 │   │       ├── clusterrolebinding.yaml
+│   │       ├── role.yaml
+│   │       ├── rolebinding.yaml
 │   │       └── serviceaccount.yaml
 │   ├── values/                        # Example values files for different operators
 │   ├── yamls/                         # Manual YAML deployment files

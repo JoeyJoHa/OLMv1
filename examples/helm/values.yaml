@@ -93,6 +93,53 @@ clusterRoleBindingRBAC:
   # Bind the additional cluster role binding
   bind: true
 
+# Role Configuration
+role:
+  # Create the role (set to false if using existing)
+  create: true
+  # Name of the role (will be prefixed with release name)
+  name: "installer"
+  # Bind the role to the service account
+  bind: true
+  customRules:    
+  # Example: Additional permissions
+  # - apiGroups: [rbac.authorization.k8s.io]
+  #   resources: [clusterroles, clusterrolebindings]
+  #   verbs: [get, list, watch]
+
+# Additional Role for RBAC (optional)
+roleRBAC:
+  # Create additional role (set to false if not needed)
+  create: false
+  # Name of the additional role
+  name: "installer-rbac"
+  # Bind the additional role
+  bind: true
+  customRules:    
+  # Example: Additional permissions
+  # - apiGroups: [rbac.authorization.k8s.io]
+  #   resources: [clusterroles, clusterrolebindings]
+  #   verbs: [get, list, watch]
+
+# Role Binding Configuration
+roleBinding:
+  # Create the role binding (set to false if using existing)
+  create: true
+  # Name of the role binding (will be prefixed with release name)
+  name: "installer"
+  # Bind the role binding to the service account
+  bind: true
+
+# Additional Role Binding for RBAC (optional)
+roleBindingRBAC:
+  # Create additional role binding (set to false if not needed)
+  create: false
+  # Name of the additional role binding
+  name: "installer-rbac"
+  # Bind the additional role binding
+  bind: true
+
+
 # Additional Configuration
 additionalResources:
   # Create additional Kubernetes resources

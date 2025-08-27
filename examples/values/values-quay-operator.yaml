@@ -106,6 +106,34 @@ clusterRoleBindingRBAC:
   name: "installer-rbac"
   bind: true
 
+# Role Configuration
+role:
+  create: false
+  name: "installer"
+  bind: false
+  customRules: []  
+
+# Additional Role Binding for RBAC (optional)
+roleRBAC:
+  create: false
+  name: "installer-rbac"
+  bind: false
+  customRules: [] 
+
+# Role Binding Configuration
+roleBinding:
+  create: false
+  name: "installer"
+  bind: false
+  customRules: [] 
+
+# Additional Role Binding for RBAC (optional)
+roleBindingRBAC:
+  create: false
+  name: "installer-rbac"
+  bind: false
+  customRules: [] 
+
 # Additional Configuration
 additionalResources:
   create: false

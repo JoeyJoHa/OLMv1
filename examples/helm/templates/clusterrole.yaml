@@ -5,7 +5,6 @@ metadata:
   name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRole.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
-    app.kubernetes.io/component: cluster-role
 rules:
   {{- if .Values.clusterRole.customRules }}
   {{- toYaml .Values.clusterRole.customRules | nindent 2 }}
@@ -24,7 +23,6 @@ metadata:
   name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleRBAC.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
-    app.kubernetes.io/component: cluster-role-rbac
 rules:
   {{- if .Values.clusterRoleRBAC.customRules }}
   {{- toYaml .Values.clusterRoleRBAC.customRules | nindent 4 }}
