@@ -8,7 +8,7 @@
 - [Deployment Flow](#deployment-flow)
 - [Sequence Diagram](#sequence-diagram)
 - [Project Structure](#project-structure)
-- [Deployment Process](#deployment-process)
+- [Deployment Documentation](#deployment-documentation)
 - [Command Reference](#command-reference)
   - [Package Discovery](#package-discovery)
   - [Channel Information](#channel-information)
@@ -99,22 +99,23 @@ OLMv1/
 │   ├── Service.json                    # Quay operator service
 │   └── CustomResourceDefinition.json   # Quay operator CRD
 ├── examples/                           # Example operator implementations
-│   └── quay-operator/                 # Quay operator example
-│       ├── helm/                      # Helm chart for Quay operator
-│       │   ├── Chart.yaml             # Helm chart metadata
-│       │   ├── values.yaml            # Helm chart values
-│       │   ├── .helmignore            # Helm ignore patterns
-│       │   └── templates/             # Helm chart templates
-│       │       ├── clusterextension.yaml
-│       │       ├── clusterrole.yaml
-│       │       ├── clusterrolebinding.yaml
-│       │       └── serviceaccount.yaml
-│       └── yamls/                     # Manual YAML deployment files
-│           ├── 00-namespace.yaml       # Namespace definition
-│           ├── 01-serviceaccount.yaml  # Service account for operator
-│           ├── 02-clusterrole.yaml     # Cluster role with least privilege
-│           ├── 03-clusterrolebinding.yaml # Cluster role binding
-│           └── 04-clusterextension.yaml   # OLMv1 ClusterExtension
+│   ├── helm/                          # Generic Helm chart for operators
+│   │   ├── Chart.yaml                 # Helm chart metadata
+│   │   ├── values.yaml                # Helm chart values
+│   │   ├── .helmignore                # Helm ignore patterns
+│   │   └── templates/                 # Helm chart templates
+│   │       ├── clusterextension.yaml
+│   │       ├── clusterrole.yaml
+│   │       ├── clusterrolebinding.yaml
+│   │       └── serviceaccount.yaml
+│   ├── values/                        # Example values files for different operators
+│   ├── yamls/                         # Manual YAML deployment files
+│   │   ├── 00-namespace.yaml           # Namespace definition
+│   │   ├── 01-serviceaccount.yaml      # Service account for operator
+│   │   ├── 02-clusterrole.yaml         # Cluster role with least privilege
+│   │   ├── 03-clusterrolebinding.yaml  # Cluster role binding
+│   │   └── 04-clusterextension.yaml    # OLMv1 ClusterExtension
+│   └── DEPLOYMENT.md                   # Detailed deployment documentation
 ├── Templates/                          # Reusable template files
 │   └── CustomRoles/                    # Custom role templates
 │       ├── 00-rolebinding.yaml        # Role binding template
@@ -126,130 +127,18 @@ OLMv1/
 └── .cursorignore                       # Cursor ignore patterns
 ```
 
-## Deployment Process
+## Deployment Documentation
 
-### Step-by-Step Deployment
+For detailed deployment instructions, including step-by-step processes, cleanup procedures, and Helm chart usage, see the comprehensive [Deployment Guide](examples/DEPLOYMENT.md).
 
-#### 1. Create Project/Namespace
+The guide covers:
 
-```bash
-# Create new project for the operator or apply namespace manifest.
-oc new-project quay-operator
+- **Step-by-step deployment** of operators using YAML manifests
+- **Helm chart deployment** for simplified operator installation
+- **Cleanup procedures** for removing operators and resources
+- **Monitoring and verification** steps for successful deployments
 
-# Or use existing project
-oc project quay-operator
-```
-
-#### 2. Deploy Resources
-
-```bash
-
-# Deploy service account
-oc apply -f examples/quay-operator/yamls/01-serviceaccount.yaml
-
-# Deploy cluster role with least privilege
-oc apply -f examples/quay-operator/yamls/02-clusterrole.yaml
-
-# Create cluster role binding
-oc apply -f examples/quay-operator/yamls/03-clusterrolebinding.yaml
-```
-
-#### 3. Deploy Operator via ClusterExtension
-
-```bash
-# Apply the ClusterExtension manifest
-oc apply -f examples/quay-operator/yamls/04-clusterextension.yaml
-
-# Verify ClusterExtension creation
-oc get clusterextension quay-operator -n quay-operator
-
-# Check ClusterExtension status
-oc describe clusterextension quay-operator -n quay-operator
-```
-
-#### 4. Monitor Deployment Progress
-
-```bash
-# Watch operator deployment
-oc get pods -n quay-operator -w
-
-# Check operator logs
-oc logs -n quay-operator -l app.kubernetes.io/name=quay-operator
-
-# Monitor ClusterExtension status
-oc get clusterextension quay-operator -n quay-operator -o yaml
-```
-
-#### 5. Verify Installation
-
-```bash
-# Check if CRDs are installed
-oc get crd | grep quay.redhat.com
-
-# Verify operator deployment
-oc get deployment -n quay-operator
-```
-
-### Cleanup Process
-
-#### Remove Operator
-
-```bash
-# Delete ClusterExtension
-oc delete clusterextension quay-operator -n quay-operator
-
-# Wait for operator removal
-oc get pods -n quay-operator
-
-# Remove RBAC resources
-oc delete -f examples/quay-operator/yamls/03-clusterrolebinding.yaml
-oc delete -f examples/quay-operator/yamls/02-clusterrole.yaml
-oc delete -f examples/quay-operator/yamls/01-serviceaccount.yaml
-
-# Remove namespace (optional)
-oc delete project quay-operator
-```
-
-## Alternative Deployment Methods
-
-### Helm Chart Deployment
-
-The project provides a **generic Helm chart** that can deploy any operator using OLMv1, with Quay operator as an example:
-
-```bash
-# Install Quay operator using the generic chart
-helm install quay-operator examples/quay-operator/helm/ \
-  --namespace quay-operator \
-  --create-namespace \
-  --values examples/quay-operator/helm/values-quay-operator.yaml
-
-# Install any other operator
-helm install my-operator examples/quay-operator/helm/ \
-  --namespace my-operator \
-  --create-namespace \
-  --set name=my-operator \
-  --set namespace=my-operator \
-  --set operator.packageName=my-operator-package \
-  --set operator.channel=stable \
-  --set operator.appVersion=1.0.0
-
-# Upgrade existing installation
-helm upgrade quay-operator examples/quay-operator/helm/ \
-  --namespace quay-operator \
-  --values examples/quay-operator/helm/values-quay-operator.yaml
-
-# Uninstall
-helm uninstall quay-operator -n quay-operator
-```
-
-**Key Benefits of the Generic Chart:**
-
-- **Reusable**: Deploy any operator available in OLM catalogs
-- **Configurable**: Flexible RBAC and service account configuration
-- **Best Practices**: Follows Helm and Kubernetes best practices
-- **Consistent**: Standardized deployment pattern for all operators
-
-### Using Templates
+## Using Templates
 
 The `Templates/CustomRoles/` directory contains reusable templates for custom RBAC configurations that can be adapted for different operators.
 
