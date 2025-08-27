@@ -100,13 +100,11 @@ OLMv1/
 │   └── CustomResourceDefinition.json   # Quay operator CRD
 ├── examples/                           # Example operator implementations
 │   └── quay-operator/                 # Quay operator example
-│       ├── helm/                      # Generic Helm chart for operators
+│       ├── helm/                      # Helm chart for Quay operator
 │       │   ├── Chart.yaml             # Helm chart metadata
-│       │   ├── values.yaml            # Generic default values
-│       │   ├── values-quay-operator.yaml # Quay operator example values
+│       │   ├── values.yaml            # Helm chart values
 │       │   ├── .helmignore            # Helm ignore patterns
 │       │   └── templates/             # Helm chart templates
-│       │       ├── _helpers.tpl       # Helm helper functions
 │       │       ├── clusterextension.yaml
 │       │       ├── clusterrole.yaml
 │       │       ├── clusterrolebinding.yaml
