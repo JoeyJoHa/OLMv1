@@ -1,0 +1,16 @@
+apiVersion: olm.operatorframework.io/v1
+kind: ClusterExtension
+metadata:
+  name: quay-operator
+spec:
+  namespace: quay-operator
+  serviceAccount:
+    name: quay-operator-installer
+  source:
+    catalog:
+      channels:
+        - stable-3.10
+      packageName: quay-operator
+      upgradeConstraintPolicy: CatalogProvided
+      version: 3.10.13 #Version pinning
+    sourceType: Catalog
