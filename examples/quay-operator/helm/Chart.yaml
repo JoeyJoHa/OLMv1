@@ -1,15 +1,15 @@
 apiVersion: v2
-name: quay-operator-olmv1
-description: A Helm chart for deploying Quay operator using OLMv1 ClusterExtension
+name: operator-olm-v1
+description: A generic Helm chart for deploying operators using OLMv1 ClusterExtension
 type: application
 version: 0.1.0
-appVersion: "3.10.13"
+appVersion: "1.0.0"
 keywords:
-  - quay
   - operator
-  - olmv1
-  - registry
-  - container
-home: https://github.com/quay/quay-operator
+  - olm
+  - v1
+  - kubernetes
+  - helm
+home: https://github.com/JoeyJoHa/operator-olm-v1
 sources:
-  - https://github.com/quay/quay-operator
+  - https://github.com/JoeyJoHa/operator-olm-v1

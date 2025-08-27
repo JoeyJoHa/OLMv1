@@ -1,18 +1,104 @@
-# Default values for quay-operator-olmv1.
+# Default values for operator-olm-v1.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
+# 
+# Example: Quay Operator Configuration
+# name: quay-operator
+# namespace: quay-operator
+# operator:
+#   appVersion: 3.10.13
+#   channel: stable-3.10
+#   packageName: quay-operator
 
-name: quay-operator
-appVersion: 3.10.13
-namespace: quay-operator
+# Operator Configuration
+name: "my-operator"
+namespace: "my-operator"
 
-catalog:
-  channels:
-  packageName:
+# Override the name of the chart (optional)
+nameOverride: ""
+# Override the full name of the chart (optional)
+fullnameOverride: ""
 
-clusterRole:
-  customRules:
+# Operator package details
+operator:
+  # Version of the operator to install (e.g., "3.10.13", "latest")
+  appVersion: "latest"
+  # Channel to use for the operator (e.g., "stable", "alpha", "beta")
+  channel: "stable"
+  # Package name of the operator in the catalog
+  packageName: "my-operator-package"
 
-clusterRoleRBAC:
+# Service Account Configuration
+serviceAccount:
+  # Name of the service account (will be prefixed with release name)
+  name: "installer"
+  # Create the service account (set to false if using existing)
   create: true
-  customRules:
+  # Annotations to add to the service account
+  annotations: {}
+  # Labels to add to the service account
+  labels: {}
+
+# Cluster Role Configuration
+clusterRole:  
+  # Create the cluster role (set to false if using existing)
+  create: true
+  # Name of the cluster role (will be prefixed with release name)
+  name: "installer"
+  # Bind the cluster role to the service account
+  bind: true
+  # Custom RBAC rules for the cluster role
+  customRules:    
+    # Example: OLMv1 finalizer permissions
+    - apiGroups: [olm.operatorframework.io]
+      resources: [clusterextensions/finalizers]
+      verbs: [update]
+      resourceNames: []
+    # Example: Custom operator permissions
+    # - apiGroups: [your.api.group]
+    #   resources: [yourresources]
+    #   verbs: [get, list, watch, create, update, patch, delete]
+    # Add more custom rules as needed
+
+# Additional Cluster Role for RBAC (optional)
+clusterRoleRBAC:
+  # Create additional cluster role (set to false if not needed)
+  create: false
+  # Name of the additional cluster role
+  name: "installer-rbac"
+  # Bind the additional cluster role
+  bind: true
+  # Custom RBAC rules for the additional cluster role
+  customRules:    
+    # Example: Additional permissions
+    # - apiGroups: [rbac.authorization.k8s.io]
+    #   resources: [clusterroles, clusterrolebindings]
+    #   verbs: [get, list, watch]
+
+# Cluster Role Binding Configuration
+clusterRoleBinding:
+  # Create the cluster role binding (set to false if using existing)
+  create: true
+  # Name of the cluster role binding (will be prefixed with release name)
+  name: "installer"
+  # Bind the cluster role binding to the service account
+  bind: true
+
+# Additional Cluster Role Binding for RBAC (optional)
+clusterRoleBindingRBAC:
+  # Create additional cluster role binding (set to false if not needed)
+  create: false
+  # Name of the additional cluster role binding
+  name: "installer-rbac"
+  # Bind the additional cluster role binding
+  bind: true
+
+# Additional Configuration
+additionalResources:
+  # Create additional Kubernetes resources
+  create: false
+  # List of additional resource files to include
+  resources: []
+  # Example:
+  # - configmap.yaml
+  # - secret.yaml

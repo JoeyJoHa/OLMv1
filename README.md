@@ -100,10 +100,13 @@ OLMv1/
 │   └── CustomResourceDefinition.json   # Quay operator CRD
 ├── examples/                           # Example operator implementations
 │   └── quay-operator/                 # Quay operator example
-│       ├── helm/                      # Helm chart for Quay operator
+│       ├── helm/                      # Generic Helm chart for operators
 │       │   ├── Chart.yaml             # Helm chart metadata
-│       │   ├── values.yaml            # Helm chart values
+│       │   ├── values.yaml            # Generic default values
+│       │   ├── values-quay-operator.yaml # Quay operator example values
+│       │   ├── .helmignore            # Helm ignore patterns
 │       │   └── templates/             # Helm chart templates
+│       │       ├── _helpers.tpl       # Helm helper functions
 │       │       ├── clusterextension.yaml
 │       │       ├── clusterrole.yaml
 │       │       ├── clusterrolebinding.yaml
@@ -213,27 +216,40 @@ oc delete project quay-operator
 
 ### Helm Chart Deployment
 
-The project also provides a Helm chart for easier deployment and customization:
+The project provides a **generic Helm chart** that can deploy any operator using OLMv1, with Quay operator as an example:
 
 ```bash
-# Install using Helm
-helm install quay-operator examples/quay-operator/helm/ \
-  --namespace quay-operator \
-  --create-namespace
-
-# Customize values
+# Install Quay operator using the generic chart
 helm install quay-operator examples/quay-operator/helm/ \
   --namespace quay-operator \
   --create-namespace \
-  --values examples/quay-operator/helm/values.yaml
+  --values examples/quay-operator/helm/values-quay-operator.yaml
+
+# Install any other operator
+helm install my-operator examples/quay-operator/helm/ \
+  --namespace my-operator \
+  --create-namespace \
+  --set name=my-operator \
+  --set namespace=my-operator \
+  --set operator.packageName=my-operator-package \
+  --set operator.channel=stable \
+  --set operator.appVersion=1.0.0
 
 # Upgrade existing installation
 helm upgrade quay-operator examples/quay-operator/helm/ \
-  --namespace quay-operator
+  --namespace quay-operator \
+  --values examples/quay-operator/helm/values-quay-operator.yaml
 
 # Uninstall
 helm uninstall quay-operator -n quay-operator
 ```
+
+**Key Benefits of the Generic Chart:**
+
+- **Reusable**: Deploy any operator available in OLM catalogs
+- **Configurable**: Flexible RBAC and service account configuration
+- **Best Practices**: Follows Helm and Kubernetes best practices
+- **Consistent**: Standardized deployment pattern for all operators
 
 ### Using Templates
 

@@ -1,27 +1,36 @@
+{{- if .Values.clusterRoleBinding.create }}
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: quay-operator-installer-clusterrolebinding
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleBinding.name }}
+  labels:
+    {{- include "operator-olm-v1.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-role-binding
 subjects:
   - kind: ServiceAccount
-    name: {{ .Release.Name }}-installer
-    namespace: {{ .Release.Namespace }}
+    name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.serviceAccount.name }}
+    namespace: {{ .Values.namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: quay-operator-installer-clusterrole
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRole.name }}
+{{- end }}
 ---
+{{- if .Values.clusterRoleBindingRBAC.create }}
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: quay-operator-installer-rbac-clusterrolebinding
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleBindingRBAC.name }}
+  labels:
+    {{- include "operator-olm-v1.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-role-binding-rbac
 subjects:
   - kind: ServiceAccount
-    name: {{ .Release.Name }}-installer
-    namespace: {{ .Release.Namespace }}
+    name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.serviceAccount.name }}
+    namespace: {{ .Values.namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: quay-operator-installer-rbac-clusterrole
-
+  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.clusterRoleRBAC.name }}
+{{- end }}
 
