@@ -98,12 +98,27 @@ OLMv1/
 │   ├── ClusterServiceVersion.json      # Quay operator CSV
 │   ├── Service.json                    # Quay operator service
 │   └── CustomResourceDefinition.json   # Quay operator CRD
-├── Manifests/                          # Manual deployment YAML files
-│   ├── 00-namespace.yaml               # Namespace definition
-│   ├── 01-serviceaccount.yaml          # Service account for operator
-│   ├── 02-clusterrole.yaml             # Cluster role with least privilege
-│   ├── 03-clusterrolebinding.yaml      # Cluster role binding
-│   └── 04-clusterextension.yaml        # OLMv1 ClusterExtension
+├── examples/                           # Example operator implementations
+│   └── quay-operator/                 # Quay operator example
+│       ├── helm/                      # Helm chart for Quay operator
+│       │   ├── Chart.yaml             # Helm chart metadata
+│       │   ├── values.yaml            # Helm chart values
+│       │   └── templates/             # Helm chart templates
+│       │       ├── clusterextension.yaml
+│       │       ├── clusterrole.yaml
+│       │       ├── clusterrolebinding.yaml
+│       │       └── serviceaccount.yaml
+│       └── yamls/                     # Manual YAML deployment files
+│           ├── 00-namespace.yaml       # Namespace definition
+│           ├── 01-serviceaccount.yaml  # Service account for operator
+│           ├── 02-clusterrole.yaml     # Cluster role with least privilege
+│           ├── 03-clusterrolebinding.yaml # Cluster role binding
+│           └── 04-clusterextension.yaml   # OLMv1 ClusterExtension
+├── Templates/                          # Reusable template files
+│   └── CustomRoles/                    # Custom role templates
+│       ├── 00-rolebinding.yaml        # Role binding template
+│       ├── 01-clusterrole.yaml        # Cluster role template
+│       └── 02-clusterrolebinding.yaml # Cluster role binding template
 ├── .git/                               # Git repository
 ├── .gitignore                          # Git ignore patterns
 ├── .cursor/                            # Cursor IDE configuration
@@ -129,20 +144,20 @@ oc project quay-operator
 ```bash
 
 # Deploy service account
-oc apply -f Manifests/01-serviceaccount.yaml
+oc apply -f examples/quay-operator/yamls/01-serviceaccount.yaml
 
 # Deploy cluster role with least privilege
-oc apply -f Manifests/02-clusterrole.yaml
+oc apply -f examples/quay-operator/yamls/02-clusterrole.yaml
 
 # Create cluster role binding
-oc apply -f Manifests/03-clusterrolebinding.yaml
+oc apply -f examples/quay-operator/yamls/03-clusterrolebinding.yaml
 ```
 
 #### 3. Deploy Operator via ClusterExtension
 
 ```bash
 # Apply the ClusterExtension manifest
-oc apply -f Manifests/04-clusterextension.yaml
+oc apply -f examples/quay-operator/yamls/04-clusterextension.yaml
 
 # Verify ClusterExtension creation
 oc get clusterextension quay-operator -n quay-operator
@@ -186,13 +201,43 @@ oc delete clusterextension quay-operator -n quay-operator
 oc get pods -n quay-operator
 
 # Remove RBAC resources
-oc delete -f Manifests/03-clusterrolebinding.yaml
-oc delete -f Manifests/02-clusterrole.yaml
-oc delete -f Manifests/01-serviceaccount.yaml
+oc delete -f examples/quay-operator/yamls/03-clusterrolebinding.yaml
+oc delete -f examples/quay-operator/yamls/02-clusterrole.yaml
+oc delete -f examples/quay-operator/yamls/01-serviceaccount.yaml
 
 # Remove namespace (optional)
 oc delete project quay-operator
 ```
+
+## Alternative Deployment Methods
+
+### Helm Chart Deployment
+
+The project also provides a Helm chart for easier deployment and customization:
+
+```bash
+# Install using Helm
+helm install quay-operator examples/quay-operator/helm/ \
+  --namespace quay-operator \
+  --create-namespace
+
+# Customize values
+helm install quay-operator examples/quay-operator/helm/ \
+  --namespace quay-operator \
+  --create-namespace \
+  --values examples/quay-operator/helm/values.yaml
+
+# Upgrade existing installation
+helm upgrade quay-operator examples/quay-operator/helm/ \
+  --namespace quay-operator
+
+# Uninstall
+helm uninstall quay-operator -n quay-operator
+```
+
+### Using Templates
+
+The `Templates/CustomRoles/` directory contains reusable templates for custom RBAC configurations that can be adapted for different operators.
 
 ## Command Reference
 

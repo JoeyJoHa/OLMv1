@@ -1,0 +1,31 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: olmv1-manager-clusterrole
+  annotations:
+    description: "Core OLMv1 permissions for cluster users"
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+rules:
+  # Allow users to create and manage clustercatalogs and clusterextensions
+  - apiGroups: ["olm.operatorframework.io"]
+    resources: ["clustercatalogs", "clusterextensions"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+  # Allow users to manage finalizers and status for OLMv1 resources
+  - apiGroups: ["olm.operatorframework.io"]
+    resources: ["clustercatalogs/finalizers", "clusterextensions/finalizers", "clustercatalogs/status", "clusterextensions/status"]
+    verbs: ["update"]
+  # Allow users to read CRDs to understand available custom resources
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  # Allow users to list namespaces/projects in the cluster
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["project.openshift.io"]
+    resources: ["projects"]
+    verbs: ["get", "list", "watch"]
+  # Allow users to create project requests (required for project creation in OpenShift)
+  - apiGroups: ["project.openshift.io"]
+    resources: ["projectrequests"]
+    verbs: ["create", "get", "list", "watch"]
