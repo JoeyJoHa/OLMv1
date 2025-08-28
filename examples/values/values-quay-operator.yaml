@@ -4,7 +4,7 @@
 # Operator Configuration
 operator:
   # Name of the operator and ClusterExtension
-  name: "quay-operator"
+  name: "quay-operator"  # Custom name
   # Namespace where the operator will be installed
   namespace: "quay-operator"
   # Specific version of Quay operator

@@ -249,8 +249,18 @@ permissions:
   - → ServiceAccount: `quay-test-operator-olm-v1-installer`
   - → ClusterRole (operator): `quay-test-operator-olm-v1-installer`
   - → ClusterRole (grantor): `quay-test-operator-olm-v1-installer-grantor`
-  - → ClusterRoleBinding (operator): `quay-test-operator-olm-v1-installer-cluster-binding`
-  - → ClusterRoleBinding (grantor): `quay-test-operator-olm-v1-installer-grantor-cluster-binding`
+  - → ClusterRoleBinding (operator): `quay-test-operator-olm-v1-installer-crb`
+  - → ClusterRoleBinding (grantor): `quay-test-operator-olm-v1-installer-grantor-crb`
+  - → ClusterExtension: `quay-test` (auto-generated from release name)
+
+- **Custom naming** (when `operator.name: "quay-operator"`):
+  - Release: `quay-test`, Chart: `operator-olm-v1`, Custom Name: `quay-operator`
+  - → ServiceAccount: `quay-test-operator-olm-v1-installer`
+  - → ClusterRole (operator): `quay-test-operator-olm-v1-installer`
+  - → ClusterRole (grantor): `quay-test-operator-olm-v1-installer-grantor`
+  - → ClusterRoleBinding (operator): `quay-test-operator-olm-v1-installer-crb`
+  - → ClusterRoleBinding (grantor): `quay-test-operator-olm-v1-installer-grantor-crb`
+  - → ClusterExtension: `quay-operator` (custom name)
 
 ### Permission Types Explained
 

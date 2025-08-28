@@ -46,7 +46,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 Selector labels
 */}}
 {{- define "operator-olm-v1.selectorLabels" -}}
-app.kubernetes.io/name: {{ .Values.operator.name }}
+app.kubernetes.io/name: {{ .Values.operator.name | default .Release.Name }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
@@ -98,5 +98,17 @@ If create: false, user must provide existing resource name
   {{- end }}
 {{- else }}
   {{- (index .Values.permissions.roles 0).name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Smart naming for cluster extension
+If user provides a name, use it as-is; otherwise use release name
+*/}}
+{{- define "operator-olm-v1.clusterExtensionName" -}}
+{{- if .Values.operator.name }}
+  {{- .Values.operator.name }}
+{{- else }}
+  {{- .Release.Name }}
 {{- end }}
 {{- end }}

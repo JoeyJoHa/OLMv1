@@ -30,7 +30,7 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: {{ include "operator-olm-v1.clusterRoleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-cluster-binding
+  name: {{ include "operator-olm-v1.clusterRoleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-crb
   labels:
     {{- include "operator-olm-v1.labels" $ | nindent 4 }}
     app.kubernetes.io/component: cluster-role-binding

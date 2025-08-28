@@ -31,7 +31,7 @@ rules:
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-namespace-binding
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-rb
   namespace: {{ $.Values.operator.namespace }}
   labels:
     {{- include "operator-olm-v1.labels" $ | nindent 4 }}
