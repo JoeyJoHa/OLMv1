@@ -1,13 +1,14 @@
 apiVersion: olm.operatorframework.io/v1
 kind: ClusterExtension
 metadata:
-  name: {{ .Values.name }}
+  name: {{ .Values.operator.name }}
   labels:
     {{- include "operator-olm-v1.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster-extension
 spec:
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Values.operator.namespace }}
   serviceAccount:
-    name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.serviceAccount.name }}
+    name: {{ include "operator-olm-v1.serviceAccountName" . }}
   source:
     catalog:
       channels:

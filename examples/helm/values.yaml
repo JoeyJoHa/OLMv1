@@ -3,24 +3,116 @@
 # Declare variables to be passed into your templates.
 # 
 # Example: Quay Operator Configuration
-# name: quay-operator
-# namespace: quay-operator
 # operator:
+#   name: quay-operator
+#   namespace: quay-operator
 #   appVersion: 3.10.13
 #   channel: stable-3.10
 #   packageName: quay-operator
+#
+# Smart Naming Examples:
+# 
+# 1. Default naming (name: "" or not specified):
+#    Release: quay-test, Chart: operator-olm-v1
+#    → ServiceAccount: quay-test-operator-olm-v1-installer
+#    → ClusterRole: quay-test-operator-olm-v1-installer
+#    → ClusterRoleBinding: quay-test-operator-olm-v1-installer-cluster-binding (auto-generated)
+#    → Role: quay-test-operator-olm-v1-installer
+#    → RoleBinding: quay-test-operator-olm-v1-installer-namespace-binding (auto-generated)
+#
+# 2. Custom naming (name: "custom-name"):
+#    Release: quay-test, Chart: operator-olm-v1, name: "custom-name"
+#    → ServiceAccount: custom-name
+#    → ClusterRole: custom-name
+#    → ClusterRoleBinding: custom-name-cluster-binding (auto-generated)
+#    → Role: custom-name
+#    → RoleBinding: custom-name-namespace-binding (auto-generated)
+#
+# 3. Using existing resources (create: false, name: "admin-provided"):
+#    → ServiceAccount: admin-provided (existing)
+#    → ClusterRole: admin-provided (existing)
+#    → No bindings created (serviceAccount.bind: false)
+#    → permissions: {} (empty)
+#
+# 4. RBAC resources (name: "" or not specified):
+#    → ClusterRole: quay-test-operator-olm-v1-installer (with type: "operator")
+#    → Role: quay-test-operator-olm-v1-installer (with type: "operator")
 
-# Operator Configuration
-name: "my-operator"
-namespace: "my-operator"
+# Enterprise Usage Examples
+# 
+# Scenario 1: Using Admin-Provided Resources
+# When cluster admins or security teams provide pre-configured RBAC resources:
+#
+# operator:
+#   name: "quay-operator"
+#   namespace: "quay-operator"
+#
+# serviceAccount:
+#   create: false
+#   name: "admin-provided-operator-sa"  # Must provide existing name
+#   bind: false  # Cannot bind to resources we don't own
+#
+# permissions: {}  # Empty - no resources created or bound
+#
+# Scenario 2: Full Admin with Custom Naming
+# When you have full control and need specific resource names:
+#
+# operator:
+#   name: "quay-operator"
+#   namespace: "quay-operator"
+#
+# serviceAccount:
+#   create: true
+#   name: "quay-operator-installer"
+#   bind: true  # Will bind to all created resources
+#
+# permissions:
+#   clusterRoles:
+#     - name: "quay-operator-admin"  # Custom name
+#       type: "operator"  # Type: "operator" for operator permissions, "grantor" for RBAC permissions
+#       create: true
+#       customRules: [...]
+#
+#   roles:
+#     - name: "quay-operator-namespace"  # Custom name
+#       type: "operator"  # Type: "operator" for operator permissions, "grantor" for RBAC permissions
+#       create: true
+#       customRules: [...]
+#
+# Scenario 3: Mixed Approach
+# Create some resources, use existing for others:
+#
+# operator:
+#   name: "quay-operator"
+#   namespace: "quay-operator"
+#
+# serviceAccount:
+#   create: true
+#   name: "custom-sa-name"
+#   bind: true  # Will bind to created resources
+#
+# permissions:
+#   clusterRoles:
+#     - name: "custom-admin-role"  # Create new
+#       type: "operator"
+#       create: true
+#       customRules: [...]
+#
+#     - name: "existing-admin-role"  # Reference existing
+#       type: "operator"
+#       create: false
 
 # Override the name of the chart (optional)
 nameOverride: ""
 # Override the full name of the chart (optional)
 fullnameOverride: ""
 
-# Operator package details
+# Operator Configuration
 operator:
+  # Name of the operator and ClusterExtension
+  name: "my-operator"
+  # Namespace where the operator will be installed
+  namespace: "my-operator"
   # Version of the operator to install (e.g., "3.10.13", "latest")
   appVersion: "latest"
   # Channel to use for the operator (e.g., "stable", "alpha", "beta")
@@ -30,116 +122,57 @@ operator:
 
 # Service Account Configuration
 serviceAccount:
-  # Name of the service account (will be prefixed with release name)
-  name: "installer"
   # Create the service account (set to false if using existing)
   create: true
+  # Name of the service account (optional - defaults to "installer" suffix)
+  # If not specified, will use: <release>-<chart>-installer
+  # If specified, will use: <custom-name> (as-is)
+  # If create: false, must provide existing resource name
+  name: ""
+  # Should we bind this ServiceAccount to created RBAC resources?
+  # Only applies when create: true and permissions resources have create: true
+  bind: true
   # Annotations to add to the service account
   annotations: {}
   # Labels to add to the service account
   labels: {}
 
-# Cluster Role Configuration
-clusterRole:  
-  # Create the cluster role (set to false if using existing)
-  create: true
-  # Name of the cluster role (will be prefixed with release name)
-  name: "installer"
-  # Bind the cluster role to the service account
-  bind: true
-  # Custom RBAC rules for the cluster role
-  customRules:    
-    # Example: OLMv1 finalizer permissions
-    - apiGroups: [olm.operatorframework.io]
-      resources: [clusterextensions/finalizers]
-      verbs: [update]
-      resourceNames: []
-    # Example: Custom operator permissions
-    # - apiGroups: [your.api.group]
-    #   resources: [yourresources]
-    #   verbs: [get, list, watch, create, update, patch, delete]
-    # Add more custom rules as needed
-
-# Additional Cluster Role for RBAC (optional)
-clusterRoleRBAC:
-  # Create additional cluster role (set to false if not needed)
-  create: false
-  # Name of the additional cluster role
-  name: "installer-rbac"
-  # Bind the additional cluster role
-  bind: true
-  # Custom RBAC rules for the additional cluster role
-  customRules:    
-    # Example: Additional permissions
-    # - apiGroups: [rbac.authorization.k8s.io]
-    #   resources: [clusterroles, clusterrolebindings]
-    #   verbs: [get, list, watch]
-
-# Cluster Role Binding Configuration
-clusterRoleBinding:
-  # Create the cluster role binding (set to false if using existing)
-  create: true
-  # Name of the cluster role binding (will be prefixed with release name)
-  name: "installer"
-  # Bind the cluster role binding to the service account
-  bind: true
-
-# Additional Cluster Role Binding for RBAC (optional)
-clusterRoleBindingRBAC:
-  # Create additional cluster role binding (set to false if not needed)
-  create: false
-  # Name of the additional cluster role binding
-  name: "installer-rbac"
-  # Bind the additional cluster role binding
-  bind: true
-
-# Role Configuration
-role:
-  # Create the role (set to false if using existing)
-  create: true
-  # Name of the role (will be prefixed with release name)
-  name: "installer"
-  # Bind the role to the service account
-  bind: true
-  customRules:    
-  # Example: Additional permissions
-  # - apiGroups: [rbac.authorization.k8s.io]
-  #   resources: [clusterroles, clusterrolebindings]
-  #   verbs: [get, list, watch]
-
-# Additional Role for RBAC (optional)
-roleRBAC:
-  # Create additional role (set to false if not needed)
-  create: false
-  # Name of the additional role
-  name: "installer-rbac"
-  # Bind the additional role
-  bind: true
-  customRules:    
-  # Example: Additional permissions
-  # - apiGroups: [rbac.authorization.k8s.io]
-  #   resources: [clusterroles, clusterrolebindings]
-  #   verbs: [get, list, watch]
-
-# Role Binding Configuration
-roleBinding:
-  # Create the role binding (set to false if using existing)
-  create: true
-  # Name of the role binding (will be prefixed with release name)
-  name: "installer"
-  # Bind the role binding to the service account
-  bind: true
-
-# Additional Role Binding for RBAC (optional)
-roleBindingRBAC:
-  # Create additional role binding (set to false if not needed)
-  create: false
-  # Name of the additional role binding
-  name: "installer-rbac"
-  # Bind the additional role binding
-  bind: true
-
-
+# Permissions Configuration
+# All RBAC resources are defined here. Binding names are auto-generated
+# based on role names with appropriate suffixes.
+# If serviceAccount.bind: false, this section can be empty: permissions: {}
+# Note: All generated names respect Kubernetes 253 character limit
+permissions:
+  # Cluster-level permissions
+  # Binding names auto-generated with "-cluster-binding" suffix
+  clusterRoles:
+    - name: ""  # Empty = auto-generate: <release>-<chart>-installer
+      type: "operator"  # Type: "operator" for operator permissions, "grantor" for RBAC permissions
+      create: true
+      customRules:    
+        # Example: OLMv1 finalizer permissions
+        - apiGroups: [olm.operatorframework.io]
+          resources: [clusterextensions/finalizers]
+          verbs: [update]
+          resourceNames: []
+        # Example: Custom operator permissions
+        # - apiGroups: [your.api.group]
+        #   resources: [yourresources]
+        #   verbs: [get, list, watch, create, update, patch, delete]
+        # Add more custom rules as needed
+  
+  # Namespace-level permissions
+  # Binding names auto-generated with "-namespace-binding" suffix
+  roles:
+    - name: ""  # Empty = auto-generate: <release>-<chart>-installer
+      type: "operator"  # Type: "operator" for operator permissions, "grantor" for RBAC permissions
+      create: true
+      customRules:    
+        # Example: Additional permissions
+        # - apiGroups: [rbac.authorization.k8s.io]
+        #   resources: [clusterroles, clusterrolebindings]
+        #   verbs: [get, list, watch]
+  
 # Additional Configuration
 additionalResources:
   # Create additional Kubernetes resources

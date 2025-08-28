@@ -21,3 +21,18 @@
 .idea/
 *.tmproj
 .vscode/
+# OS generated files
+Thumbs.db
+ehthumbs.db
+# Helm
+charts/
+*.tgz
+# Documentation
+README.md
+DEPLOYMENT.md
+# Examples
+examples/
+# Templates
+Templates/
+# Bundle files
+bundle/

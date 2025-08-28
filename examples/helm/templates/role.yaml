@@ -1,32 +1,53 @@
-{{- if .Values.role.create }}
+{{- range .Values.permissions.roles }}
+{{- if and $.Values.serviceAccount.bind .create }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.role.name }}
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}
+  namespace: {{ $.Values.operator.namespace }}
   labels:
-    {{- include "operator-olm-v1.labels" . | nindent 4 }}
-    app.kubernetes.io/component: cluster-role
+    {{- include "operator-olm-v1.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: role
+    {{- if eq .type "grantor" }}
+    app.kubernetes.io/component-type: grantor
+    {{- else }}
+    app.kubernetes.io/component-type: operator
+    {{- end }}
 rules:
-  {{- if .Values.role.customRules }}
-  {{- toYaml .Values.role.customRules | nindent 2 }}
+  {{- if .customRules }}
+  {{- toYaml .customRules | nindent 2 }}
   {{- else }}
-  # Default minimal permissions for OLMv1 operator installation
-  - apiGroups: [olm.operatorframework.io]
-    resources: [clusterextensions/finalizers]
-    verbs: [update]
+  # Default minimal permissions for operator installation
+  - apiGroups: [""]
+    resources: [pods, services, configmaps, secrets]
+    verbs: [get, list, watch]
   {{- end }}
 {{- end }}
+{{- end }}
+
 ---
-{{- if .Values.roleRBAC.create }}
+{{- range .Values.permissions.roles }}
+{{- if and $.Values.serviceAccount.bind .create }}
+kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
 metadata:
-  name: {{ include "operator-olm-v1.fullname" . }}-{{ .Values.roleRBAC.name }}
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-namespace-binding
+  namespace: {{ $.Values.operator.namespace }}
   labels:
-    {{- include "operator-olm-v1.labels" . | nindent 4 }}
-    app.kubernetes.io/component: cluster-role-rbac
-rules:
-  {{- if .Values.roleRBAC.customRules }}
-  {{- toYaml .Values.roleRBAC.customRules | nindent 4 }}
-  {{- end }}
+    {{- include "operator-olm-v1.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: role-binding
+    {{- if eq .type "grantor" }}
+    app.kubernetes.io/component-type: grantor
+    {{- else }}
+    app.kubernetes.io/component-type: operator
+    {{- end }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "operator-olm-v1.serviceAccountName" $ }}
+    namespace: {{ $.Values.operator.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}
+{{- end }}
 {{- end }}
