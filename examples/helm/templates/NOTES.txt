@@ -1,23 +1,21 @@
 Thank you for installing {{ .Release.Name }}.{{ .Chart.Name }}.
 
+## Operator Information
 {{- if .Values.operator.name }}
-Operator Information
-Operator Name: {{ .Values.operator.name }}
-Namespace: {{ .Release.Namespace }}
-Version: {{ .Values.operator.appVersion }}
-Channel: {{ .Values.operator.channel }}
-Package: {{ .Values.operator.packageName }}
+- Operator Name: {{ .Values.operator.name }}
+- Namespace: {{ .Release.Namespace }}
+- Version: {{ .Values.operator.appVersion }}
+- Channel: {{ .Values.operator.channel }}
+- Package: {{ .Values.operator.packageName }}
 {{- else }}
-Operator Information
-Operator Name: {{ .Release.Name }} (auto-generated)
-Namespace: {{ .Release.Namespace }}
-Version: {{ .Values.operator.appVersion }}
-Channel: {{ .Values.operator.channel }}
-Package: {{ .Values.operator.packageName }}
+- Operator Name: {{ .Release.Name }} (auto-generated)
+- Namespace: {{ .Release.Namespace }}
+- Version: {{ .Values.operator.appVersion }}
+- Channel: {{ .Values.operator.channel }}
+- Package: {{ .Values.operator.packageName }}
 {{- end }}
 
 ## Verification
-
 Once the operator is running, you should see:
 - Operator pods in the {{ .Release.Namespace }} namespace
 - Custom Resource Definitions (CRDs) installed in your cluster
@@ -25,7 +23,6 @@ Once the operator is running, you should see:
 
 
 ## Support
-
 For more information about this chart:
 - Chart version: {{ .Chart.Version }}
 - App version: {{ .Values.operator.appVersion }}
