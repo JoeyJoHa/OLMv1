@@ -111,8 +111,6 @@ fullnameOverride: ""
 operator:
   # Name of the operator and ClusterExtension
   name: "my-operator"
-  # Namespace where the operator will be installed
-  namespace: "my-operator"
   # Version of the operator to install (e.g., "3.10.13", "latest")
   appVersion: "latest"
   # Channel to use for the operator (e.g., "stable", "alpha", "beta")
@@ -160,13 +158,23 @@ permissions:
         #   resources: [yourresources]
         #   verbs: [get, list, watch, create, update, patch, delete]
         # Add more custom rules as needed
+    - name: ""  # Empty = auto-generate: <release>-<chart>-installer
+      type: "grantor"  # Type: "operator" for operator permissions, "grantor" for RBAC permissions
+      create: false
+      customRules: []    
+        # Example: OLMv1 finalizer permissions
+        # - apiGroups: [olm.operatorframework.io]
+        #   resources: [clusterextensions/finalizers]
+        #   verbs: [update]
+        #   resourceNames: []
+
   
   # Namespace-level permissions
   # Binding names auto-generated with "-namespace-binding" suffix
   roles:
     - name: ""  # Empty = auto-generate: <release>-<chart>-installer
       type: "operator"  # Type: "operator" for operator permissions, "grantor" for RBAC permissions
-      create: true
+      create: false
       customRules:    
         # Example: Additional permissions
         # - apiGroups: [rbac.authorization.k8s.io]

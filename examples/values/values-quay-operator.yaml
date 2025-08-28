@@ -5,8 +5,6 @@
 operator:
   # Name of the operator and ClusterExtension
   name: "quay-operator"  # Custom name
-  # Namespace where the operator will be installed
-  namespace: "quay-operator"
   # Specific version of Quay operator
   appVersion: "3.10.13"
   # Quay operator channel
@@ -103,7 +101,11 @@ permissions:
   roles:
     - name: ""  # Empty = auto-generate: <release>-<chart>-installer
       type: "operator"  # Type: "operator" for operator permissions, "grantor" for RBAC permissions
-      create: false  # No namespace-level roles needed for Quay operator
+      create: create  # No namespace-level roles needed for Quay operator
+      customRules:
+        - apiGroups: [""]
+          resources: ["pods", "services", "configmaps", "secrets"]
+          verbs: ["*"]
 
 # Additional Configuration
 additionalResources:

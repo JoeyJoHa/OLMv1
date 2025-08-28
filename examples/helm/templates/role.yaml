@@ -3,8 +3,8 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}
-  namespace: {{ $.Values.operator.namespace }}
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-role
+  namespace: {{ $.Release.Namespace }}
   labels:
     {{- include "operator-olm-v1.labels" $ | nindent 4 }}
     app.kubernetes.io/component: role
@@ -32,7 +32,7 @@ kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-rb
-  namespace: {{ $.Values.operator.namespace }}
+  namespace: {{ $.Release.Namespace }}
   labels:
     {{- include "operator-olm-v1.labels" $ | nindent 4 }}
     app.kubernetes.io/component: role-binding
@@ -44,10 +44,10 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: {{ include "operator-olm-v1.serviceAccountName" $ }}
-    namespace: {{ $.Values.operator.namespace }}
+    namespace: {{ $.Release.Namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-role
 {{- end }}
 {{- end }}

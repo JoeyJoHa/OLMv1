@@ -1,9 +1,9 @@
 Thank you for installing {{ .Release.Name }}.{{ .Chart.Name }}.
 
 {{- if .Values.operator.name }}
-## Operator Information
-- **Operator Name**: {{ .Values.operator.name }}
-- **Namespace**: {{ .Values.operator.namespace }}
+Operator Information:
+Operator Name: {{ .Values.operator.name }}
+Namespace: {{ .Values.operator.namespace }}
 - **Version**: {{ .Values.operator.appVersion }}
 - **Channel**: {{ .Values.operator.channel }}
 - **Package**: {{ .Values.operator.packageName }}
