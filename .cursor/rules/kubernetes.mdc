@@ -22,9 +22,9 @@ This document outlines a collection of guidelines, style suggestions, and tips f
   - `vendor/`: (If using `go modules` without external dependency management) Contains vendored dependencies.  Generally discouraged in modern Go with `go modules`.
 - **Component-Specific Directories:** Inside `pkg/` or `internal/`, organize code by component or module. Each component should have its own directory with clear separation of concerns.
 
-```text
 Example:
 
+```tree
 my-kubernetes-project/
 ├── cmd/
 │   └── controller/
