@@ -1,0 +1,90 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+{{- if .Values.operator.name }}
+## Operator Information
+- **Operator Name**: {{ .Values.operator.name }}
+- **Namespace**: {{ .Values.operator.namespace }}
+- **Version**: {{ .Values.operator.appVersion }}
+- **Channel**: {{ .Values.operator.channel }}
+- **Package**: {{ .Values.operator.packageName }}
+{{- else }}
+## Operator Information
+- **Operator Name**: {{ .Release.Name }} (auto-generated)
+- **Namespace**: {{ .Values.operator.namespace }}
+- **Version**: {{ .Values.operator.appVersion }}
+- **Channel**: {{ .Values.operator.channel }}
+- **Package**: {{ .Values.operator.packageName }}
+{{- end }}
+
+## What Happens Next
+
+1. **ClusterExtension Created**: A ClusterExtension resource has been created to deploy your operator
+2. **RBAC Resources**: ServiceAccount, ClusterRoles, and ClusterRoleBindings have been configured
+3. **Operator Installation**: OLM will automatically install the operator based on your configuration
+
+## Monitoring the Deployment
+
+Check the status of your operator:
+
+```bash
+# Check ClusterExtension status
+kubectl get clusterextension {{ .Values.operator.name | default .Release.Name }} -n {{ .Values.operator.namespace }}
+
+# Check operator pods
+kubectl get pods -n {{ .Values.operator.namespace }}
+
+# Check operator logs
+kubectl logs -n {{ .Values.operator.namespace }} -l app.kubernetes.io/name={{ .Values.operator.name | default .Release.Name }}
+```
+
+## Verification
+
+Once the operator is running, you should see:
+- Operator pods in the {{ .Values.operator.namespace }} namespace
+- Custom Resource Definitions (CRDs) installed in your cluster
+- The operator ready to manage your application resources
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. **Check ClusterExtension status**:
+   ```bash
+   kubectl describe clusterextension {{ .Values.operator.name | default .Release.Name }} -n {{ .Values.operator.namespace }}
+   ```
+
+2. **Check operator logs**:
+   ```bash
+   kubectl logs -n {{ .Values.operator.namespace }} -l app.kubernetes.io/name={{ .Values.operator.name | default .Release.Name }}
+   ```
+
+3. **Verify RBAC permissions**:
+   ```bash
+   kubectl get clusterrolebinding | grep {{ .Release.Name }}
+   kubectl get rolebinding -n {{ .Values.operator.namespace }} | grep {{ .Release.Name }}
+   ```
+
+## Uninstalling
+
+To uninstall the release:
+
+```bash
+helm uninstall {{ .Release.Name }} -n {{ .Values.operator.namespace }}
+```
+
+**Note**: This will remove the ClusterExtension, which will trigger OLM to uninstall the operator and clean up associated resources.
+
+## Support
+
+For more information about this chart:
+- Chart version: {{ .Chart.Version }}
+- App version: {{ .Chart.AppVersion }}
+
+Happy operating! 🚀
