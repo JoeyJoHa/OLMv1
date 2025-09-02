@@ -1,0 +1,14 @@
+apiVersion: olm.operatorframework.io/v1
+kind: ClusterExtension
+metadata:
+  name: clusterextension
+spec:
+  namespace: namespace
+  serviceAccount:
+    name: installer-serviceaccount
+  source:
+    catalog:
+      channels: [] #Channel names, can be array
+      packageName: package-name #Package name in the catalog
+      version: version #Version pinning
+    sourceType: Catalog

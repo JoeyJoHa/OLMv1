@@ -1,0 +1,12 @@
+apiVersion: olm.operatorframework.io/v1
+kind: ClusterCatalog
+metadata:
+  name: clustercatalog
+spec:
+  availabilityMode: Available
+  priority: -200
+  source:
+    image:
+      pollIntervalMinutes: 10
+      ref: '' #Replace with the image of the catalog
+    type: Image
