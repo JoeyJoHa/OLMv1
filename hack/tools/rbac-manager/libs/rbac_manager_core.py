@@ -133,7 +133,7 @@ class RBACManager:
             rbac_data: RBAC resources dictionary  
             operator_name: Operator name for logging
         """
-        logging.info(f"🚀 Deploying RBAC for operator: {operator_name}")
+        logging.info(f"Deploying RBAC for operator: {operator_name}")
         
         # Check if oc command is available
         try:
@@ -181,7 +181,7 @@ class RBACManager:
             stdout, stderr = process.communicate(input=full_yaml)
             
             if process.returncode == 0:
-                logging.info(f"✅ Successfully deployed RBAC for {operator_name}")
+                logging.info(f"Successfully deployed RBAC for {operator_name}")
                 if stdout.strip():
                     for line in stdout.strip().split('\n'):
                         logging.info(f"   {line}")
@@ -189,7 +189,7 @@ class RBACManager:
                 raise Exception(f"oc apply failed: {stderr}")
                 
         except Exception as e:
-            logging.error(f"❌ Failed to deploy RBAC for {operator_name}: {e}")
+            logging.error(f"Failed to deploy RBAC for {operator_name}: {e}")
             raise
     
     def _create_binding_templates(self, operator_dir: Path, rbac_data: Dict[str, Any], 

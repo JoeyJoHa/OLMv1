@@ -60,7 +60,7 @@ class OpenShiftAuth:
             )
             server_url = result.stdout.strip()
             if server_url:
-                logging.info(f"🔍 Auto-discovered cluster URL: {server_url}")
+                logging.info(f"Auto-discovered cluster URL: {server_url}")
                 return server_url
         except (subprocess.CalledProcessError, FileNotFoundError):
             logging.debug("oc command not available or failed")
@@ -73,7 +73,7 @@ class OpenShiftAuth:
             )
             server_url = result.stdout.strip()
             if server_url:
-                logging.info(f"🔍 Auto-discovered cluster URL: {server_url}")
+                logging.info(f"Auto-discovered cluster URL: {server_url}")
                 return server_url
         except (subprocess.CalledProcessError, FileNotFoundError):
             logging.debug("kubectl command not available or failed")
@@ -117,7 +117,7 @@ class OpenShiftAuth:
                 if cluster.get('name') == cluster_name:
                     server_url = cluster.get('cluster', {}).get('server')
                     if server_url:
-                        logging.info(f"🔍 Auto-discovered cluster URL: {server_url}")
+                        logging.info(f"Auto-discovered cluster URL: {server_url}")
                         return server_url
             
             raise Exception("Cluster server URL not found in kubeconfig")
@@ -148,7 +148,7 @@ class OpenShiftAuth:
             # Check if user can get services in openshift-catalogd namespace
             try:
                 services = v1.list_namespaced_service(namespace="openshift-catalogd")
-                logging.info("✅ User has access to openshift-catalogd namespace")
+                logging.info("User has access to openshift-catalogd namespace")
                 
                 # Check if catalogd-service exists
                 catalogd_service = None
@@ -158,18 +158,18 @@ class OpenShiftAuth:
                         break
                 
                 if catalogd_service:
-                    logging.info("✅ catalogd-service found and accessible")
+                    logging.info("catalogd-service found and accessible")
                     return True
                 else:
-                    logging.warning("⚠️  catalogd-service not found in openshift-catalogd namespace")
+                    logging.warning("catalogd-service not found in openshift-catalogd namespace")
                     return False
                     
             except Exception as e:
-                logging.error(f"❌ Cannot access openshift-catalogd namespace: {e}")
+                logging.error(f"Cannot access openshift-catalogd namespace: {e}")
                 return False
                 
         except Exception as e:
-            logging.error(f"❌ Permission verification failed: {e}")
+            logging.error(f"Permission verification failed: {e}")
             return False
     
     def login(self) -> bool:
@@ -182,28 +182,64 @@ class OpenShiftAuth:
         Raises:
             Exception: If authentication fails or required permissions missing
         """
-        if not self.token:
-            raise Exception("Authentication token required. Provide --openshift-token or set OPENSHIFT_TOKEN environment variable")
-        
         try:
-            import openshift as oc
-            from kubernetes import client
+            from kubernetes import client, config
             
-            # Configure the OpenShift client
-            configuration = client.Configuration()
-            configuration.host = self.api_url
-            configuration.api_key = {"authorization": f"Bearer {self.token}"}
-            configuration.verify_ssl = not self.insecure
+            # First, try to use existing kubeconfig (from oc login)
+            if not self.token:
+                logging.info("No explicit token provided, using existing kubeconfig authentication...")
+                try:
+                    # If insecure mode, disable SSL warnings first
+                    if self.insecure:
+                        import urllib3
+                        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                    
+                    # Load kubeconfig and use existing authentication
+                    config.load_kube_config()
+                    
+                    # Override the host and SSL settings to use our discovered/provided URL and insecure setting
+                    configuration = client.Configuration.get_default_copy()
+                    configuration.host = self.api_url
+                    configuration.verify_ssl = not self.insecure
+                    
+                    # Test the connection with kubeconfig auth
+                    api = client.CoreV1Api(client.ApiClient(configuration))
+                    api.get_api_resources()
+                    
+                    logging.info(f"Successfully authenticated using kubeconfig at {self.api_url}")
+                    
+                    # Set the configuration as default for other operations
+                    client.Configuration.set_default(configuration)
+                    
+                except Exception as kubeconfig_error:
+                    logging.warning(f"Kubeconfig authentication failed: {kubeconfig_error}")
+                    # Check if this is an SSL certificate error
+                    error_msg = str(kubeconfig_error).lower()
+                    if "ssl" in error_msg or "certificate" in error_msg or "tls" in error_msg:
+                        raise Exception("SSL certificate verification failed. Your cluster appears to use self-signed certificates. Please use the --insecure flag to skip SSL verification, or provide --openshift-token with a valid authentication token.")
+                    else:
+                        raise Exception("Authentication token required. Please provide --openshift-token, set OPENSHIFT_TOKEN environment variable, or ensure you're logged in with 'oc login'")
             
-            # Set the configuration
-            client.Configuration.set_default(configuration)
-            oc_client = client.ApiClient(configuration)
-            
-            # Test the connection
-            api = client.CoreV1Api()
-            api.get_api_resources()
-            
-            logging.info(f"✅ Successfully authenticated with OpenShift at {self.api_url}")
+            else:
+                # Use explicit token authentication
+                logging.info("Using provided authentication token...")
+                import openshift as oc
+                
+                # Configure the OpenShift client
+                configuration = client.Configuration()
+                configuration.host = self.api_url
+                configuration.api_key = {"authorization": f"Bearer {self.token}"}
+                configuration.verify_ssl = not self.insecure
+                
+                # Set the configuration
+                client.Configuration.set_default(configuration)
+                oc_client = client.ApiClient(configuration)
+                
+                # Test the connection
+                api = client.CoreV1Api()
+                api.get_api_resources()
+                
+                logging.info(f"Successfully authenticated with token at {self.api_url}")
             
             # Verify catalogd permissions if requested
             if self.verify_catalogd_permissions:
@@ -214,6 +250,8 @@ class OpenShiftAuth:
             return True
             
         except ImportError:
-            raise Exception("OpenShift Python client not installed. Run: pip install openshift")
+            raise Exception("Kubernetes Python client not installed. Run: pip install -r requirements.txt")
         except Exception as e:
+            if "Authentication token required" in str(e) or "SSL certificate verification failed" in str(e):
+                raise e
             raise Exception(f"OpenShift authentication failed: {e}")

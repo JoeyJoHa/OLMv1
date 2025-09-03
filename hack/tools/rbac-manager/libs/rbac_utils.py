@@ -111,8 +111,14 @@ def extract_rbac_from_bundles(bundles: List[Dict], package_name: str) -> Optiona
     Returns:
         Dict with clusterRoles, roles, and serviceAccount, or None if no RBAC found
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if not bundles:
+        logger.warning(f"No bundles provided for package: {package_name}")
         return None
+    
+    logger.info(f"Processing {len(bundles)} bundle(s) for RBAC extraction")
     
     raw_rbac = {
         'clusterPermissions': [],
@@ -121,16 +127,70 @@ def extract_rbac_from_bundles(bundles: List[Dict], package_name: str) -> Optiona
     }
     
     # Extract raw permissions from bundles
-    for bundle in bundles:
+    bundles_processed = 0
+    csv_found_count = 0
+    
+    for i, bundle in enumerate(bundles):
+        logger.debug(f"Processing bundle {i+1}/{len(bundles)}")
+        
+        # Diagnostic: Log bundle structure
+        bundle_keys = list(bundle.keys())
+        logger.debug(f"Bundle keys: {bundle_keys}")
+        
         csv_data = get_csv_metadata(bundle)
         if csv_data:
+            csv_found_count += 1
+            logger.debug(f"CSV metadata found in bundle {i+1}")
+            
+            # Check install specification
             install_spec = csv_data.get('spec', {}).get('install', {})
+            if not install_spec:
+                logger.debug(f"No install specification in CSV for bundle {i+1}")
+                continue
+            
+            logger.debug(f"Install spec keys: {list(install_spec.keys())}")
+            
+            # Extract service account and permissions
+            before_sa = raw_rbac['serviceAccount']
+            before_perms = len(raw_rbac['permissions'])
+            before_cluster_perms = len(raw_rbac['clusterPermissions'])
+            
             extract_service_account(install_spec, raw_rbac)
             extract_permissions(install_spec, raw_rbac)
+            
+            # Log what was extracted
+            sa_added = raw_rbac['serviceAccount'] != before_sa
+            perms_added = len(raw_rbac['permissions']) - before_perms
+            cluster_perms_added = len(raw_rbac['clusterPermissions']) - before_cluster_perms
+            
+            logger.debug(f"From bundle {i+1}: SA added: {sa_added}, Perms: +{perms_added}, ClusterPerms: +{cluster_perms_added}")
+            bundles_processed += 1
+        else:
+            logger.debug(f"No CSV metadata found in bundle {i+1}")
+            # Log bundle properties to understand structure
+            properties = bundle.get('properties', [])
+            prop_types = [p.get('type') for p in properties]
+            logger.debug(f"Bundle {i+1} property types: {prop_types}")
+    
+    # Diagnostic summary
+    logger.info(f"RBAC extraction summary:")
+    logger.info(f"   Bundles processed: {bundles_processed}/{len(bundles)}")
+    logger.info(f"   CSVs found: {csv_found_count}")
+    logger.info(f"   Service accounts: {1 if raw_rbac['serviceAccount'] else 0}")
+    logger.info(f"   Permissions: {len(raw_rbac['permissions'])}")
+    logger.info(f"   Cluster permissions: {len(raw_rbac['clusterPermissions'])}")
     
     # Return None if no permissions found
     if not (raw_rbac['permissions'] or raw_rbac['clusterPermissions']):
+        logger.warning(f"No RBAC permissions found for package '{package_name}'")
+        logger.warning(f"Possible reasons:")
+        logger.warning(f"   - The operator doesn't require special permissions")
+        logger.warning(f"   - The bundle format is not OLMv1 compatible") 
+        logger.warning(f"   - The CSV install specification is missing or malformed")
+        logger.warning(f"   - The bundle metadata structure is different than expected")
         return None
+    
+    logger.info(f"Successfully extracted RBAC for package '{package_name}'")
     
     # Convert raw permissions to Kubernetes YAML structures
     return convert_to_k8s_resources(raw_rbac, package_name)

@@ -9,6 +9,7 @@ import logging
 import os
 import subprocess
 import yaml
+import json
 from typing import Dict, List, Optional
 
 # Import shared RBAC utilities
@@ -62,6 +63,12 @@ class OPMQueryLib:
         except subprocess.CalledProcessError as e:
             logger.error(f"OPM command failed: {' '.join(cmd)} - {e.stderr}")
             
+            # Handle 401 Unauthorized errors (authentication/authorization issues)
+            if "401 Unauthorized" in str(e.stderr) or "failed to authorize" in str(e.stderr):
+                registry_host = self._extract_registry_host_from_command(cmd)
+                error_msg = self._build_authentication_error_message(registry_host, e.stderr)
+                raise Exception(error_msg)
+            
             # Provide helpful error message for certificate issues
             if "x509: certificate signed by unknown authority" in str(e.stderr):
                 registry_host = ""
@@ -72,12 +79,12 @@ class OPMQueryLib:
                         registry_host = image_ref.split('/')[0]
                 
                 error_msg = (
-                    f"🔒 TLS certificate verification failed for the container registry.\n\n"
+                    f"TLS certificate verification failed for the container registry.\n\n"
                     f"This usually means:\n"
                     f"1. The registry uses a self-signed certificate\n" 
                     f"2. The registry certificate is not trusted by the system\n"
                     f"3. You need to configure your container runtime for insecure registries\n\n"
-                    f"💡 Try these solutions:\n"
+                    f"Try these solutions:\n"
                 )
                 
                 if registry_host:
@@ -123,11 +130,45 @@ class OPMQueryLib:
         cmd = ['opm', 'render', image_ref]
         output = self._run_opm_command(cmd)
         
-        # Parse YAML documents
+        # Parse JSON output 
         entries = []
-        for doc in yaml.safe_load_all(output):
-            if doc:
-                entries.append(doc)
+        
+        try:
+            # Split into individual JSON objects by finding complete braces
+            objects = []
+            brace_count = 0
+            current_object = []
+            
+            for line in output.split('\n'):
+                current_object.append(line)
+                brace_count += line.count('{') - line.count('}')
+                
+                # When brace count reaches 0, we have a complete object
+                if brace_count == 0 and current_object:
+                    obj_str = '\n'.join(current_object).strip()
+                    if obj_str:
+                        objects.append(obj_str)
+                    current_object = []
+            
+            # Parse each JSON object
+            for obj_str in objects:
+                if obj_str:
+                    try:
+                        doc = json.loads(obj_str)
+                        entries.append(doc)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Skipping invalid JSON object: {e}")
+                        
+        except Exception:
+            # Fallback to YAML parsing for older OPM versions
+            logger.debug("JSON parsing failed, trying YAML...")
+            try:
+                for doc in yaml.safe_load_all(output):
+                    if doc:
+                        entries.append(doc)
+            except yaml.YAMLError as e:
+                logger.error(f"Failed to parse OPM output as both JSON and YAML: {e}")
+                raise Exception(f"Unable to parse OPM output format")
         
         # Cache the results for future use
         self._catalog_cache[image_ref] = entries
@@ -189,6 +230,63 @@ class OPMQueryLib:
                 bundles.append(entry)
         
         return bundles
+    
+    def _extract_registry_host_from_command(self, cmd: List[str]) -> str:
+        """
+        Extract registry host from OPM command arguments.
+        
+        Args:
+            cmd: OPM command arguments list
+            
+        Returns:
+            Registry hostname or empty string if not found
+        """
+        if len(cmd) < 3:
+            return ""
+        
+        # Find image reference in command (skip --skip-tls flag)
+        image_ref = ""
+        for arg in cmd[2:]:
+            if not arg.startswith('--'):
+                image_ref = arg
+                break
+        
+        if not image_ref:
+            return ""
+        
+        # Extract host from image reference
+        if "://" in image_ref:
+            return image_ref.split("://")[1].split("/")[0]
+        elif "/" in image_ref:
+            return image_ref.split("/")[0]
+        
+        return ""
+    
+    def _build_authentication_error_message(self, registry_host: str, stderr_output: str) -> str:
+        """
+        Build a user-friendly authentication error message.
+        
+        Args:
+            registry_host: Registry hostname
+            stderr_output: Original error output from OPM
+            
+        Returns:
+            Formatted error message with troubleshooting steps
+        """
+        error_msg = f"Registry Authentication Required\n\n"
+        error_msg += f"The registry '{registry_host}' requires authentication to access this image.\n"
+        error_msg += f"This typically happens with:\n"
+        error_msg += f"  - Red Hat registries (registry.redhat.io)\n"
+        error_msg += f"  - Private enterprise registries\n"
+        error_msg += f"  - Quay.io private repositories\n\n"
+        error_msg += f"To fix this:\n"
+        error_msg += f"  1. For Red Hat registries: Login with 'podman login registry.redhat.io'\n"
+        error_msg += f"  2. For other registries: Use 'podman login <registry-host>'\n"
+        error_msg += f"  3. Ensure your credentials are valid and have pull access\n"
+        error_msg += f"  4. For Podman Machine (macOS/Windows): Login inside the VM with 'podman machine ssh'\n\n"
+        error_msg += f"Original error: {stderr_output.strip()}"
+        
+        return error_msg
     
     def extract_rbac_resources(self, image_ref: str, package_name: str) -> Optional[Dict]:
         """

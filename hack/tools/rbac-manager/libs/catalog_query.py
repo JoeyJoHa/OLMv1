@@ -1,17 +1,21 @@
 """
-ClusterCatalog API Query Library.
+ClusterCatalog API Query and User Interface Module.
 
-This module provides ClusterCatalog API querying functionality with caching
-and improved error handling.
+This module provides ClusterCatalog API querying functionality with caching,
+improved error handling, and interactive catalog selection UI.
+Consolidates catalog operations and user interaction in one cohesive module.
 """
 
 import logging
 import requests
 import urllib3
-from typing import Dict, List, Optional
+import sys
+from typing import Dict, List, Optional, Any
+import argparse
 
 # Import shared RBAC utilities
 from . import rbac_utils
+from .core_utils import check_terminal_output, display_pipe_error_message
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -37,6 +41,47 @@ class CatalogAPIQueryLib:
         if insecure:
             self.session.verify = False
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    @staticmethod
+    def get_available_clustercatalogs() -> List[Dict[str, str]]:
+        """
+        Get list of available ClusterCatalogs from the cluster.
+        
+        Returns:
+            List of catalog information dictionaries
+        """
+        try:
+            from kubernetes import client
+            api_client = client.CustomObjectsApi()
+            cluster_catalogs = api_client.list_cluster_custom_object(
+                group="olm.operatorframework.io",
+                version="v1",
+                plural="clustercatalogs"
+            )
+            catalogs_info = []
+            for catalog in cluster_catalogs.get('items', []):
+                metadata = catalog.get('metadata', {})
+                status = catalog.get('status', {})
+                
+                # Parse serving status from conditions array
+                serving_status = False
+                conditions = status.get('conditions', [])
+                for condition in conditions:
+                    if condition.get('type') == 'Serving' and condition.get('status') == 'True':
+                        serving_status = True
+                        break
+                
+                catalog_info = {
+                    'name': metadata.get('name', 'unknown'),
+                    'lastUnpacked': status.get('lastUnpacked', 'never'),
+                    'serving': serving_status,
+                    'age': metadata.get('creationTimestamp', 'unknown')
+                }
+                catalogs_info.append(catalog_info)
+            logger.info(f"Found {len(catalogs_info)} ClusterCatalogs")
+            return catalogs_info
+        except Exception as e:
+            raise Exception(f"Failed to query ClusterCatalogs: {e}")
     
     def _make_request(self, endpoint: str) -> requests.Response:
         """Make HTTP request with error handling."""
@@ -69,7 +114,18 @@ class CatalogAPIQueryLib:
         endpoint = f"/catalogs/{catalog_name}/api/v1/all"
         response = self._make_request(endpoint)
         
-        data = response.json()
+        # Parse NDJSON (newline-delimited JSON) response
+        data = []
+        response_text = response.text.strip()
+        if response_text:
+            import json
+            for line in response_text.split('\n'):
+                line = line.strip()
+                if line:
+                    try:
+                        data.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Skipping invalid JSON line: {line[:100]}... Error: {e}")
         
         # Cache the results for future use
         self._catalog_cache[catalog_name] = data
@@ -213,5 +269,121 @@ class CatalogAPIQueryLib:
         """
         bundles = self.get_package_bundles(package_name, catalog_name)
         return rbac_utils.extract_rbac_from_bundles(bundles, package_name)
-    
 
+
+# ============================================================================
+# CATALOG SELECTION USER INTERFACE
+# ============================================================================
+
+class CatalogSelectionUI:
+    """Handles interactive catalog selection and user interface concerns."""
+    
+    @staticmethod
+    def select_catalog_interactively() -> str:
+        """
+        Display available ClusterCatalogs and let user choose one interactively.
+        
+        Returns:
+            Selected catalog name
+            
+        Raises:
+            SystemExit: If user cancels or no catalogs available
+        """
+        try:
+            catalogs = CatalogAPIQueryLib.get_available_clustercatalogs()
+            
+            if not catalogs:
+                print("No ClusterCatalogs found in this cluster.")
+                sys.exit(1)
+            
+            CatalogSelectionUI._display_catalog_table(catalogs)
+            return CatalogSelectionUI._get_user_selection(catalogs)
+            
+        except Exception as e:
+            print(f"Error fetching ClusterCatalogs: {e}")
+            print("Falling back to default catalog: operatorhubio")
+            return "operatorhubio"
+    
+    @staticmethod
+    def determine_catalog_to_use(args: argparse.Namespace, command_context: str) -> str:
+        """
+        Determine which catalog to use based on arguments and terminal context.
+        
+        Args:
+            args: Parsed command line arguments
+            command_context: Context string for error messages
+            
+        Returns:
+            Selected catalog name
+            
+        Raises:
+            SystemExit: If piped output requires --catalog-name but it's not provided
+        """
+        if args.catalog_name:
+            # User explicitly specified a catalog name
+            return args.catalog_name
+        
+        # Check if output is being piped (not connected to terminal)
+        if not check_terminal_output():
+            display_pipe_error_message(command_context)
+            sys.exit(1)
+        
+        # No catalog specified, let user choose interactively
+        print("No catalog specified. Discovering available ClusterCatalogs...")
+        return CatalogSelectionUI.select_catalog_interactively()
+    
+    @staticmethod
+    def _display_catalog_table(catalogs: List[Dict[str, Any]]) -> None:
+        """Display catalogs in a formatted table."""
+        print(f"\nAvailable ClusterCatalogs:")
+        print("-" * 70)
+        print(f"{'  #':<4} {'Name':<35} {'Serving':<8} {'Last Unpacked':<20}")
+        print("-" * 70)
+        
+        serving_catalogs = []
+        for i, catalog in enumerate(catalogs, 1):
+            serving_status = "True" if catalog['serving'] else "False"
+            
+            print(f"{i:>3} {catalog['name']:<35} {serving_status:<8} {catalog['lastUnpacked']:<20}")
+            if catalog['serving']:
+                serving_catalogs.append((i, catalog['name']))
+        
+        print("-" * 70)
+        
+        if not serving_catalogs:
+            print("WARNING: No serving ClusterCatalogs found. All catalogs appear to be offline.")
+            print("Note: You can still try to query them, but the requests may fail.")
+        else:
+            print(f"\nNote: Only serving catalogs can be reliably queried for packages.")
+    
+    @staticmethod
+    def _get_user_selection(catalogs: List[Dict[str, Any]]) -> str:
+        """Get user's catalog selection."""
+        while True:
+            try:
+                choice = input(f"\nSelect a catalog (1-{len(catalogs)}) or 'q' to quit: ").strip()
+                
+                if choice.lower() == 'q':
+                    print("Exiting.")
+                    sys.exit(0)
+                
+                choice_num = int(choice)
+                if 1 <= choice_num <= len(catalogs):
+                    selected_catalog = catalogs[choice_num - 1]
+                    
+                    if not selected_catalog['serving']:
+                        print(f"WARNING: '{selected_catalog['name']}' is not currently serving. This query may fail.")
+                        confirm = input("Continue anyway? (y/N): ").strip().lower()
+                        if confirm != 'y':
+                            continue
+                    
+                    print(f"Selected catalog: {selected_catalog['name']}")
+                    return selected_catalog['name']
+                else:
+                    print(f"Invalid choice. Please enter a number between 1 and {len(catalogs)}")
+                    
+            except ValueError:
+                print("Invalid input. Please enter a valid number or 'q' to quit")
+            except KeyboardInterrupt:
+                print("\nExiting.")
+                sys.exit(0)
