@@ -2,20 +2,13 @@
 
 A unified tool for extracting RBAC (Role-Based Access Control) permissions from OLM (Operator Lifecycle Manager) operators with modern features like configuration file support and automatic cluster discovery.
 
-## ✨ Features
-
-- **🔧 Configuration File Support** - Set default values, never type the same arguments again
-- **🔍 Automatic Cluster Discovery** - Auto-detects your current cluster, no need for `--openshift-url`
-- **📁 Multiple Query Methods** - Support both OPM image and ClusterCatalog API queries
-- **⚡ Flexible Output** - Print to stdout, save to files, or deploy directly to cluster
-- **🏗️ Modular Architecture** - Clean, maintainable codebase with reusable components
-- **🌱 Environment Variables** - Use `${VAR_NAME}` expansion in config files
-
 **Query Methods:**
+
 1. **ClusterCatalog API Queries** - Query via OpenShift ClusterCatalog API using secure port-forward *(Recommended)*
 2. **OPM Image Queries** - Query operator images directly using the `opm` tool
 
 **Output Modes:**
+
 1. **Print to Stdout** (default) - Display RBAC YAML in terminal
 2. **Deploy to Cluster** (`--deploy`) - Apply RBAC directly using `oc apply -f -`
 3. **Save to Files** (`--output DIR`) - Save YAML files to specified directory
@@ -23,6 +16,7 @@ A unified tool for extracting RBAC (Role-Based Access Control) permissions from 
 ## 🚀 Quick Start
 
 ### First Time Setup
+
 ```bash
 # Generate a sample configuration file (recommended for frequent use)
 python3 rbac_manager.py --generate-config ~/.rbac-manager.yaml
@@ -35,6 +29,7 @@ python3 rbac_manager.py --catalogd --package prometheus
 ```
 
 ### Simple Usage (with auto-discovery)
+
 ```bash
 # Make sure you're logged into your OpenShift cluster
 oc login https://api.your-cluster.com:6443
@@ -49,49 +44,16 @@ python3 rbac_manager.py --catalogd --package grafana --deploy
 python3 rbac_manager.py --catalogd --package cert-manager --output ./rbac-files
 ```
 
-## 📊 Before vs After
-
-### Before (Manual Process)
-```bash
-# Complex manual commands required every time
-python3 rbac_manager.py \
-  --catalogd \
-  --openshift-url https://api.my-cluster.com:6443 \
-  --openshift-token sha256~long-token \
-  --catalog-name operatorhubio \
-  --local-port 8080 \
-  --output ./rbac-output \
-  --verbose \
-  --package prometheus-operator
-```
-
-### After (With Configuration)
-```yaml
-# ~/.rbac-manager.yaml
-openshift:
-  url: https://api.my-cluster.com:6443
-  token: ${OPENSHIFT_TOKEN}
-catalog:
-  name: operatorhubio
-output:
-  directory: ./rbac-output
-logging:
-  verbose: true
-```
-
-```bash
-# Simple command using configuration defaults
-python3 rbac_manager.py --catalogd --package prometheus-operator
-```
-
 ## 🛠️ Prerequisites
 
 ### For ClusterCatalog API Queries (Recommended)
+
 - `oc` (OpenShift CLI) installed and accessible
 - OpenShift cluster access with authentication credentials
 - Permissions to access `services` in `openshift-catalogd` namespace
 
 ### For OPM Queries
+
 - `opm` tool installed and accessible
 - Access to operator catalog images
 - Container runtime (Docker or Podman) properly configured
@@ -345,6 +307,7 @@ specified-directory/
 ```
 
 **Template Features:**
+
 - Uses Helm template syntax: `{{ .Release.Namespace }}`
 - Consistent resource naming: `{operator-name}-{resource-type}`
 - Ready for Helm chart integration
@@ -352,17 +315,6 @@ specified-directory/
 ### Deploy Output (`--deploy`)
 
 RBAC resources are applied directly to the cluster using `oc apply -f -`. No files are created.
-
-Example output:
-```
-🔐 Authenticating with OpenShift...
-🔍 Auto-discovered cluster URL: https://api.cluster.example.com:6443
-✅ Successfully authenticated with OpenShift at https://api.cluster.example.com:6443
-🔗 Setting up port-forward to catalogd service...
-✅ Successfully deployed RBAC for prometheus
-   clusterrole.rbac.authorization.k8s.io/prometheus-cluster-role created
-   clusterrolebinding.rbac.authorization.k8s.io/prometheus-cluster-role-binding created
-```
 
 ## 📘 Common Catalogs
 
@@ -459,19 +411,22 @@ python3 rbac_manager.py --opm --image my-registry.com/catalog:latest --insecure 
 **Important Note**: When using Podman on macOS or Windows, the `--insecure` flag may not work as expected because Podman operates in a client-server model. The actual container operations happen inside a Linux virtual machine (the "Podman Machine"), so registry configuration must be applied within the VM.
 
 #### Symptoms
+
 - `--insecure` flag doesn't resolve certificate issues
 - Errors like: `x509: certificate signed by unknown authority`
 - OPM commands fail even with insecure flags
 
 #### Solution: Configure Podman Machine
 
-**Step 1: SSH into the Podman Machine**
+##### **Step 1: SSH into the Podman Machine**
+
 ```bash
 # This opens a shell inside the Linux VM where containers actually run
 podman machine ssh
 ```
 
-**Step 2: Edit Registry Configuration (Inside VM)**
+##### **Step 2: Edit Registry Configuration (Inside VM)**
+
 ```bash
 # Inside the podman machine ssh session
 # Use vi or another available editor to add your insecure registry
@@ -490,7 +445,8 @@ insecure = true
 # Save and exit the editor (:wq in vi)
 ```
 
-**Step 3: Restart Podman Machine (if necessary)**
+###### **Step 3: Restart Podman Machine (if necessary)**
+
 ```bash
 # Exit the ssh session
 exit
@@ -500,7 +456,8 @@ podman machine stop
 podman machine start
 ```
 
-**Step 4: Test Configuration**
+###### **Step 4: Test Configuration**
+
 ```bash
 # Test that the registry is now accessible
 podman pull your-private-registry.com/some-image:latest
@@ -510,11 +467,14 @@ python3 rbac_manager.py --opm --image your-private-registry.com/catalog:latest -
 ```
 
 #### Alternative: Use Docker Desktop
+
 If you're using Docker Desktop instead of Podman, you can configure insecure registries through the GUI:
 
 1. Open Docker Desktop Settings
 2. Go to "Docker Engine" tab
-3. Add your registry to the `insecure-registries` array:
+3. Add your registry to the `insecure-registries` array
+4. Click "Apply & Restart"
+
 ```json
 {
   "builder": {
@@ -533,7 +493,6 @@ If you're using Docker Desktop instead of Podman, you can configure insecure reg
   ]
 }
 ```
-4. Click "Apply & Restart"
 
 #### Troubleshooting Podman Machine Issues
 
@@ -560,81 +519,3 @@ cat /etc/containers/registries.conf
 - `OPENSHIFT_TOKEN` - OpenShift authentication token (alternative to --openshift-token)
 - `CLUSTER_URL` - Can be used in configuration files via `${CLUSTER_URL}`
 - `HOME` - Used for default config file locations
-
-## 💡 Best Practices
-
-### 1. Configuration Management
-- **Use Configuration Files**: Set up `~/.rbac-manager.yaml` for your common settings
-- **Environment-Specific Configs**: Create separate configs for different clusters/environments
-- **Environment Variables**: Use `${VAR_NAME}` expansion for sensitive data like tokens
-
-### 2. Security
-- **Service Account Tokens**: Use service account tokens for automation instead of user tokens
-- **Token Storage**: Store tokens in environment variables, not configuration files
-- **Least Privilege**: Review generated RBAC before deploying to ensure minimal permissions
-
-### 3. Automation
-- **Port-Forward Method**: More secure than exposed routes - preferred for production
-- **Batch Processing**: Use configuration files and loops for processing multiple operators
-- **CI/CD Integration**: Integrate with GitOps workflows for automated RBAC management
-
-### 4. Development Workflow
-- **Specific Packages**: Extract specific packages rather than all packages when possible
-- **Version Control**: Store generated RBAC files in version control for review and rollback
-
-## 🚀 Integration Examples
-
-### With Helm Charts
-
-```bash
-# Generate RBAC files for Helm chart templates
-python3 rbac_manager.py --catalogd --package prometheus --output ./helm-chart/templates/rbac/
-
-# Use in Helm chart values
-cat > values.yaml <<EOF
-rbac:
-  create: true
-  serviceAccountName: prometheus-operator
-EOF
-```
-
-### With GitOps
-
-```bash
-# Generate RBAC for GitOps repository
-python3 rbac_manager.py --catalogd --package cert-manager --output ./k8s-manifests/cert-manager/rbac/
-
-# Commit to Git
-git add k8s-manifests/
-git commit -m "Add cert-manager RBAC resources"
-git push
-```
-
-### With Operator SDK
-
-```bash
-# Generate RBAC for operator development
-python3 rbac_manager.py --opm --image quay.io/my-org/my-catalog:latest --package my-operator --output ./config/rbac/
-```
-
-## 🤝 Contributing
-
-The RBAC Manager uses a modular architecture that makes it easy to contribute:
-
-- **Core Logic**: Located in `libs/rbac_manager_core.py`
-- **Query Methods**: Separate modules for OPM (`libs/opm_query.py`) and ClusterCatalog (`libs/catalog_query.py`)
-- **Configuration**: All config handling in `libs/config_utils.py`
-- **Authentication**: OpenShift auth and discovery in `libs/openshift_auth.py`
-
-## 🆘 Support
-
-For issues, questions, or contributions:
-
-1. Review the troubleshooting section for common issues
-2. Use `--verbose` flag for detailed logging
-3. Check configuration with `--generate-config` for sample setups
-4. Create an issue in the main project repository
-
----
-
-**Part of the [OLMv1 Project](../../../README.md)** - Automating Kubernetes operator lifecycle management with security best practices.
