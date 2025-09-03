@@ -1,0 +1,53 @@
+{{- range .Values.permissions.roles }}
+{{- if and $.Values.serviceAccount.bind .create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-role
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "operator-olm-v1.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: role
+    {{- if eq .type "grantor" }}
+    app.kubernetes.io/component-type: grantor
+    {{- else }}
+    app.kubernetes.io/component-type: operator
+    {{- end }}
+rules:
+  {{- if .customRules }}
+  {{- toYaml .customRules | nindent 2 }}
+  {{- else }}
+  # Default minimal permissions for operator installation
+  - apiGroups: [""]
+    resources: [pods, services, configmaps, secrets]
+    verbs: [get, list, watch]
+  {{- end }}
+{{- end }}
+{{- end }}
+
+---
+{{- range .Values.permissions.roles }}
+{{- if and $.Values.serviceAccount.bind .create }}
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-rb
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "operator-olm-v1.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: role-binding
+    {{- if eq .type "grantor" }}
+    app.kubernetes.io/component-type: grantor
+    {{- else }}
+    app.kubernetes.io/component-type: operator
+    {{- end }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "operator-olm-v1.serviceAccountName" $ }}
+    namespace: {{ $.Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "operator-olm-v1.roleName" $ }}{{ if eq .type "grantor" }}-grantor{{ end }}-role
+{{- end }}
+{{- end }}

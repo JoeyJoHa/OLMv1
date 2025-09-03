@@ -1,6 +1,6 @@
 # Operator Lifecycle Manager V1 (OLMv1)
 
-> **Disclaimer**: This documentation contains AI-generated content.
+> **Disclaimer**: This repo contains AI-generated content using Cursor / Gemini AI.
 
 ## Table of Contents
 
@@ -11,6 +11,8 @@
 - [Sequence Diagram](#sequence-diagram)
 - [Project Structure](#project-structure)
 - [Deployment Documentation](#deployment-documentation)
+- [Using Templates](#using-templates)
+- [RBAC Manager Tool](#rbac-manager-tool)
 - [Command Reference](#command-reference)
   - [Package Discovery](#package-discovery)
   - [Channel Information](#channel-information)
@@ -96,23 +98,14 @@ This project provides a structured approach for deploying OLMv1 operators with p
 ```tree
 OLMv1/
 ├── README.md                           # This documentation
+├── requirements.txt                    # Python dependencies
 ├── bundle/                             # Operator bundle files
 │   ├── ClusterServiceVersion.json      # Quay operator CSV
 │   ├── Service.json                    # Quay operator service
 │   └── CustomResourceDefinition.json   # Quay operator CRD
 ├── examples/                           # Example operator implementations
-│   ├── helm/                          # Generic Helm chart for operators
-│   │   ├── Chart.yaml                 # Helm chart metadata
-│   │   ├── values.yaml                # Helm chart values
-│   │   ├── .helmignore                # Helm ignore patterns
-│   │   └── templates/                 # Helm chart templates
-│   │       ├── clusterextension.yaml
-│   │       ├── clusterrole.yaml
-│   │       ├── clusterrolebinding.yaml
-│   │       ├── role.yaml
-│   │       ├── rolebinding.yaml
-│   │       └── serviceaccount.yaml
 │   ├── values/                        # Example values files for different operators
+│   │   └── values-quay-operator.yaml  # Quay operator example
 │   ├── yamls/                         # Manual YAML deployment files
 │   │   ├── 00-namespace.yaml           # Namespace definition
 │   │   ├── 01-serviceaccount.yaml      # Service account for operator
@@ -120,15 +113,42 @@ OLMv1/
 │   │   ├── 03-clusterrolebinding.yaml  # Cluster role binding
 │   │   └── 04-clusterextension.yaml    # OLMv1 ClusterExtension
 │   └── DEPLOYMENT.md                   # Detailed deployment documentation
+├── helm/                              # Generic Helm chart for operators
+│   ├── Chart.yaml                     # Helm chart metadata
+│   ├── values.yaml                    # Default Helm chart values
+│   └── templates/                     # Helm chart templates
+│       ├── _helpers.tpl               # Helper template functions
+│       ├── clusterextension.yaml      # ClusterExtension template
+│       ├── clusterrole.yaml           # ClusterRole template
+│       ├── role.yaml                  # Role template
+│       ├── serviceaccount.yaml        # ServiceAccount template
+│       └── NOTES.txt                  # Installation notes
+├── hack/                              # Developer tools and utilities
+│   └── tools/
+│       └── rbac-manager/              # Advanced RBAC extraction tool
+│           ├── rbac_manager.py        # Main CLI tool with config support
+│           ├── README.md              # Comprehensive usage guide
+│           └── libs/                  # Modular library components
+│               ├── openshift_auth.py    # Auto-discovery & authentication
+│               ├── rbac_manager_core.py # Core RBAC processing
+│               ├── config_utils.py      # Configuration file support
+│               ├── logging_utils.py     # Logging configuration
+│               ├── opm_query.py         # OPM image query functionality
+│               ├── catalog_query.py     # ClusterCatalog API queries
+│               ├── rbac_utils.py        # Shared RBAC processing utilities
+│               └── port_forward_utils.py # Port-forward management
 ├── Templates/                          # Reusable template files
-│   └── CustomRoles/                    # Custom role templates
-│       ├── 00-rolebinding.yaml        # Role binding template
-│       ├── 01-clusterrole.yaml        # Cluster role template
-│       └── 02-clusterrolebinding.yaml # Cluster role binding template
-├── .git/                               # Git repository
-├── .gitignore                          # Git ignore patterns
-├── .cursor/                            # Cursor IDE configuration
-└── .cursorignore                       # Cursor ignore patterns
+│   ├── CustomRoles/                    # Custom role templates
+│   │   ├── 00-rolebinding.yaml        # Role binding template
+│   │   ├── 01-clusterrole.yaml        # Cluster role template
+│   │   └── 02-clusterrolebinding.yaml # Cluster role binding template
+│   └── OLMv1 Resources/               # OLMv1 resource templates
+│       ├── 01-clustercatalog.yaml     # ClusterCatalog example
+│       └── 02-clusterextension.yaml   # ClusterExtension example
+├── .git/                              # Git repository
+├── .gitignore                         # Git ignore patterns
+├── .cursor/                           # Cursor IDE configuration
+└── .cursorignore                      # Cursor ignore patterns
 ```
 
 ## Deployment Documentation
@@ -146,9 +166,53 @@ The guide covers:
 
 The `Templates/CustomRoles/` directory contains reusable templates for custom RBAC configurations that can be adapted for different operators.
 
+## RBAC Manager Tool
+
+The project includes an advanced RBAC Manager tool (`hack/tools/rbac-manager/`) that automates the extraction and processing of RBAC permissions from OLM operators. This tool significantly simplifies the process of creating proper security configurations for OLMv1 deployments.
+
+### Quick Start
+
+```bash
+# Navigate to the tool directory
+cd hack/tools/rbac-manager/
+
+# Generate a configuration file (optional but recommended)
+python3 rbac_manager.py --generate-config ~/.rbac-manager.yaml
+
+# Extract RBAC for an operator (auto-discovers cluster URL)
+python3 rbac_manager.py --catalogd --package prometheus
+
+# Deploy RBAC directly to your cluster
+python3 rbac_manager.py --catalogd --package grafana --deploy
+
+# Save RBAC files for later use
+python3 rbac_manager.py --catalogd --package cert-manager --output ./rbac-files
+```
+
+### Benefits for OLMv1 Deployment
+
+1. **Accurate RBAC Extraction**: Automatically extracts the exact permissions required by operators
+2. **Kubernetes-Native Output**: Generates proper Kubernetes RBAC YAML with consistent naming
+3. **Helm Integration**: Outputs include Helm template syntax for easy chart integration
+4. **Security Best Practices**: Follows least-privilege principles and proper role separation
+5. **Automation Ready**: Supports scripting and CI/CD integration with configuration files
+
+### Integration with OLMv1 Workflow
+
+The RBAC Manager integrates seamlessly with the OLMv1 deployment process:
+
+1. **Extract RBAC**: Use the tool to extract required permissions for your chosen operator
+2. **Review Permissions**: Examine the generated RBAC to ensure it meets security requirements
+3. **Deploy RBAC**: Apply the RBAC resources before deploying the ClusterExtension
+4. **Deploy Operator**: Use the generated ServiceAccount in your ClusterExtension manifest
+
+For comprehensive usage instructions, examples, and troubleshooting guides, see the [RBAC Manager Guide](hack/tools/rbac-manager/README.md).
+
 ## Command Reference
 
 This section provides practical commands for interacting with OLMv1 catalogs and analyzing operator bundles. Most commands use the `opm` tool, but equivalent `catalogd` interactions are also shown.
+
+> **💡 Tip**: For easier RBAC extraction and operator analysis, consider using the [RBAC Manager Tool](#rbac-manager-tool) which automates many of these manual processes with a user-friendly interface and configuration file support.
 
 ### Package Discovery
 
@@ -212,6 +276,8 @@ opm render registry.redhat.io/redhat/redhat-operator-index:v4.18 \
 ### Permission Analysis
 
 **Note**: When analyzing operator permissions, always review both `clusterPermissions` and `permissions` sections. The Quay operator example above only shows `permissions` as it doesn't include `clusterPermissions`.
+
+> **⚠️ macOS/Windows Users**: When using `opm` with Podman, the `--skip-tls` flag may not work due to Podman's client-server architecture. You may need to configure insecure registries within the Podman Machine. See the [RBAC Manager documentation](hack/tools/rbac-manager/README.md#podman-machine-configuration-macoswindows) for detailed setup instructions.
 
 **Query required permissions for an operator:**
 
