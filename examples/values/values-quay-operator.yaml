@@ -101,7 +101,7 @@ permissions:
   roles:
     - name: ""  # Empty = auto-generate: <release>-<chart>-installer
       type: "operator"  # Type: "operator" for operator permissions, "grantor" for RBAC permissions
-      create: create  # No namespace-level roles needed for Quay operator
+      create: false  # No namespace-level roles needed for Quay operator
       customRules:
         - apiGroups: [""]
           resources: ["pods", "services", "configmaps", "secrets"]
