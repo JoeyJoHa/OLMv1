@@ -13,12 +13,43 @@ import sys
 from typing import Dict, List, Optional, Any
 import argparse
 
-# Import shared RBAC utilities
-from . import rbac_utils
-from .core_utils import check_terminal_output, display_pipe_error_message
+# Import core utilities
+from .cli_interface import check_terminal_output, display_pipe_error_message
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def create_catalogd_discoverer(base_url: str, insecure: bool = False) -> 'CatalogAPIQueryLib':
+    """
+    Create a catalogd discoverer (simplified factory function).
+    
+    Args:
+        base_url: Base URL for the catalog API
+        insecure: Skip TLS verification
+        
+    Returns:
+        Configured Catalog API query library
+    """
+    return CatalogAPIQueryLib(base_url=base_url, insecure=insecure)
+
+
+def discover_bundles_via_catalogd(catalog_lib: 'CatalogAPIQueryLib', package_name: str, catalog_name: str = "operatorhubio") -> List[str]:
+    """
+    Simplified bundle discovery via catalogd API (replaces complex factory pattern).
+    
+    Args:
+        catalog_lib: Configured CatalogAPIQueryLib instance
+        package_name: Name of the package to search for
+        catalog_name: Name of the catalog to query
+        
+    Returns:
+        List of bundle image URLs
+    """
+    # This is a simplified version - in practice, this would extract bundle URLs from the API
+    # For now, return empty list as catalogd bundle discovery needs more implementation
+    logger.info(f"Catalogd bundle discovery for package '{package_name}' in catalog '{catalog_name}'")
+    return []
 
 
 class CatalogAPIQueryLib:
@@ -37,6 +68,8 @@ class CatalogAPIQueryLib:
         
         # Cache for storing catalog entries to avoid repeated API calls
         self._catalog_cache: Dict[str, List[Dict]] = {}
+        # Index for efficient data access by schema type
+        self._entries_by_schema: Dict[str, List[Dict]] = {}
         
         if insecure:
             self.session.verify = False
@@ -127,50 +160,73 @@ class CatalogAPIQueryLib:
                     except json.JSONDecodeError as e:
                         logger.warning(f"Skipping invalid JSON line: {line[:100]}... Error: {e}")
         
-        # Cache the results for future use
+        # Cache the results and create index for future use
         self._catalog_cache[catalog_name] = data
+        self._index_entries(data)
         
-        logger.info(f"Retrieved and cached {len(data)} catalog entries")
+        logger.info(f"Retrieved, cached, and indexed {len(data)} catalog entries")
         return data
+    
+    def _index_entries(self, entries: List[Dict]) -> None:
+        """
+        Create an index of entries by their schema for faster lookups.
+        
+        This optimization eliminates the need for repeated full scans of the dataset
+        when querying for specific schema types (e.g., 'olm.package', 'olm.bundle').
+        
+        Args:
+            entries: List of catalog entries to index
+        """
+        self._entries_by_schema = {}
+        for entry in entries:
+            schema = entry.get('schema')
+            if schema:
+                if schema not in self._entries_by_schema:
+                    self._entries_by_schema[schema] = []
+                self._entries_by_schema[schema].append(entry)
+        
+        logger.debug(f"Indexed {len(entries)} entries across {len(self._entries_by_schema)} schema types")
     
     def clear_cache(self, catalog_name: Optional[str] = None) -> None:
         """
-        Clear cached catalog data.
+        Clear cached catalog data and indexes.
         
         Args:
             catalog_name: Specific catalog to clear, or None to clear all
         """
         if catalog_name:
             self._catalog_cache.pop(catalog_name, None)
-            logger.debug(f"Cleared cache for catalog: {catalog_name}")
+            # Clear index when cache is cleared (will be rebuilt on next access)
+            self._entries_by_schema.clear()
+            logger.debug(f"Cleared cache and index for catalog: {catalog_name}")
         else:
             self._catalog_cache.clear()
-            logger.debug("Cleared all catalog cache")
+            self._entries_by_schema.clear()
+            logger.debug("Cleared all catalog cache and indexes")
     
     def list_packages(self, catalog_name: str = "operatorhubio") -> List[str]:
         """
-        List all packages in catalog.
+        List all packages in catalog using the index.
         
         Args:
             catalog_name: Name of the catalog
             
         Returns:
-            List of package names
+            List of package names (sorted)
         """
-        entries = self.get_all_entries(catalog_name)
+        # Ensures data is loaded and indexed
+        self.get_all_entries(catalog_name)
         
-        packages = []
-        for entry in entries:
-            if entry.get('schema') == 'olm.package':
-                packages.append(entry['name'])
+        # Use index for efficient lookup
+        package_entries = self._entries_by_schema.get('olm.package', [])
+        packages = sorted([entry['name'] for entry in package_entries if entry.get('name')])
         
-        packages.sort()
         return packages
     
     def get_package_bundles(self, package_name: str, 
                           catalog_name: str = "operatorhubio") -> List[Dict]:
         """
-        Get all bundles for a specific package.
+        Get all bundles for a specific package using the index.
         
         Args:
             package_name: Name of the package
@@ -179,13 +235,12 @@ class CatalogAPIQueryLib:
         Returns:
             List of bundle entries
         """
-        entries = self.get_all_entries(catalog_name)
+        # Ensures data is loaded and indexed
+        self.get_all_entries(catalog_name)
         
-        bundles = []
-        for entry in entries:
-            if (entry.get('schema') == 'olm.bundle' and 
-                entry.get('package') == package_name):
-                bundles.append(entry)
+        # Use index for efficient lookup
+        bundle_entries = self._entries_by_schema.get('olm.bundle', [])
+        bundles = [entry for entry in bundle_entries if entry.get('package') == package_name]
         
         return bundles
     
@@ -199,7 +254,11 @@ class CatalogAPIQueryLib:
         Returns:
             True if AllNamespaces is supported
         """
-        return rbac_utils.has_all_namespaces_support(csv_data)
+        install_modes = csv_data.get('installModes', [])
+        for mode in install_modes:
+            if mode.get('type') == 'AllNamespaces' and mode.get('supported', False):
+                return True
+        return False
     
     def _has_webhooks(self, bundle_entry: Dict) -> bool:
         """
@@ -211,7 +270,11 @@ class CatalogAPIQueryLib:
         Returns:
             True if webhooks are defined
         """
-        return rbac_utils.has_webhooks(bundle_entry)
+        properties = bundle_entry.get('properties', [])
+        for prop in properties:
+            if prop.get('type') == 'olm.webhook':
+                return True
+        return False
     
     def _get_csv_metadata(self, bundle_entry: Dict) -> Optional[Dict]:
         """
@@ -223,7 +286,11 @@ class CatalogAPIQueryLib:
         Returns:
             CSV metadata or None if not found
         """
-        return rbac_utils.get_csv_metadata(bundle_entry)
+        properties = bundle_entry.get('properties', [])
+        for prop in properties:
+            if prop.get('type') == 'olm.csv.metadata':
+                return prop.get('value', {})
+        return None
 
     def get_packages_with_all_namespaces(self, catalog_name: str = "operatorhubio") -> List[str]:
         """
@@ -255,20 +322,322 @@ class CatalogAPIQueryLib:
         logger.info(f"Found {len(result)} packages supporting AllNamespaces without webhooks")
         return result
     
-    def extract_rbac_resources(self, package_name: str, 
-                               catalog_name: str = "operatorhubio") -> Optional[Dict]:
+    def get_package_metadata(self, package_name: str, 
+                           catalog_name: str = "operatorhubio") -> Optional[Dict[str, Any]]:
         """
-        Extract RBAC resources for a package as Kubernetes YAML structures.
+        Get comprehensive package metadata including versions, channels, and bundle URLs.
+        
+        This method extracts metadata needed for OPM bundle processing, not RBAC extraction.
+        RBAC extraction will be done later using 'opm render <bundle-image-url>'.
         
         Args:
             package_name: Name of the package
             catalog_name: Name of the catalog
             
         Returns:
-            Dict with clusterRoles, roles, and serviceAccount, or None if not found
+            Dict with package metadata:
+            {
+                'package_name': str,
+                'channels': [{'name': str, 'entries': [{'name': str, 'version': str}]}],
+                'bundles': [{'name': str, 'version': str, 'image': str, 'olmv1_compatible': bool}],
+                'latest_version': str,
+                'default_channel': str
+            }
+            Or None if package not found
         """
-        bundles = self.get_package_bundles(package_name, catalog_name)
-        return rbac_utils.extract_rbac_from_bundles(bundles, package_name)
+        entries = self.get_all_entries(catalog_name)
+        
+        # Find package entry first
+        package_info = None
+        for entry in entries:
+            if (entry.get('schema') == 'olm.package' and 
+                entry.get('name') == package_name):
+                package_info = entry
+                break
+        
+        if not package_info:
+            logger.warning(f"Package '{package_name}' not found in catalog '{catalog_name}'")
+            return None
+        
+        # Extract channels and versions
+        channels_data = []
+        for entry in entries:
+            if (entry.get('schema') == 'olm.channel' and 
+                entry.get('package') == package_name):
+                
+                channel_info = {
+                    'name': entry.get('name'),
+                    'entries': entry.get('entries', [])
+                }
+                channels_data.append(channel_info)
+        
+        # Extract bundle information with OLMv1 compatibility check
+        bundles_data = []
+        for entry in entries:
+            if (entry.get('schema') == 'olm.bundle'):
+                # Check if this bundle belongs to our package
+                is_package_bundle = False
+                for prop in entry.get('properties', []):
+                    if (prop.get('type') == 'olm.package' and
+                        prop.get('value', {}).get('packageName') == package_name):
+                        is_package_bundle = True
+                        break
+                
+                if is_package_bundle:
+                    bundle_image = entry.get('image')
+                    bundle_version = entry.get('name', 'unknown')
+                    
+                    # Check OLMv1 compatibility and get detailed info
+                    olmv1_info = self._is_olmv1_compatible(entry)
+                    olmv1_compatible = olmv1_info['compatible']
+                    
+                    bundle_info = {
+                        'name': bundle_version,
+                        'version': bundle_version.split('.')[-1] if '.' in bundle_version else bundle_version,
+                        'image': bundle_image,
+                        'olmv1_compatible': olmv1_compatible,
+                        'olmv1_info': olmv1_info,
+                        'full_entry': entry  # Include full entry for advanced processing
+                    }
+                    bundles_data.append(bundle_info)
+        
+        # Get default channel and latest version
+        default_channel = package_info.get('defaultChannel', 'stable')
+        
+        # Find latest version from channels
+        latest_version = 'unknown'
+        if channels_data:
+            for channel in channels_data:
+                if channel['name'] == default_channel and channel['entries']:
+                    # Get the last entry (usually latest)
+                    latest_version = channel['entries'][-1].get('name', 'unknown')
+                    break
+        
+        metadata = {
+            'package_name': package_name,
+            'catalog_name': catalog_name,
+            'default_channel': default_channel,
+            'latest_version': latest_version,
+            'channels': channels_data,
+            'bundles': bundles_data,
+            'olmv1_compatible_bundles': [b for b in bundles_data if b.get('olmv1_info', {}).get('compatible', False)],
+            'total_bundles': len(bundles_data),
+            'compatible_bundles_count': len([b for b in bundles_data if b.get('olmv1_info', {}).get('compatible', False)])
+        }
+        
+        logger.info(f"Package '{package_name}' metadata: {metadata['compatible_bundles_count']}/{metadata['total_bundles']} OLMv1 compatible bundles")
+        return metadata
+    
+    def _is_olmv1_compatible(self, bundle_entry: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Check OLMv1 compatibility and extract detailed compatibility info.
+        
+        Args:
+            bundle_entry: Bundle entry from catalog
+            
+        Returns:
+            Dictionary with compatibility details: compatible, webhooks, installModes
+        """
+        compatibility_info = {
+            'compatible': False,
+            'has_webhooks': False,
+            'install_modes': {},
+            'all_namespaces_supported': False
+        }
+        
+        properties = bundle_entry.get('properties', [])
+        
+        # Look for olm.csv.metadata property which indicates CSV presence
+        for prop in properties:
+            if prop.get('type') == 'olm.csv.metadata':
+                csv_data = prop.get("value", {})
+                compatibility_info['compatible'] = True
+                
+                # Check for webhooks
+                webhooks = csv_data.get("webhookdefinitions", [])
+                compatibility_info['has_webhooks'] = len(webhooks) > 0
+                
+                # Extract install modes
+                install_modes = csv_data.get("installModes", [])
+                for mode in install_modes:
+                    mode_type = mode.get("type")
+                    supported = mode.get("supported", False)
+                    compatibility_info['install_modes'][mode_type] = supported
+                    
+                    if mode_type == "AllNamespaces" and supported:
+                        compatibility_info['all_namespaces_supported'] = True
+                
+                break
+        
+        return compatibility_info
+    
+    def get_bundle_images_for_opm(self, package_name: str, 
+                                catalog_name: str = "operatorhubio") -> List[str]:
+        """
+        Get bundle image URLs for a package that can be used with 'opm render'.
+        
+        This is the method that should be used for RBAC extraction workflow:
+        1. Get bundle image URLs from this method
+        2. Use 'opm render <bundle-image-url>' to get CSV
+        3. Extract RBAC from CSV
+        
+        Args:
+            package_name: Name of the package  
+            catalog_name: Name of the catalog
+            
+        Returns:
+            List of bundle image URLs suitable for 'opm render'
+        """
+        metadata = self.get_package_metadata(package_name, catalog_name)
+        
+        if not metadata:
+            return []
+        
+        bundle_images = []
+        compatible_bundles = [b for b in metadata.get('bundles', []) if b.get('olmv1_info', {}).get('compatible', False)]
+        for bundle in compatible_bundles:
+            image_url = bundle.get('image')
+            if image_url:
+                bundle_images.append(image_url)
+        
+        logger.info(f"Found {len(bundle_images)} OLMv1 compatible bundle images for package '{package_name}'")
+        return bundle_images
+
+    def get_package_channels(self, package_name: str, 
+                           catalog_name: str = "operatorhubio") -> Optional[List[Dict[str, Any]]]:
+        """
+        Get only the channels for a package.
+        
+        Args:
+            package_name: Name of the package
+            catalog_name: Name of the catalog
+            
+        Returns:
+            List of channel information dictionaries
+        """
+        try:
+            entries = self.get_all_entries(catalog_name)
+            
+            # Find package entry
+            package_entry = None
+            for entry in entries:
+                if (entry.get("schema") == "olm.package" and 
+                    entry.get("name") == package_name):
+                    package_entry = entry
+                    break
+            
+            if not package_entry:
+                logger.warning(f"Package '{package_name}' not found in catalog '{catalog_name}'")
+                return None
+            
+            # Find channels for this package
+            channels = []
+            for entry in entries:
+                if (entry.get("schema") == "olm.channel" and 
+                    entry.get("package") == package_name):
+                    channels.append({
+                        'name': entry.get("name"),
+                        'package': entry.get("package"),
+                        'entries': entry.get("entries", [])
+                    })
+            
+            logger.info(f"Found {len(channels)} channels for package '{package_name}'")
+            return channels
+            
+        except Exception as e:
+            logger.error(f"Error retrieving channels for package '{package_name}': {e}")
+            return None
+
+    def get_channel_versions(self, package_name: str, channel_name: str,
+                           catalog_name: str = "operatorhubio") -> Optional[List[str]]:
+        """
+        Get all versions available in a specific channel.
+        
+        Args:
+            package_name: Name of the package
+            channel_name: Name of the channel
+            catalog_name: Name of the catalog
+            
+        Returns:
+            List of version names in the channel
+        """
+        try:
+            entries = self.get_all_entries(catalog_name)
+            
+            # Find the specific channel
+            for entry in entries:
+                if (entry.get("schema") == "olm.channel" and 
+                    entry.get("package") == package_name and
+                    entry.get("name") == channel_name):
+                    
+                    versions = [e.get("name") for e in entry.get("entries", []) if e.get("name")]
+                    logger.info(f"Found {len(versions)} versions in channel '{channel_name}' for package '{package_name}'")
+                    return sorted(versions)
+            
+            logger.warning(f"Channel '{channel_name}' not found for package '{package_name}' in catalog '{catalog_name}'")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error retrieving versions for channel '{channel_name}': {e}")
+            return None
+
+    def get_version_metadata(self, package_name: str, version_name: str,
+                           catalog_name: str = "operatorhubio") -> Optional[Dict[str, Any]]:
+        """
+        Get detailed metadata for a specific version.
+        
+        Args:
+            package_name: Name of the package
+            version_name: Name of the version
+            catalog_name: Name of the catalog
+            
+        Returns:
+            Dictionary with detailed version metadata
+        """
+        try:
+            entries = self.get_all_entries(catalog_name)
+            
+            # Find the specific bundle for this version
+            for entry in entries:
+                if entry.get("schema") == "olm.bundle":
+                    # Check if this bundle matches our package and version
+                    for prop in entry.get("properties", []):
+                        if (prop.get("type") == "olm.package" and 
+                            prop.get("value", {}).get("packageName") == package_name and
+                            (prop.get("value", {}).get("version") == version_name or
+                             entry.get("name") == version_name)):
+                            
+                            # Extract CSV metadata if available
+                            csv_metadata = None
+                            for p in entry.get("properties", []):
+                                if p.get("type") == "olm.csv.metadata":
+                                    csv_metadata = p.get("value")
+                                    break
+                            
+                            # Build detailed metadata with enhanced compatibility info
+                            olmv1_info = self._is_olmv1_compatible(entry)
+                            metadata = {
+                                'name': entry.get("name"),
+                                'package': package_name,
+                                'version': version_name,
+                                'image': entry.get("image"),
+                                'schema': entry.get("schema"),
+                                'olmv1_compatible': olmv1_info['compatible'],
+                                'olmv1_info': olmv1_info,
+                                'csv_metadata': csv_metadata,
+                                'properties': entry.get("properties", []),
+                                'related_images': entry.get("relatedImages", [])
+                            }
+                            
+                            logger.info(f"Found detailed metadata for version '{version_name}' of package '{package_name}'")
+                            return metadata
+            
+            logger.warning(f"Version '{version_name}' not found for package '{package_name}' in catalog '{catalog_name}'")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error retrieving metadata for version '{version_name}': {e}")
+            return None
 
 
 # ============================================================================
@@ -293,6 +662,7 @@ class CatalogSelectionUI:
             catalogs = CatalogAPIQueryLib.get_available_clustercatalogs()
             
             if not catalogs:
+                logging.warning("No ClusterCatalogs found in this cluster")
                 print("No ClusterCatalogs found in this cluster.")
                 sys.exit(1)
             
@@ -300,6 +670,7 @@ class CatalogSelectionUI:
             return CatalogSelectionUI._get_user_selection(catalogs)
             
         except Exception as e:
+            logging.error(f"Error fetching ClusterCatalogs: {e}")
             print(f"Error fetching ClusterCatalogs: {e}")
             print("Falling back to default catalog: operatorhubio")
             return "operatorhubio"
@@ -387,3 +758,11 @@ class CatalogSelectionUI:
             except KeyboardInterrupt:
                 print("\nExiting.")
                 sys.exit(0)
+
+
+# ============================================================================
+# BUNDLE DISCOVERY moved to bundle_processor.py
+# ============================================================================
+# BundleDiscovery class has been moved to bundle_processor.py for better
+# organization - bundle discovery is more closely related to bundle processing
+# than catalog querying.

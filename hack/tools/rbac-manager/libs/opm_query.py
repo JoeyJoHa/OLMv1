@@ -2,7 +2,8 @@
 OPM Query Library.
 
 This module provides OPM-based catalog querying functionality with caching
-and improved error handling.
+and improved error handling. Also includes simplified discovery functionality
+previously in discoverer_factory.py.
 """
 
 import logging
@@ -10,13 +11,52 @@ import os
 import subprocess
 import yaml
 import json
-from typing import Dict, List, Optional
-
-# Import shared RBAC utilities
-from . import rbac_utils
+from typing import Dict, List, Optional, Any
+from enum import Enum
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+class DiscoveryMethod(Enum):
+    """Supported discovery methods."""
+    OPM = "opm"
+    CATALOGD = "catalogd"
+
+
+def create_opm_discoverer(insecure: bool = False) -> 'OPMQueryLib':
+    """
+    Create an OPM discoverer (simplified factory function).
+    
+    Args:
+        insecure: Skip TLS verification
+        
+    Returns:
+        Configured OPM query library
+    """
+    return OPMQueryLib(insecure=insecure)
+
+
+def discover_bundles_via_opm(bundle_image: str, package_name: Optional[str] = None, insecure: bool = False) -> List[str]:
+    """
+    Simplified bundle discovery via OPM (replaces complex factory pattern).
+    
+    Args:
+        bundle_image: Bundle image or catalog index image
+        package_name: Optional package name to filter bundles
+        insecure: Skip TLS verification
+        
+    Returns:
+        List of bundle image URLs
+    """
+    opm_lib = OPMQueryLib(insecure=insecure)
+    
+    if package_name:
+        # Discover specific package from catalog index
+        return opm_lib.discover_package_bundle_urls(bundle_image, package_name)
+    else:
+        # Single bundle image - return as-is
+        return [bundle_image]
 
 
 class OPMQueryLib:
@@ -288,17 +328,80 @@ class OPMQueryLib:
         
         return error_msg
     
-    def extract_rbac_resources(self, image_ref: str, package_name: str) -> Optional[Dict]:
+    def discover_package_bundle_urls(self, image_ref: str, package_name: str) -> List[str]:
         """
-        Extract RBAC resources for a specific package as Kubernetes YAML structures.
+        Discover bundle image URLs for a specific package from a catalog index.
+        
+        This method performs pure discovery - it queries the catalog index to find
+        all bundle images associated with the specified package, returning only the URLs.
+        Processing of these bundles should be handled by the caller.
         
         Args:
-            image_ref: Container image reference
-            package_name: Name of the package
+            image_ref: Container image reference (catalog index image)
+            package_name: Name of the package to find bundles for
             
         Returns:
-            Dict with clusterRoles, roles, and serviceAccount, or None if not found
+            List of bundle image URLs, or empty list if none found
         """
+        # Get bundle information from the catalog index
         bundles = self.get_package_bundles(image_ref, package_name)
-        return rbac_utils.extract_rbac_from_bundles(bundles, package_name)
+        if not bundles:
+            logger.warning(f"No bundles found for package '{package_name}' in catalog '{image_ref}'")
+            return []
+        
+        # Extract bundle image URLs from bundle metadata
+        bundle_image_urls = []
+        for bundle in bundles:
+            image_url = bundle.get('image')
+            if image_url:
+                bundle_image_urls.append(image_url)
+        
+        if not bundle_image_urls:
+            logger.warning(f"No bundle image URLs found for package '{package_name}'")
+            return []
+        
+        logger.info(f"Discovered {len(bundle_image_urls)} bundle image(s) for package '{package_name}'")
+        return bundle_image_urls
+    
+    def discover_catalog_bundle_urls(self, image_ref: str) -> Dict[str, List[str]]:
+        """
+        Discover all bundle image URLs from a catalog index, organized by package.
+        
+        This method performs comprehensive discovery across an entire catalog index,
+        returning bundle URLs grouped by package name for further processing.
+        
+        Args:
+            image_ref: Container image reference (catalog index image)
+            
+        Returns:
+            Dictionary mapping package names to their bundle image URLs
+        """
+        try:
+            packages = self.render_catalog_packages(image_ref)
+            
+            bundle_urls_by_package = {}
+            total_bundles = 0
+            
+            for package in packages:
+                package_name = package.get('packageName') or package.get('name', 'unknown')
+                
+                # Get bundles for this package
+                bundles = self.get_package_bundles(image_ref, package_name)
+                bundle_urls = []
+                
+                for bundle in bundles:
+                    image_url = bundle.get('image')
+                    if image_url:
+                        bundle_urls.append(image_url)
+                
+                if bundle_urls:
+                    bundle_urls_by_package[package_name] = bundle_urls
+                    total_bundles += len(bundle_urls)
+            
+            logger.info(f"Discovered {total_bundles} bundle(s) across {len(bundle_urls_by_package)} package(s)")
+            return bundle_urls_by_package
+            
+        except Exception as e:
+            logger.error(f"Failed to discover bundle URLs from catalog '{image_ref}': {e}")
+            return {}
 
