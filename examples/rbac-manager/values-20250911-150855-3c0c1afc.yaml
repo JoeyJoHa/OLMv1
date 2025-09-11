@@ -1,0 +1,109 @@
+# SECURITY NOTICE: Post-Installation RBAC Hardening Required
+# =========================================================
+# This values.yaml contains installer permissions with INTENTIONALLY BROAD SCOPE
+# for successful initial deployment. The installer ClusterRole uses wildcard
+# permissions (no resourceNames specified) which defaults to '*' behavior.
+#
+# CRITICAL: After successful OLMv1 installation, you MUST harden these permissions:
+#
+# Step 1: Inspect Created Resources
+# ---------------------------------
+# Run these commands to see what OLMv1 actually created:
+#   kubectl get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#   kubectl get clusterextensions
+#
+# Step 2: Update Installer Permissions  
+# ------------------------------------
+# In this values.yaml, find the installer ClusterRole rules and add resourceNames:
+#
+# For ClusterRole/ClusterRoleBinding management rules:
+#   resourceNames: ['<packageName>.<hash1>', '<packageName>.<hash2>']
+#   Example: ['quay-operator.a1b2c3d4', 'quay-operator.e5f6g7h8']
+#
+# For ClusterExtension finalizer rules:
+#   resourceNames: ['<your-chosen-clusterextension-name>']
+#   Example: ['my-quay-operator'] or ['company-gitops']
+#
+# Step 3: Redeploy with Hardened Permissions
+# ------------------------------------------
+#   helm upgrade <release-name> <chart-path> -f <this-values.yaml>
+#
+# =========================================================
+operator:
+  name: quay-operator
+  create: true
+  appVersion: 3.10.13
+  channel: stable
+  packageName: quay-operator
+serviceAccount:
+  create: true
+  name: ''
+  bind: true
+  annotations: {}
+  labels: {}
+permissions:
+  clusterRoles:
+  - name: ''
+    type: operator
+    create: true
+    customRules:
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterroles]
+      verbs: [create, list, watch]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterroles]
+      verbs: [get, update, patch, delete]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterrolebindings]
+      verbs: [create, list, watch]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterrolebindings]
+      verbs: [get, update, patch, delete]
+    - apiGroups: [apiextensions.k8s.io]
+      resources: [customresourcedefinitions]
+      verbs: [create, list, watch]
+    - apiGroups: [apiextensions.k8s.io]
+      resources: [customresourcedefinitions]
+      verbs: [get, update, patch, delete]
+      resourceNames: [quayregistries.quay.redhat.com]
+    - apiGroups: [olm.operatorframework.io]
+      resources: [clusterextensions/finalizers]
+      verbs: [update]
+  - name: ''
+    type: grantor
+    create: true
+    customRules:
+    - apiGroups: [quay.redhat.com]
+      resources: [quayregistries, quayregistries/status]
+      verbs: ['*']
+    - apiGroups: [apps]
+      resources: [deployments]
+      verbs: ['*']
+    - apiGroups: ['']
+      resources: [pods, services, secrets, configmaps, serviceaccounts, persistentvolumeclaims,
+        events]
+      verbs: ['*']
+    - apiGroups: ['']
+      resources: [namespaces]
+      verbs: [get, watch, list]
+    - apiGroups: ['']
+      resources: [namespaces]
+      verbs: [update, patch]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [roles, rolebindings]
+      verbs: ['*']
+    - apiGroups: [route.openshift.io]
+      resources: [routes, routes/custom-host]
+      verbs: ['*']
+    - apiGroups: [autoscaling]
+      resources: [horizontalpodautoscalers]
+      verbs: ['*']
+    - apiGroups: [objectbucket.io]
+      resources: [objectbucketclaims]
+      verbs: ['*']
+    - apiGroups: [monitoring.coreos.com]
+      resources: [prometheusrules, servicemonitors]
+      verbs: ['*']
+    - apiGroups: [batch]
+      resources: [jobs]
+      verbs: ['*']

@@ -132,9 +132,10 @@ Required Arguments:
 General Options:
 --openshift-namespace NAMESPACE  Target OpenShift namespace for generated resources (auto-discovered from current context)
 
-Output Options (mutually exclusive):
+Output Options:
   --helm                       Generate values.yaml for operator-olmv1 Helm chart
-  --output DIR                 Save files to specified directory (default: print to stdout)
+  --output DIR                 Save files to specified directory (YAML files or values.yaml)
+  --helm --output DIR          Save Helm values.yaml to directory (instead of stdout)
   
 
 Registry Authentication (for private registries):
@@ -532,11 +533,10 @@ class CLIInterface:
     
     def _add_output_arguments(self, parser: argparse.ArgumentParser) -> None:
         """Add output arguments."""
-        output_group = parser.add_mutually_exclusive_group()
-        output_group.add_argument('--output', metavar='DIR',
-                                 help='Save files to specified directory (YAML files or values.yaml)')
-        output_group.add_argument('--helm', action='store_true',
-                                 help='Generate values.yaml for operator-olmv1 Helm chart (default: print to stdout)')
+        parser.add_argument('--output', metavar='DIR',
+                           help='Save files to specified directory (YAML files or values.yaml)')
+        parser.add_argument('--helm', action='store_true',
+                           help='Generate values.yaml for operator-olmv1 Helm chart (default: print to stdout)')
         
         # OpenShift namespace argument for YAML generation (not used with --helm which uses templates)
         parser.add_argument('--openshift-namespace', metavar='NAMESPACE',

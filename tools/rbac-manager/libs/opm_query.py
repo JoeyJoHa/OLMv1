@@ -404,4 +404,3 @@ class OPMQueryLib:
         except Exception as e:
             logger.error(f"Failed to discover bundle URLs from catalog '{image_ref}': {e}")
             return {}
-

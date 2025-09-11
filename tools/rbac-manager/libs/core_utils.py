@@ -578,27 +578,28 @@ def create_flow_style_yaml_dumper():
     class FlowStyleDumper(yaml.SafeDumper):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            # Track if we are inside an RBAC rule
-            self._is_in_rbac_rule = False
+            self._in_rbac_rule = False
+            self._current_key = None
 
         def represent_mapping(self, tag, mapping, flow_style=None):
-            # Check if this dictionary is an RBAC rule (supports both camelCase and snake_case)
+            # Check if this is an individual RBAC rule (not the rules array)
             if isinstance(mapping, dict):
-                # Helm format (camelCase)
-                helm_rule = 'apiGroups' in mapping and 'resources' in mapping and 'verbs' in mapping
-                # Standard Kubernetes format (snake_case or mixed)
-                k8s_rule = ('api_groups' in mapping or 'apiGroups' in mapping) and 'resources' in mapping and 'verbs' in mapping
-                if helm_rule or k8s_rule:
-                    self._is_in_rbac_rule = True
-            result = super().represent_mapping(tag, mapping, flow_style)
-            self._is_in_rbac_rule = False
-            return result
-        
-        def represent_list(self, data):
-            # If we are inside an RBAC rule, format lists inline (flow style)
-            if self._is_in_rbac_rule:
-                return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
-            # Otherwise, use the default block style
-            return super().represent_list(data)
+                is_rbac_rule = ('apiGroups' in mapping and 'resources' in mapping and 'verbs' in mapping) or \
+                              ('nonResourceURLs' in mapping and 'verbs' in mapping)
+                if is_rbac_rule:
+                    self._in_rbac_rule = True
+                    result = super().represent_mapping(tag, mapping, flow_style=False)
+                    self._in_rbac_rule = False
+                    return result
+            
+            return super().represent_mapping(tag, mapping, flow_style=flow_style)
+
+        def represent_sequence(self, tag, sequence, flow_style=None):
+            # Use flow style only for lists within RBAC rules (apiGroups, resources, verbs)
+            # but not for the main 'rules' array
+            if self._in_rbac_rule:
+                return super().represent_sequence(tag, sequence, flow_style=True)
+            else:
+                return super().represent_sequence(tag, sequence, flow_style=False)
 
     return FlowStyleDumper

@@ -758,11 +758,4 @@ class CatalogSelectionUI:
             except KeyboardInterrupt:
                 print("\nExiting.")
                 sys.exit(0)
-
-
-# ============================================================================
-# BUNDLE DISCOVERY moved to bundle_processor.py
-# ============================================================================
-# BundleDiscovery class has been moved to bundle_processor.py for better
-# organization - bundle discovery is more closely related to bundle processing
-# than catalog querying.
+                

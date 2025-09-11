@@ -118,12 +118,13 @@ class PermissionRule:
     Represents a single RBAC permission rule.
     
     This corresponds to a rule in a Kubernetes Role or ClusterRole.
+    Uses Kubernetes-standard camelCase field names.
     """
-    api_groups: List[str] = field(default_factory=list)
+    apiGroups: List[str] = field(default_factory=list)
     resources: List[str] = field(default_factory=list)
     verbs: List[str] = field(default_factory=list)
-    resource_names: Optional[List[str]] = None
-    non_resource_urls: Optional[List[str]] = None
+    resourceNames: Optional[List[str]] = None
+    nonResourceURLs: Optional[List[str]] = None
     
     # to_dict() method removed - use dataclasses.asdict() instead
 
@@ -367,11 +368,11 @@ def dict_to_permission_rules(rules_data: List[Dict[str, Any]]) -> List[Permissio
     """Convert list of rule dictionaries to PermissionRule objects."""
     return [
         PermissionRule(
-            api_groups=rule.get('apiGroups', []),
+            apiGroups=rule.get('apiGroups', []),
             resources=rule.get('resources', []), 
             verbs=rule.get('verbs', []),
-            resource_names=rule.get('resourceNames'),
-            non_resource_urls=rule.get('nonResourceURLs')
+            resourceNames=rule.get('resourceNames'),
+            nonResourceURLs=rule.get('nonResourceURLs')
         )
         for rule in rules_data
     ]
@@ -411,7 +412,21 @@ class HelmRBACRule:
     resourceNames: Optional[List[str]] = None
     nonResourceURLs: Optional[List[str]] = None
 
-    # to_dict() method removed - use dataclasses.asdict() instead
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary, excluding None/empty fields."""
+        result = {
+            'apiGroups': self.apiGroups,
+            'resources': self.resources,
+            'verbs': self.verbs
+        }
+        
+        # Only include optional fields if they have values
+        if self.resourceNames is not None and self.resourceNames:
+            result['resourceNames'] = self.resourceNames
+        if self.nonResourceURLs is not None and self.nonResourceURLs:
+            result['nonResourceURLs'] = self.nonResourceURLs
+            
+        return result
 
     # from_dict() method removed - use generic from_dict() function instead
 
@@ -458,6 +473,7 @@ class HelmServiceAccount:
 class HelmOperator:
     """Represents the operator section in Helm values."""
     name: str = ""
+    create: bool = True
     appVersion: str = "latest"
     channel: str = "stable"
     packageName: str = ""
@@ -489,12 +505,47 @@ class HelmChartValues:
         # Use the flow-style dumper for RBAC rules
         FlowStyleDumper = create_flow_style_yaml_dumper()
         
-        yaml_content = yaml.dump(asdict(self), Dumper=FlowStyleDumper, 
+        # Convert to dict manually to ensure custom to_dict() methods are used
+        data = self.to_dict()
+        
+        yaml_content = yaml.dump(data, Dumper=FlowStyleDumper, 
                                default_flow_style=False, indent=2, sort_keys=False)
         
         if security_header:
             return security_header + "\n" + yaml_content
         return yaml_content
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary, using custom to_dict() methods for nested objects."""
+        permissions_dict = {
+            'clusterRoles': [
+                {
+                    'name': role.name,
+                    'type': role.type,
+                    'create': role.create,
+                    'customRules': [rule.to_dict() for rule in role.customRules]
+                }
+                for role in self.permissions.clusterRoles
+            ]
+        }
+        
+        # Only include roles if they exist and are not empty
+        if self.permissions.roles is not None and self.permissions.roles:
+            permissions_dict['roles'] = [
+                {
+                    'name': role.name,
+                    'type': role.type,
+                    'create': role.create,
+                    'customRules': [rule.to_dict() for rule in role.customRules]
+                }
+                for role in self.permissions.roles
+            ]
+        
+        return {
+            'operator': asdict(self.operator),
+            'serviceAccount': asdict(self.serviceAccount),
+            'permissions': permissions_dict
+        }
 
     # from_dict() method removed - use generic from_dict() function instead
 
@@ -651,12 +702,22 @@ class ExecutionContext:
         output_directory = None
         helm_mode = False
         
+        # Check for helm mode
         if hasattr(args, 'helm') and args.helm:
-            output_mode = "helm"
             helm_mode = True
-        elif hasattr(args, 'output') and args.output:
-            output_mode = "directory"
+            
+        # Check for output directory (can be used with or without helm)
+        if hasattr(args, 'output') and args.output:
             output_directory = args.output
+            output_mode = "directory"
+        
+        # Set final output mode based on combination of flags
+        if helm_mode and output_directory:
+            output_mode = "helm_to_directory"
+        elif helm_mode:
+            output_mode = "helm"
+        elif output_directory:
+            output_mode = "directory"
         
         return cls(
             # Operation modes

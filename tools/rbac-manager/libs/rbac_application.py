@@ -195,20 +195,27 @@ class RBACManagerApplication:
         import os
         import yaml
         from pathlib import Path
+        import datetime
+        import secrets
         
         # Create output directory if it doesn't exist
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
-        logging.info(f"Saving RBAC resources to {output_dir}")
+        # Generate unique identifier to prevent file overwrites
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        random_suffix = secrets.token_hex(4)  # 8-character hex string
+        unique_id = f"{timestamp}-{random_suffix}"
         
-        # Define file names for each resource type
+        logging.info(f"Saving RBAC resources to {output_dir} with unique ID: {unique_id}")
+        
+        # Define file names for each resource type with unique identifier
         file_mapping = {
-            'serviceAccounts': 'service-accounts.yaml',
-            'roles': 'roles.yaml', 
-            'clusterRoles': 'cluster-roles.yaml',
-            'roleBindings': 'role-bindings.yaml',
-            'clusterRoleBindings': 'cluster-role-bindings.yaml'
+            'service_accounts': f'service-accounts-{unique_id}.yaml',
+            'roles': f'roles-{unique_id}.yaml', 
+            'cluster_roles': f'cluster-roles-{unique_id}.yaml',
+            'role_bindings': f'role-bindings-{unique_id}.yaml',
+            'cluster_role_bindings': f'cluster-role-bindings-{unique_id}.yaml'
         }
         
         # Convert to dict if needed for backward compatibility
@@ -1590,7 +1597,7 @@ Workflow Example:
                     rbac_data_dict = rbac_data if isinstance(rbac_data, dict) else {}
                 
                 k8s_resources_dict = rbac_converter.convert_csv_rbac_to_k8s_resources(
-                    rbac_data_dict, csv_name, namespace_template, self.context.least_privileges
+                    rbac_data_dict, csv_name, namespace_template, self.context.least_privileges, csv_data
                 )
                 
                 # Merge resources from this bundle into typed structure
@@ -1667,11 +1674,20 @@ Workflow Example:
         """Handle output of final Helm YAML string."""
         try:
             if self.args.output:
-                # Save to specified directory with values.yaml filename
+                # Save to specified directory with unique values.yaml filename
                 from pathlib import Path
+                import datetime
+                import secrets
+                
                 output_path = Path(self.args.output)
                 output_path.mkdir(parents=True, exist_ok=True)
-                values_path = output_path / "values.yaml"
+                
+                # Generate unique identifier to prevent file overwrites
+                timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+                random_suffix = secrets.token_hex(4)  # 8-character hex string
+                unique_id = f"{timestamp}-{random_suffix}"
+                
+                values_path = output_path / f"values-{unique_id}.yaml"
                 
                 with open(values_path, 'w') as f:
                     f.write(helm_yaml)

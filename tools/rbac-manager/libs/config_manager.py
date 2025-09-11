@@ -398,8 +398,3 @@ def generate_sample_config_file(output_path: Optional[str] = None, mode: str = "
     
     logger.info(f"Sample {mode} configuration file created: {output_path}")
     return output_path
-
-
-# ============================================================================
-# CLI INTERFACE AND ARGUMENT PARSING
-# ============================================================================

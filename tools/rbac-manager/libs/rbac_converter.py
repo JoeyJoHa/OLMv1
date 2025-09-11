@@ -50,7 +50,8 @@ class RBACConverter:
                                         rbac_data: Dict[str, Any], 
                                         package_name: str,
                                         namespace_template: str,
-                                        expand_wildcards: bool = False) -> Dict[str, List[Dict]]:
+                                        expand_wildcards: bool = False,
+                                        csv_data: Dict[str, Any] = None) -> Dict[str, List[Dict]]:
         """
         Convert CSV RBAC data to Kubernetes RBAC resources.
         
@@ -112,13 +113,22 @@ class RBACConverter:
         
         # Process cluster permissions (always cluster-scoped)
         if has_cluster_permissions:
-            cluster_role, cluster_role_binding = self._create_cluster_rbac_resources(
-                cluster_permissions, package_name, service_account_name, namespace_template, expand_wildcards
+            # Create separate operator and grantor ClusterRoles
+            operator_resources, grantor_resources = self._create_separate_operator_grantor_resources(
+                cluster_permissions, package_name, service_account_name, namespace_template, expand_wildcards, csv_data
             )
-            if cluster_role:
-                resources['clusterRoles'].append(cluster_role)
-            if cluster_role_binding:
-                resources['clusterRoleBindings'].append(cluster_role_binding)
+            
+            # Add operator resources
+            if operator_resources['clusterRole']:
+                resources['clusterRoles'].append(operator_resources['clusterRole'])
+            if operator_resources['clusterRoleBinding']:
+                resources['clusterRoleBindings'].append(operator_resources['clusterRoleBinding'])
+                
+            # Add grantor resources
+            if grantor_resources['clusterRole']:
+                resources['clusterRoles'].append(grantor_resources['clusterRole'])
+            if grantor_resources['clusterRoleBinding']:
+                resources['clusterRoleBindings'].append(grantor_resources['clusterRoleBinding'])
         
         # Process permissions based on context
         if has_namespace_permissions:
@@ -135,13 +145,22 @@ class RBACConverter:
             else:
                 # Case 3: Only permissions exist → treat as cluster-scoped (fallback logic)
                 self.logger.info("Only 'permissions' found (no 'clusterPermissions') - treating permissions as cluster-scoped")
-                cluster_role, cluster_role_binding = self._create_cluster_rbac_resources(
-                    namespace_permissions, package_name, service_account_name, namespace_template, expand_wildcards
+                # Create separate operator and grantor ClusterRoles for namespace permissions treated as cluster-scoped
+                operator_resources, grantor_resources = self._create_separate_operator_grantor_resources(
+                    namespace_permissions, package_name, service_account_name, namespace_template, expand_wildcards, csv_data
                 )
-                if cluster_role:
-                    resources['clusterRoles'].append(cluster_role)
-                if cluster_role_binding:
-                    resources['clusterRoleBindings'].append(cluster_role_binding)
+                
+                # Add operator resources
+                if operator_resources['clusterRole']:
+                    resources['clusterRoles'].append(operator_resources['clusterRole'])
+                if operator_resources['clusterRoleBinding']:
+                    resources['clusterRoleBindings'].append(operator_resources['clusterRoleBinding'])
+                    
+                # Add grantor resources
+                if grantor_resources['clusterRole']:
+                    resources['clusterRoles'].append(grantor_resources['clusterRole'])
+                if grantor_resources['clusterRoleBinding']:
+                    resources['clusterRoleBindings'].append(grantor_resources['clusterRoleBinding'])
         
         # Log conversion results
         total_resources = sum(len(resource_list) for resource_list in resources.values())
@@ -176,12 +195,17 @@ class RBACConverter:
         else:
             rbac_dict = rbac_data if isinstance(rbac_data, dict) else {}
         
-        # 1. Create the top-level operator specification
+        # 1. Extract actual package name and metadata from CSV
+        actual_package_name = self._extract_package_name_from_csv(csv_data) if csv_data else package_name
+        operator_channel = self._extract_channel_from_csv(csv_data) if csv_data else 'stable'
+        
+        # 2. Create the top-level operator specification
         operator_spec = HelmOperator(
-            name=package_name.replace('.', '-'),
-            packageName=package_name,
+            name=actual_package_name.replace('.', '-'),
+            create=True,  # Default to creating ClusterExtension
+            packageName=actual_package_name,
             appVersion=self._extract_version_from_csv(csv_data) if csv_data else 'latest',
-            channel='stable'
+            channel=operator_channel
         )
         
         # 2. Create the Helm values structure with default service account
@@ -225,10 +249,112 @@ class RBACConverter:
     
     def _build_installer_context(self, package_name: str, csv_data: Dict[str, Any] = None) -> Dict[str, Any]:
         """Build context for installer rule generation."""
-        return {
+        context = {
             'package_name': package_name,
             'csv_data': csv_data
         }
+        
+        # Extract CRD names from CSV for scoped permissions
+        if csv_data:
+            crd_names = self._extract_crd_names_from_csv(csv_data)
+            if crd_names:
+                context['crd_names'] = crd_names
+                
+        return context
+    
+    def _extract_crd_names_from_csv(self, csv_data: Dict[str, Any]) -> List[str]:
+        """Extract CRD names from CSV metadata for scoped permissions."""
+        crd_names = []
+        
+        # Handle CSVManifest object
+        if hasattr(csv_data, 'spec'):
+            spec = csv_data.spec
+        else:
+            spec = csv_data.get('spec', {})
+        
+        # Look for CRDs in customresourcedefinitions.owned
+        crds = spec.get('customresourcedefinitions', {}).get('owned', [])
+        
+        for crd in crds:
+            if isinstance(crd, dict):
+                # Extract name from CRD definition
+                name = crd.get('name')
+                if name:
+                    crd_names.append(name)
+        
+        self.logger.debug(f"Extracted CRD names from CSV: {crd_names}")
+        return crd_names
+    
+    def _create_separate_operator_grantor_resources(self, cluster_permissions: List[Dict[str, Any]], package_name: str, 
+                                                  service_account_name: str, namespace_template: str, 
+                                                  expand_wildcards: bool, csv_data: Dict[str, Any] = None) -> tuple:
+        """
+        Create separate operator and grantor ClusterRole resources.
+        
+        Args:
+            cluster_permissions: List of cluster permission rules
+            package_name: Package name for resource naming
+            service_account_name: Service account name for binding
+            namespace_template: Namespace template for binding
+            expand_wildcards: Whether to expand wildcard permissions
+            csv_data: CSV data for context
+            
+        Returns:
+            Tuple of (operator_resources, grantor_resources) dictionaries
+        """
+        # Build installer context for operator permissions
+        context = self._build_installer_context(package_name, csv_data)
+        rule_builder = RBACRuleBuilder(self.logger)
+        installer_cluster_rules = rule_builder.build_installer_cluster_rules(context)
+        
+        # Create operator ClusterRole (installer permissions)
+        operator_rules = []
+        if installer_cluster_rules:
+            operator_rules = self._process_installer_rules_for_helm(installer_cluster_rules)
+            
+        # Create operator RBAC pair using existing method
+        operator_cluster_role, operator_cluster_role_binding = self._create_rbac_pair(
+            permissions=[{'rules': operator_rules}] if operator_rules else [],
+            package_name=package_name,  # Let _create_rbac_pair add the -installer suffix
+            service_account_name=service_account_name,
+            namespace_template=namespace_template,
+            is_cluster_scoped=True,
+            expand_wildcards=False  # Already processed
+        )
+        
+        # Add component labels to operator resources
+        if operator_cluster_role:
+            operator_cluster_role.setdefault('metadata', {}).setdefault('labels', {})['app.kubernetes.io/component'] = 'operator-installer'
+        if operator_cluster_role_binding:
+            operator_cluster_role_binding.setdefault('metadata', {}).setdefault('labels', {})['app.kubernetes.io/component'] = 'operator-installer'
+        
+        # Create grantor ClusterRole (extracted operator permissions)
+        grantor_cluster_role, grantor_cluster_role_binding = self._create_rbac_pair(
+            permissions=cluster_permissions,
+            package_name=f"{package_name}-grantor",
+            service_account_name=service_account_name,
+            namespace_template=namespace_template,
+            is_cluster_scoped=True,
+            expand_wildcards=expand_wildcards
+        )
+        
+        # Add component labels to grantor resources
+        if grantor_cluster_role:
+            grantor_cluster_role.setdefault('metadata', {}).setdefault('labels', {})['app.kubernetes.io/component'] = 'operator-grantor'
+        if grantor_cluster_role_binding:
+            grantor_cluster_role_binding.setdefault('metadata', {}).setdefault('labels', {})['app.kubernetes.io/component'] = 'operator-grantor'
+        
+        operator_resources = {
+            'clusterRole': operator_cluster_role,
+            'clusterRoleBinding': operator_cluster_role_binding
+        }
+        
+        grantor_resources = {
+            'clusterRole': grantor_cluster_role,
+            'clusterRoleBinding': grantor_cluster_role_binding
+        }
+        
+        return operator_resources, grantor_resources
     
     def _extract_grantor_rules(self, rbac_dict: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract and convert grantor (operator) rules from RBAC data."""
@@ -247,15 +373,18 @@ class RBACConverter:
         return grantor_rules
     
     def _add_namespace_roles(self, helm_values: 'HelmChartValues', rbac_dict: Dict[str, Any], installer_namespace_rules: List[Dict[str, Any]]) -> None:
-        """Add namespace-scoped roles to helm values if needed."""
+        """Add namespace-scoped roles to helm values only if there are actual namespace permissions from CSV."""
         namespace_permissions = rbac_dict.get('namespace_permissions', [])
+        cluster_permissions = rbac_dict.get('cluster_permissions', [])
         
-        if namespace_permissions or installer_namespace_rules:
+        # Only create roles section if the bundle has BOTH cluster and namespace permissions
+        # This matches the user's requirement: roles should only exist when bundle has both types
+        if namespace_permissions and cluster_permissions:
             # Initialize roles list if not already present
             if helm_values.permissions.roles is None:
                 helm_values.permissions.roles = []
             
-            # Add installer namespace role
+            # Add installer namespace role (only when we have actual namespace permissions)
             if installer_namespace_rules:
                 helm_values.permissions.roles.append(
                     HelmRoleDefinition(
@@ -267,15 +396,14 @@ class RBACConverter:
                 )
             
             # Add namespace grantor role
-            if namespace_permissions:
-                helm_values.permissions.roles.append(
-                    HelmRoleDefinition(
-                        type="grantor",
-                        customRules=self._convert_dict_rules_to_helm_rules(
-                            self._convert_rules_to_helm_format(namespace_permissions)
-                        )
+            helm_values.permissions.roles.append(
+                HelmRoleDefinition(
+                    type="grantor",
+                    customRules=self._convert_dict_rules_to_helm_rules(
+                        self._convert_rules_to_helm_format(namespace_permissions)
                     )
                 )
+            )
     
     def _convert_dict_rules_to_helm_rules(self, dict_rules: List[Dict[str, Any]]) -> List[HelmRBACRule]:
         """
@@ -344,6 +472,74 @@ class RBACConverter:
             return csv_data['spec'].get('version', 'latest')
         return 'latest'
     
+    def _extract_package_name_from_csv(self, csv_data: Dict[str, Any]) -> str:
+        """
+        Extract the actual package name from CSV data.
+        
+        The CSV name is often like 'prometheusoperator.0.56.3' but the package name
+        is usually the part before the version (e.g., 'prometheusoperator').
+        
+        Args:
+            csv_data: CSV data dictionary or CSVManifest object
+            
+        Returns:
+            Package name string
+        """
+        if not csv_data:
+            return 'operator'
+            
+        # Handle CSVManifest object
+        if hasattr(csv_data, 'name'):
+            csv_name = csv_data.name
+        elif hasattr(csv_data, 'metadata'):
+            csv_name = csv_data.metadata.get('name', 'operator')
+        else:
+            csv_name = csv_data.get('metadata', {}).get('name', 'operator')
+        
+        # Extract package name from CSV name (remove version part)
+        # Examples: 'prometheusoperator.0.56.3' -> 'prometheusoperator'
+        #           'quay-operator.v3.10.3' -> 'quay-operator'
+        if '.' in csv_name:
+            # Split by '.' and take everything before the first numeric version
+            parts = csv_name.split('.')
+            # Find the first part that starts with a digit
+            for i, part in enumerate(parts):
+                if part and (part[0].isdigit() or part.startswith('v')):
+                    return '.'.join(parts[:i])
+            # If no version found, use the first part
+            return parts[0]
+        
+        return csv_name
+    
+    def _extract_channel_from_csv(self, csv_data: Dict[str, Any]) -> str:
+        """
+        Extract the channel from CSV data.
+        
+        Args:
+            csv_data: CSV data dictionary or CSVManifest object
+            
+        Returns:
+            Channel string or 'stable' if not found
+        """
+        if not csv_data:
+            return 'stable'
+            
+        # Handle CSVManifest object
+        if hasattr(csv_data, 'metadata'):
+            metadata = csv_data.metadata
+        else:
+            metadata = csv_data.get('metadata', {})
+        
+        # Look for channel in annotations
+        annotations = metadata.get('annotations', {})
+        channel = annotations.get('operatorframework.io/suggested-namespace', 'stable')
+        
+        # If no channel found in annotations, default to stable
+        if not channel or channel == 'stable':
+            return 'stable'
+            
+        return str(channel)
+    
     def _convert_rules_to_helm_format(self, permissions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Convert CSV permission rules to Helm chart format with human-readable structure.
@@ -406,35 +602,13 @@ class RBACConverter:
         Create a YAML dumper that doesn't use anchors/references and formats RBAC arrays inline.
         
         This prevents &id### and *id### references that cause issues in Helm values files.
-        Formats apiGroups, resources, and verbs as inline arrays like values-quay-operator.yaml.
+        Uses the same flow-style logic as the main RBAC dumper.
         """
-        class CleanYAMLDumper(yaml.SafeDumper):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                self._inside_rbac_rule = False
-                
+        from .core_utils import create_flow_style_yaml_dumper
+        
+        class CleanYAMLDumper(create_flow_style_yaml_dumper()):
             def ignore_aliases(self, data):
                 return True  # Never use aliases/anchors
-                
-            def represent_dict(self, data):
-                # Check if this is an RBAC rule dictionary
-                if isinstance(data, dict) and ('apiGroups' in data or 'resources' in data or 'verbs' in data):
-                    self._inside_rbac_rule = True
-                    result = super().represent_dict(data)
-                    self._inside_rbac_rule = False
-                    return result
-                return super().represent_dict(data)
-                
-            def represent_list(self, data):
-                # Use flow style for RBAC rule lists (apiGroups, resources, verbs)
-                # Check if we're in the context of writing out dict values and the current key context
-                if hasattr(self, '_inside_rbac_rule') and self._inside_rbac_rule:
-                    return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
-                return self.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
-        
-        # Override the default representers
-        CleanYAMLDumper.add_representer(dict, CleanYAMLDumper.represent_dict)
-        CleanYAMLDumper.add_representer(list, CleanYAMLDumper.represent_list)
         
         return CleanYAMLDumper
     
@@ -1094,9 +1268,6 @@ class RBACConverter:
                 normalized_groups.append(str(group))
         
         formatted_rule['apiGroups'] = normalized_groups
-        # Remove snake_case variant to avoid duplicates in YAML output
-        if 'api_groups' in formatted_rule:
-            del formatted_rule['api_groups']
         
         # Ensure resources is a list
         resources = formatted_rule.get('resources', [])
@@ -1110,12 +1281,23 @@ class RBACConverter:
             verbs = [str(verbs)] if verbs is not None else []
         formatted_rule['verbs'] = [str(v) for v in verbs]
         
-        # Handle resourceNames if present
+        # Handle resourceNames if present (only add if not None/empty)
         resource_names = formatted_rule.get('resourceNames')
-        if resource_names is not None:
+        if resource_names is not None and resource_names:
             if not isinstance(resource_names, list):
                 resource_names = [str(resource_names)]
             formatted_rule['resourceNames'] = [str(rn) for rn in resource_names]
+        elif 'resourceNames' in formatted_rule:
+            del formatted_rule['resourceNames']
+        
+        # Handle nonResourceURLs if present (only add if not None/empty)
+        non_resource_urls = formatted_rule.get('nonResourceURLs')
+        if non_resource_urls is not None and non_resource_urls:
+            if not isinstance(non_resource_urls, list):
+                non_resource_urls = [str(non_resource_urls)]
+            formatted_rule['nonResourceURLs'] = [str(url) for url in non_resource_urls]
+        elif 'nonResourceURLs' in formatted_rule:
+            del formatted_rule['nonResourceURLs']
         
         return formatted_rule
     
@@ -1624,4 +1806,3 @@ class RBACRuleBuilder:
         """Get expected rolebinding names based on operator metadata."""
         # Same as role names for this pattern
         return self._get_expected_role_names(context)
-
