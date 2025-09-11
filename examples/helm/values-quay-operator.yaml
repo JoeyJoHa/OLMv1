@@ -5,6 +5,8 @@
 operator:
   # Name of the operator and ClusterExtension
   name: "quay-operator"  # Custom name
+  # Create the operator (create ClusterExtension resource)
+  create: true
   # Specific version of Quay operator
   appVersion: "3.10.13"
   # Quay operator channel

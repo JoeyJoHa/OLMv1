@@ -111,6 +111,9 @@ fullnameOverride: ""
 operator:
   # Name of the operator and ClusterExtension
   name: "my-operator"
+  # Create the operator (create ClusterExtension resource)
+  # Set to false to only create RBAC resources without deploying the operator
+  create: true
   # Version of the operator to install (e.g., "3.10.13", "latest")
   appVersion: "latest"
   # Channel to use for the operator (e.g., "stable", "alpha", "beta")

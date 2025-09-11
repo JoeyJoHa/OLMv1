@@ -301,4 +301,3 @@ When the structure evolves:
 4. **Communicate changes** clearly to contributors
 
 This structure provides a solid foundation for the OLMv1 project while remaining flexible enough to accommodate future growth and changes.
-

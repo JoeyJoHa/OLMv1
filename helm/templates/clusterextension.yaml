@@ -1,3 +1,4 @@
+{{- if .Values.operator.create }}
 apiVersion: olm.operatorframework.io/v1
 kind: ClusterExtension
 metadata:
@@ -18,3 +19,4 @@ spec:
       version: {{ .Values.operator.appVersion }}
       {{- end }}
     sourceType: Catalog
+{{- end }}
