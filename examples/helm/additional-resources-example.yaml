@@ -1,0 +1,103 @@
+# Example values.yaml showing how to use additionalResources
+# This demonstrates including custom ConfigMaps, Secrets, and other resources
+# alongside the operator deployment
+
+operator:
+  name: my-operator
+  namespace: my-operator
+  appVersion: 1.0.0
+  channel: stable
+  packageName: my-operator
+
+serviceAccount:
+  create: true
+  name: ""
+  bind: true
+
+permissions:
+  clusterRoles: []
+
+# Example of additional resources - simplified structure
+additionalResources:
+  # ConfigMap with operator configuration
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: "{{ include \"operator-olmv1.fullname\" . }}-config"
+      namespace: "{{ .Release.Namespace }}"
+      labels:
+        "{{- include \"operator-olmv1.labels\" . | nindent 4 }}"
+    data:
+      operator.yaml: |
+        logging:
+          level: info
+        metrics:
+          enabled: true
+          port: 8080
+        webhook:
+          port: 9443
+  
+  # Secret for operator credentials
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: "{{ include \"operator-olmv1.fullname\" . }}-secret"
+      namespace: "{{ .Release.Namespace }}"
+      labels:
+        "{{- include \"operator-olmv1.labels\" . | nindent 4 }}"
+    type: Opaque
+    data:
+      api-key: bXktc2VjcmV0LWFwaS1rZXk=  # base64: my-secret-api-key
+      webhook-cert: ZHVtbXktY2VydC1kYXRh  # base64: dummy-cert-data
+  
+  # Service for operator metrics
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: "{{ include \"operator-olmv1.fullname\" . }}-metrics"
+      namespace: "{{ .Release.Namespace }}"
+      labels:
+        "{{- include \"operator-olmv1.labels\" . | nindent 4 }}"
+    spec:
+      selector:
+        app.kubernetes.io/name: "{{ include \"operator-olmv1.name\" . }}"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+      ports:
+        - name: metrics
+          port: 8080
+          targetPort: 8080
+          protocol: TCP
+  
+  # NetworkPolicy for operator security
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: "{{ include \"operator-olmv1.fullname\" . }}-netpol"
+      namespace: "{{ .Release.Namespace }}"
+      labels:
+        "{{- include \"operator-olmv1.labels\" . | nindent 4 }}"
+    spec:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: "{{ include \"operator-olmv1.name\" . }}"
+          app.kubernetes.io/instance: "{{ .Release.Name }}"
+      policyTypes:
+        - Ingress
+        - Egress
+      ingress:
+        - from:
+            - namespaceSelector:
+                matchLabels:
+                  name: monitoring
+          ports:
+            - protocol: TCP
+              port: 8080
+      egress:
+        - to: []
+          ports:
+            - protocol: TCP
+              port: 443  # HTTPS
+            - protocol: TCP
+              port: 53   # DNS
+            - protocol: UDP
+              port: 53   # DNS

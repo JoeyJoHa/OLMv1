@@ -1,0 +1,3 @@
+{{- if and .Values.additionalResources (gt (len .Values.additionalResources) 0) }}
+{{- include "operator-olmv1.additionalResources" . }}
+{{- end }}

@@ -107,12 +107,26 @@ permissions:
           resources: ["pods", "services", "configmaps", "secrets"]
           verbs: ["*"]
 
-# Additional Configuration
-additionalResources:
-  # Create additional Kubernetes resources
-  create: false
-  # List of additional resource files to include
-  resources: []
-  # Example:
-  # - configmap.yaml
-  # - secret.yaml
+# Additional Resources Configuration
+# List of additional Kubernetes resources to create alongside the operator
+additionalResources: []
+# Example usage:
+# additionalResources:
+#   - apiVersion: v1
+#     kind: ConfigMap
+#     metadata:
+#       name: quay-operator-config
+#       namespace: {{ .Release.Namespace }}
+#     data:
+#       config.yaml: |
+#         quay:
+#           features:
+#             FEATURE_USER_INITIALIZE: true
+#   - apiVersion: v1
+#     kind: Secret
+#     metadata:
+#       name: quay-operator-secret
+#       namespace: {{ .Release.Namespace }}
+#     type: Opaque
+#     data:
+#       database-password: cXVheS1kYi1wYXNzd29yZA==  # base64: quay-db-password

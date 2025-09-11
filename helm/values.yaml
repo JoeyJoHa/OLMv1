@@ -181,12 +181,40 @@ permissions:
         #   resources: [clusterroles, clusterrolebindings]
         #   verbs: [get, list, watch]
   
-# Additional Configuration
-additionalResources:
-  # Create additional Kubernetes resources
-  create: false
-  # List of additional resource files to include
-  resources: []
-  # Example:
-  # - configmap.yaml
-  # - secret.yaml
+# Additional Resources Configuration
+# List of additional Kubernetes resources to create alongside the operator
+additionalResources: []
+# Example usage:
+# additionalResources:
+#   - apiVersion: v1
+#     kind: ConfigMap
+#     metadata:
+#       name: my-extra-configmap
+#       namespace: {{ .Release.Namespace }}
+#     data:
+#       key: value
+#   - apiVersion: v1
+#     kind: Secret
+#     metadata:
+#       name: my-extra-secret
+#       namespace: {{ .Release.Namespace }}
+#     type: Opaque
+#     data:
+#       password: bXktc2VjcmV0LXBhc3N3b3Jk  # base64 encoded
+#   - apiVersion: networking.k8s.io/v1
+#     kind: Ingress
+#     metadata:
+#       name: my-extra-ingress
+#       namespace: {{ .Release.Namespace }}
+#     spec:
+#       rules:
+#         - host: example.com
+#           http:
+#             paths:
+#               - path: /
+#                 pathType: Prefix
+#                 backend:
+#                   service:
+#                     name: my-service
+#                     port:
+#                       number: 80

@@ -112,3 +112,14 @@ If user provides a name, use it as-is; otherwise use release name
   {{- .Release.Name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Additional Resources Template
+Renders additional Kubernetes resources defined in values.yaml
+*/}}
+{{- define "operator-olmv1.additionalResources" -}}
+{{- range $resource := .Values.additionalResources }}
+---
+{{ toYaml $resource | nindent 0 }}
+{{- end }}
+{{- end }}
