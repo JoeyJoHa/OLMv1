@@ -1,0 +1,1 @@
+@python.mdc Refactor the generate-config, its should be available for OPM for generating a template or with --catalogd with --package --version --channel to generate a config file with the image bundle url

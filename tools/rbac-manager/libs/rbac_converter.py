@@ -1094,6 +1094,9 @@ class RBACConverter:
                 normalized_groups.append(str(group))
         
         formatted_rule['apiGroups'] = normalized_groups
+        # Remove snake_case variant to avoid duplicates in YAML output
+        if 'api_groups' in formatted_rule:
+            del formatted_rule['api_groups']
         
         # Ensure resources is a list
         resources = formatted_rule.get('resources', [])

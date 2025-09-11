@@ -10,19 +10,26 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+.envrc
 
 # IDE and editor files
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
 .DS_Store
 Thumbs.db
+*.sublime-project
+*.sublime-workspace
 
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Runtime data
 pids/
@@ -30,17 +37,20 @@ pids/
 *.seed
 *.pid.lock
 
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.pytest_cache/
 
 # Temporary folders
 tmp/
 temp/
+.tmp/
 
 # OS generated files
 .DS_Store
@@ -50,7 +60,7 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.db
-
+Desktop.ini
 
 # Docker
 .dockerignore
@@ -60,22 +70,119 @@ docker-compose.*.yml
 
 # Kubernetes
 *.kubeconfig
+kubeconfig
+.kube/
+*.pem
+*.key
+*.crt
 
 # Helm
 charts/*.tgz
+*.tgz
+requirements.lock
 
 # Local development
 .local/
 local/
+.cache/
 
 # Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
 # Environments
 .env
-.envrc
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
-__pycache__/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Node.js (if any JS tools are added)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Generated files
+*.generated.*
+*_generated.*
+
+# Test artifacts
+test-results/
+test-output/
+*.html
+*.xml
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Security
+secrets/
+*.secret
+*.token
+
+# OLMv1 specific
+rbac-output/
+bundle-cache/
+opm-cache/

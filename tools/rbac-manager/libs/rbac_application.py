@@ -495,19 +495,25 @@ Note: --least-privileges expands wildcard (*) verbs to explicit verbs for securi
     def _show_catalogd_examples(self) -> None:
         """Show Catalogd-specific examples."""
         print("""
-Catalogd Examples - JSON metadata extraction from OpenShift catalogs
+Catalogd Examples - Query package metadata from OpenShift catalogs
 
-Basic package query:
+Query package information and get bundle URLs:
   python3 rbac_manager.py --catalogd --package prometheus --insecure
 
-Specific version:
-  python3 rbac_manager.py --catalogd --package prometheus --version 0.68.0 --insecure
+Query from specific catalog:
+  python3 rbac_manager.py --catalogd --package prometheus --catalog-name openshift-community-operators --insecure
 
-List packages:
+List all packages in a catalog:
   python3 rbac_manager.py --catalogd --list-packages --insecure
 
-Generate config:
+List OLMv1 compatible packages:
+  python3 rbac_manager.py --catalogd --all-namespaces-packages --insecure
+
+Generate config file:
   python3 rbac_manager.py --generate-config ~/.rbac-catalogd.yaml
+
+Note: catalogd only queries metadata. To extract RBAC, copy the bundle URL and use:
+  python3 rbac_manager.py --opm --image <bundle-url-from-catalogd>
 """)
     
     def _show_list_catalogs_examples(self) -> None:
@@ -975,11 +981,10 @@ For mode-specific examples:
             print("")
             print("Common catalogd operations:")
             print("    --catalog-name CATALOG           Query specific catalog directly")
-            print("    --package PACKAGE                Query specific package metadata")
+            print("    --package PACKAGE                Query package metadata and get bundle URLs")
             print("    --list-packages                  List all available packages")
             print("    --all-namespaces-packages        List packages supporting AllNamespaces install mode")
             print("    --examples                       Show detailed catalogd examples")
-            print("    --package PACKAGE --version VER  Query specific package version")
             print("")
             print("Examples:")
             print("    python3 rbac_manager.py --catalogd --catalog-name redhat-custom-catalog --insecure")
@@ -1025,54 +1030,55 @@ For mode-specific examples:
             # If only catalog-name is provided (without package), list packages in that catalog
             return self._list_packages_in_catalog(self.args.catalog_name)
         else:
-            return self._extract_rbac()
+            return self._query_package_metadata()
     
     def _list_packages_in_catalog(self, catalog_name: str) -> int:
-        """List all packages in a specific catalog."""
+        """List all packages in a specific catalog in JSON format."""
         try:
-            print(f"Listing packages in catalog: {catalog_name}")
-            print("=" * 60)
+            import json
             
             packages = self.get_all_packages_via_catalogd(catalog_name)
             
             if not packages:
-                print(f"ERROR: No packages found in catalog '{catalog_name}'")
-                print("\nPossible issues:")
-                print("  • Catalog name is incorrect")
-                print("  • Catalog is not available or empty")
-                print("  • Catalogd service is not responding")
-                print("\nTo see available catalogs, run:")
-                print("    python3 rbac_manager.py --list-catalogs --insecure")
+                error_output = {
+                    "error": f"No packages found in catalog '{catalog_name}'",
+                    "possible_issues": [
+                        "Catalog name is incorrect",
+                        "Catalog is not available or empty",
+                        "Catalogd service is not responding"
+                    ]
+                }
+                print(json.dumps(error_output, indent=2))
                 return 1
             
-            print(f"Found {len(packages)} packages in catalog '{catalog_name}':")
-            print()
+            output = {
+                "catalog": catalog_name,
+                "packages": sorted(packages)
+            }
             
-            for i, package in enumerate(sorted(packages), 1):
-                print(f"{i:3d}. {package}")
-            
-            print()
-            print("To query a specific package from this catalog:")
-            print(f"    python3 rbac_manager.py --catalogd --catalog-name {catalog_name} --package PACKAGE_NAME --insecure")
-            
+            print(json.dumps(output, indent=2))
             return 0
             
         except Exception as e:
-            print(f"ERROR: Error listing packages in catalog '{catalog_name}': {e}")
+            import json
+            error_output = {
+                "error": f"Error listing packages in catalog '{catalog_name}': {e}"
+            }
+            print(json.dumps(error_output, indent=2))
             logging.error(f"Error listing packages in catalog: {e}")
         return 1
     
     def _show_catalogd_examples(self) -> int:
         """Show detailed catalogd examples."""
         print("""
-Catalogd Examples - Extract JSON metadata from OpenShift catalogs
+Catalogd Examples - Query package metadata from OpenShift catalogs
 
-Note: Catalogd returns JSON metadata only. For actual RBAC extraction from bundle images, use --opm.
+Note: Catalogd only returns package metadata and bundle URLs. For RBAC extraction, use the provided bundle URLs with --opm.
 
 Query specific catalog directly:
   python3 rbac_manager.py --catalogd --catalog-name redhat-custom-catalog --insecure
 
-Basic package metadata extraction:
+Query package metadata and get bundle URLs:
   python3 rbac_manager.py --catalogd --package prometheus --insecure
 
 Custom catalog and connection settings:
@@ -1083,9 +1089,6 @@ List all packages in a catalog:
 
 List packages supporting AllNamespaces install mode:
   python3 rbac_manager.py --catalogd --all-namespaces-packages --insecure
-
-Query specific package version:
-  python3 rbac_manager.py --catalogd --package prometheus --version 0.68.0 --insecure
 
 With custom catalogd service:
   python3 rbac_manager.py --catalogd --list-packages --catalogd-namespace custom-ns --catalogd-service custom-svc --insecure
@@ -1105,6 +1108,13 @@ Configuration file usage:
 
 Generate configuration template:
   python3 rbac_manager.py --catalogd --generate-config ./my-catalogd-config.yaml
+
+Workflow Example:
+  # 1. Query package to get bundle URLs
+  python3 rbac_manager.py --catalogd --package prometheus --insecure
+  
+  # 2. Copy a bundle URL from the output and extract RBAC
+  python3 rbac_manager.py --opm --image quay.io/openshift-community-operators/prometheus@sha256:...
         """)
         return 0
     
@@ -1157,40 +1167,323 @@ Generate configuration template:
             print(f"  - {package}")
         return 0
     
-    def _extract_rbac(self) -> int:
-        """Extract RBAC for packages."""
+    def _query_package_metadata(self) -> int:
+        """Query package metadata from catalog."""
         # Use catalog_name if provided, otherwise use UI to determine catalog
         if hasattr(self.args, 'catalog_name') and self.args.catalog_name:
             catalog_to_use = self.args.catalog_name
             print(f"Using specified catalog: {catalog_to_use}")
         else:
-            catalog_to_use = self.catalog_ui.determine_catalog_to_use(self.args, "package extraction")
+            catalog_to_use = self.catalog_ui.determine_catalog_to_use(self.args, "package metadata query")
         
         if self.args.package:
-            # Extract RBAC for specific package
-            print(f"Extracting RBAC from catalog: {catalog_to_use}")
-            rbac_resources = self.extract_rbac_via_catalogd(self.args.package, catalog_to_use)
-            if rbac_resources:
-                self.process_package_rbac(self.args.package, rbac_resources)
-                self._display_completion_message()
+            # Determine the type of query based on provided flags
+            has_channel = hasattr(self.args, 'channel') and self.args.channel
+            has_version = hasattr(self.args, 'version') and self.args.version
+            
+            if has_channel and has_version:
+                # Complete query with all flags - return JSON format
+                print(f"Querying complete package metadata from catalog: {catalog_to_use}")
+                success = self._query_package_via_catalogd(self.args.package, catalog_to_use)
+            elif has_channel:
+                # Query versions in a specific channel - human readable
+                print(f"Querying versions in channel '{self.args.channel}' for package '{self.args.package}' from catalog: {catalog_to_use}")
+                success = self._query_channel_versions(self.args.package, self.args.channel, catalog_to_use)
+            else:
+                # Query available channels - human readable
+                print(f"Querying available channels for package '{self.args.package}' from catalog: {catalog_to_use}")
+                success = self._query_package_channels(self.args.package, catalog_to_use)
+            
+            if success:
                 return 0
             else:
-                logging.error(f"No RBAC permissions found for package '{self.args.package}'")
+                logging.error(f"Failed to query package '{self.args.package}' from catalog '{catalog_to_use}'")
                 return 1
         else:
-            # List all packages from catalog (RBAC extraction for catalogd mode not yet implemented)
-            print(f"Listing all packages from catalog: {catalog_to_use}")
+            # List all packages from catalog in JSON format
+            import json
             packages = self.get_all_packages_via_catalogd(catalog_to_use)
             
-            print(f"Available packages in {catalog_to_use}:")
-            for package in packages:
-                print(f"  - {package}")
+            output = {
+                "catalog": catalog_to_use,
+                "packages": sorted(packages)
+            }
             
+            print(json.dumps(output, indent=2))
             logging.info(f"Listed {len(packages)} packages from catalog {catalog_to_use}")
-            print(f"Use --package <name> to extract metadata for a specific package.")
-            self._display_completion_message()
             return 0
     
+    def _query_package_via_catalogd(self, package_name: str, catalog_name: str) -> bool:
+        """
+        Query package metadata via catalogd API and display information for manual use.
+        
+        This method queries the catalogd API to get package metadata and displays
+        bundle URLs and other information that can be used manually with --opm flag.
+        
+        Args:
+            package_name: Name of the package to query
+            catalog_name: Name of the catalog to query
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if not self.catalog_lib:
+                logging.error("Catalog library not initialized")
+                return False
+            
+            # Get package metadata from catalogd
+            logging.info(f"Querying package '{package_name}' from catalog '{catalog_name}'")
+            package_data = self.catalog_lib.get_package_metadata(package_name, catalog_name)
+            
+            if not package_data:
+                print(f"ERROR: Package '{package_name}' not found in catalog '{catalog_name}'")
+                return False
+            
+            # Display package information
+            self._display_package_metadata(package_data, package_name, catalog_name)
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"Failed to query package via catalogd: {e}")
+            print(f"ERROR: Error querying package '{package_name}': {e}")
+            return False
+    
+    def _display_package_metadata(self, package_data: Dict[str, Any], package_name: str, catalog_name: str) -> None:
+        """
+        Display package metadata. For specific version queries, show minimal JSON.
+        For general queries, show full metadata.
+        
+        Args:
+            package_data: Package metadata from catalogd API
+            package_name: Name of the package
+            catalog_name: Name of the catalog
+        """
+        import json
+        
+        # Check if this is a specific version query
+        requested_channel = getattr(self.args, 'channel', None)
+        requested_version = getattr(self.args, 'version', None)
+        
+        if requested_channel and requested_version:
+            # Specific version query - return minimal, focused JSON
+            self._display_specific_version_metadata(package_data, package_name, catalog_name, requested_channel, requested_version)
+        else:
+            # General query - return full metadata
+            self._display_full_package_metadata(package_data, package_name, catalog_name)
+    
+    def _display_specific_version_metadata(self, package_data: Dict[str, Any], package_name: str, catalog_name: str, requested_channel: str, requested_version: str) -> None:
+        """
+        Display metadata for a specific version only - minimal JSON output.
+        """
+        import json
+        
+        # Find the specific bundle in the package data
+        target_bundle = None
+        bundles = package_data.get('bundles', [])
+        olmv1_compatible = package_data.get('olmv1_compatible_bundles', [])
+        
+        # Look for the requested version in bundles
+        for bundle in bundles:
+            bundle_name = bundle.get('name', '')
+            # Match both exact name and version patterns
+            if (bundle_name == requested_version or 
+                bundle_name.endswith(f".{requested_version}") or
+                bundle_name.endswith(f"v{requested_version}")):
+                
+                # Check if this bundle is OLMv1 compatible
+                is_olmv1_compatible = bundle in olmv1_compatible
+                
+                target_bundle = {
+                    "package": package_name,
+                    "channel": requested_channel,
+                    "version": requested_version,
+                    "image": bundle.get('image', 'unknown'),
+                    "olmv1_compatible": is_olmv1_compatible
+                }
+                break
+        
+        if target_bundle:
+            print(json.dumps(target_bundle, indent=2))
+        else:
+            error_msg = {
+                "error": f"Version '{requested_version}' not found in channel '{requested_channel}' for package '{package_name}'"
+            }
+            print(json.dumps(error_msg, indent=2))
+    
+    def _display_full_package_metadata(self, package_data: Dict[str, Any], package_name: str, catalog_name: str) -> None:
+        """
+        Display full package metadata (fallback for general queries).
+        """
+        import json
+        
+        # Build clean JSON output structure
+        bundles = package_data.get('bundles', [])
+        olmv1_compatible = package_data.get('olmv1_compatible_bundles', [])
+        
+        # Create structured output for automation
+        output = {
+            "package": {
+                "name": package_name,
+                "catalog": catalog_name,
+                "default_channel": package_data.get('default_channel', 'unknown'),
+                "latest_version": package_data.get('latest_version', 'unknown')
+            },
+            "channels": [
+                {
+                    "name": channel.get('name', 'unknown'),
+                    "entries_count": len(channel.get('entries', [])),
+                    "entries": [
+                        {
+                            "name": entry.get('name', 'unknown'),
+                            "version": entry.get('name', 'unknown')  # In OLM, entry name is typically the version
+                        }
+                        for entry in channel.get('entries', [])
+                    ]
+                }
+                for channel in package_data.get('channels', [])
+            ],
+            "bundle_summary": {
+                "total_bundles": len(bundles),
+                "olmv1_compatible": len(olmv1_compatible)
+            },
+            "olmv1_compatible_bundles": [
+                {
+                    "image": bundle.get('image', 'unknown'),
+                    "version": bundle.get('version', bundle.get('name', 'unknown')),
+                    "name": bundle.get('name', 'unknown'),
+                    "compatibility": {
+                        "all_namespaces_supported": bundle.get('olmv1_info', {}).get('all_namespaces_supported', False),
+                        "has_webhooks": bundle.get('olmv1_info', {}).get('has_webhooks', True),
+                        "compatible": bundle.get('olmv1_info', {}).get('compatible', False)
+                    }
+                }
+                for bundle in olmv1_compatible
+            ],
+            "all_bundles": [
+                {
+                    "image": bundle.get('image', 'unknown'),
+                    "version": bundle.get('version', bundle.get('name', 'unknown')),
+                    "name": bundle.get('name', 'unknown'),
+                    "olmv1_compatible": bundle in olmv1_compatible
+                }
+                for bundle in bundles
+            ],
+            "usage": {
+                "next_steps": [
+                    "Copy an image URL from olmv1_compatible_bundles",
+                    "Use the provided opm_commands to extract RBAC",
+                    "Deploy the generated RBAC resources before ClusterExtension"
+                ],
+                "example_workflow": [
+                    f"python3 rbac_manager.py --catalogd --package {package_name} --catalog-name {catalog_name}",
+                    "# Copy bundle image URL from JSON output",
+                    "python3 rbac_manager.py --opm --image <bundle-url>",
+                    "# Apply generated RBAC YAML to cluster"
+                ]
+            }
+        }
+        
+        # Output clean JSON
+        print(json.dumps(output, indent=2))
+    
+    def _query_package_channels(self, package_name: str, catalog_name: str) -> bool:
+        """
+        Query and display available channels for a package in JSON format.
+        
+        Args:
+            package_name: Name of the package
+            catalog_name: Name of the catalog
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            import json
+            
+            if not self.catalog_lib:
+                logging.error("Catalog library not initialized")
+                return False
+            
+            # Get channel information
+            channels = self.catalog_lib.get_package_channels(package_name, catalog_name)
+            
+            if not channels:
+                error_output = {
+                    "error": f"No channels found for package '{package_name}' in catalog '{catalog_name}'"
+                }
+                print(json.dumps(error_output, indent=2))
+                return False
+            
+            # Build JSON output
+            output = {
+                "package": package_name,
+                "catalog": catalog_name,
+                "channels": [channel.get('name', 'unknown') for channel in channels]
+            }
+            
+            print(json.dumps(output, indent=2))
+            return True
+            
+        except Exception as e:
+            import json
+            logging.error(f"Failed to query channels for package '{package_name}': {e}")
+            error_output = {
+                "error": f"Failed to query channels for package '{package_name}': {e}"
+            }
+            print(json.dumps(error_output, indent=2))
+            return False
+    
+    def _query_channel_versions(self, package_name: str, channel_name: str, catalog_name: str) -> bool:
+        """
+        Query and display available versions in a channel in JSON format.
+        
+        Args:
+            package_name: Name of the package
+            channel_name: Name of the channel
+            catalog_name: Name of the catalog
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            import json
+            
+            if not self.catalog_lib:
+                logging.error("Catalog library not initialized")
+                return False
+            
+            # Get version information
+            versions = self.catalog_lib.get_channel_versions(package_name, channel_name, catalog_name)
+            
+            if not versions:
+                error_output = {
+                    "error": f"No versions found for package '{package_name}' in channel '{channel_name}' from catalog '{catalog_name}'"
+                }
+                print(json.dumps(error_output, indent=2))
+                return False
+            
+            # Build JSON output
+            output = {
+                "package": package_name,
+                "catalog": catalog_name,
+                "channel": channel_name,
+                "versions": versions
+            }
+            
+            print(json.dumps(output, indent=2))
+            return True
+            
+        except Exception as e:
+            import json
+            logging.error(f"Failed to query versions for package '{package_name}' in channel '{channel_name}': {e}")
+            error_output = {
+                "error": f"Failed to query versions for package '{package_name}' in channel '{channel_name}': {e}"
+            }
+            print(json.dumps(error_output, indent=2))
+            return False
+
     # ============================================================================
     # RBAC PROCESSING METHODS (formerly in RBACManager)
     # ============================================================================
