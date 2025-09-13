@@ -131,9 +131,14 @@ OLMv1/
 │       └── 02-clusterextension.yaml  # ClusterExtension example
 ├── tools/                            # Development and management tools
 │   └── rbac-manager/                 # RBAC Manager tool
-│       ├── libs/                     # Python library modules
-│       ├── rbac_manager.py           # Main entry point
-│       └── requirements.txt          # Python dependencies
+│       ├── help_text/                # External help documentation
+│       │   ├── catalogd_help.txt     # Catalogd command help
+│       │   ├── examples.txt          # Comprehensive examples
+│       │   ├── list_catalogs_help.txt # List catalogs help
+│       │   └── opm_help.txt          # OPM command help
+│       ├── rbac_manager.py           # Single-file implementation
+│       ├── requirements.txt          # Python dependencies
+│       └── README.md                 # Tool documentation
 ├── config/                           # Configuration files (future use)
 ├── scripts/                          # Utility scripts (future use)
 ├── tests/                            # Test files (future use)
@@ -172,17 +177,26 @@ cd tools/rbac-manager/
 # Install dependencies
 pip install -r requirements.txt
 
+# Get help for specific commands
+python3 rbac_manager.py --catalogd --help
+python3 rbac_manager.py --opm --help
+
+# View comprehensive examples
+python3 rbac_manager.py --examples
+
 # Extract RBAC for an operator using OPM workflow
 python3 rbac_manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --helm
 
-# Extract RBAC using catalogd workflow
-python3 rbac_manager.py --catalogd --package prometheus --catalog-name redhat-operators
 
 # Save RBAC files for later use
 python3 rbac_manager.py --opm --image <bundle-image> --output ./rbac-files
 
 # Apply least-privilege principles
 python3 rbac_manager.py --opm --image <bundle-image> --least-privileges
+
+# Generate configuration files for reusable workflows
+python3 rbac_manager.py --generate-config ~/.rbac-opm.yaml --opm
+python3 rbac_manager.py --config ~/.rbac-opm.yaml --opm --image <bundle-image> --helm
 ```
 
 ### Benefits for OLMv1 Deployment
@@ -191,18 +205,38 @@ python3 rbac_manager.py --opm --image <bundle-image> --least-privileges
 2. **Kubernetes-Native Output**: Generates proper Kubernetes RBAC YAML with consistent naming
 3. **Helm Integration**: Outputs include Helm template syntax for easy chart integration
 4. **Security Best Practices**: Follows least-privilege principles and proper role separation
-5. **Automation Ready**: Supports scripting and CI/CD integration with configuration files
+5. **Configuration Management**: Generate templates or extract live data from catalogd for reusable workflows
+6. **Automation Ready**: Supports scripting and CI/CD integration with configuration files
+7. **Live Metadata Access**: Query catalogd directly for real-time operator bundle information and compatibility data
 
 ### Integration with OLMv1 Workflow
 
 The RBAC Manager integrates seamlessly with the OLMv1 deployment process:
 
-1. **Extract RBAC**: Use the tool to extract required permissions for your chosen operator
-2. **Review Permissions**: Examine the generated RBAC to ensure it meets security requirements
-3. **Deploy RBAC**: Apply the RBAC resources before deploying the ClusterExtension
-4. **Deploy Operator**: Use the generated ServiceAccount in your ClusterExtension manifest
+1. **Discover Operators**: Query available catalogs and packages using catalogd integration
+2. **Generate Configuration**: Create reusable configuration templates or extract live metadata from catalogd
+3. **Extract RBAC**: Use the tool to extract required permissions for your chosen operator
+4. **Review Permissions**: Examine the generated RBAC to ensure it meets security requirements
+5. **Deploy RBAC**: Apply the RBAC resources before deploying the ClusterExtension
+6. **Deploy Operator**: Use the generated ServiceAccount in your ClusterExtension manifest
 
-For comprehensive usage instructions, examples, and troubleshooting guides, see the [RBAC Manager Guide](tools/rbac-manager/).
+#### Configuration File Workflows
+
+```bash
+# Create OPM configuration template for team reuse
+python3 rbac_manager.py --generate-config ~/.team-rbac-config.yaml --opm
+
+# Extract live metadata from catalogd for specific operator version
+python3 rbac_manager.py --generate-config ./operator-metadata.json \
+  --catalogd --package prometheus --channel stable --version v0.47.0 \
+  --catalog-name operatorhubio --insecure
+
+# Use configuration for streamlined RBAC extraction
+python3 rbac_manager.py --config ~/.team-rbac-config.yaml --opm \
+  --image <bundle-from-metadata> --helm
+```
+
+For comprehensive usage instructions, examples, and troubleshooting guides, see the [RBAC Manager Documentation](tools/rbac-manager/README.md).
 
 ## Documentation
 
@@ -217,9 +251,7 @@ This project includes comprehensive documentation to help you understand and use
 
 ### Tool Documentation
 
-- **[RBAC Manager Tool](tools/rbac-manager/)**: Automated RBAC extraction and management
-- **[Contributing Guide](CONTRIBUTING.md)**: Guidelines for contributing to the project
-- **[Changelog](CHANGELOG.md)**: Version history and release notes
+- **[RBAC Manager Tool](tools/rbac-manager/README.md)**: Automated RBAC extraction and management with configuration support
 
 ### Quick References
 

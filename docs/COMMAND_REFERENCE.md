@@ -332,15 +332,62 @@ opm render registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e
 
 For automated processing of these commands and more user-friendly interfaces, consider using the [RBAC Manager Tool](../tools/rbac-manager/):
 
+### Basic Operations
+
 ```bash
-# Automated package discovery
-python3 tools/rbac-manager/rbac_manager.py --list-catalogs
+# List all Available catalogs in the cluster (Clustercatalogs API)
+python3 tools/rbac-manager/rbac_manager.py --list-catalogs 
 
 # Automated RBAC extraction
-python3 tools/rbac-manager/rbac_manager.py --catalogd --package quay-operator
+python3 tools/rbac-manager/rbac_manager.py --opm --image <bundle-image>
 
 # Automated permission analysis with least-privilege options
 python3 tools/rbac-manager/rbac_manager.py --opm --image <bundle-image> --least-privileges
 ```
 
-The RBAC Manager tool automates many of these manual processes and provides additional features like configuration file support, automatic cluster discovery, and integrated deployment capabilities.
+### Configuration File Generation
+
+The RBAC Manager tool provides configuration generation capabilities for different use cases:
+
+```bash
+# Generate OPM-specific configuration template
+python3 tools/rbac-manager/rbac_manager.py --generate-config ~/.rbac-opm.yaml --opm
+
+# Generate catalogd configuration with live data from catalogd index
+python3 tools/rbac-manager/rbac_manager.py --generate-config ~/.prometheus-data.json \
+  --catalogd --package prometheus --channel stable \
+  --version v0.47.0 --catalog-name operatorhubio --insecure
+
+# Generate OPM configuration template
+python3 tools/rbac-manager/rbac_manager.py --generate-config --opm --output ./configs/
+
+# Generate catalogd configuration template  
+python3 tools/rbac-manager/rbac_manager.py --generate-config --catalogd --output ./configs/
+```
+
+### Using Configuration Files
+
+Configuration files work with OPM operations to provide default values and streamline workflows:
+
+```bash
+# Use configuration file with OPM for RBAC generation
+python3 tools/rbac-manager/rbac_manager.py --config ~/.rbac-opm.yaml --opm --image <bundle-image> --helm
+
+# Use configuration file with custom namespace
+python3 tools/rbac-manager/rbac_manager.py --config ~/.rbac-opm.yaml --opm --image <bundle-image> --openshift-namespace production
+```
+
+### Output Options
+
+```bash
+# Generate Helm values.yaml for GitOps workflows
+python3 tools/rbac-manager/rbac_manager.py --opm --image <bundle-image> --helm
+
+# Save RBAC files to directory for manual application
+python3 tools/rbac-manager/rbac_manager.py --opm --image <bundle-image> --output ./rbac-files
+
+# Apply RBAC directly to cluster (pipe to kubectl)
+python3 tools/rbac-manager/rbac_manager.py --opm --image <bundle-image> --openshift-namespace production | kubectl apply -f -
+```
+
+The RBAC Manager tool automates many of these manual processes and provides additional features like configuration file support, automatic cluster discovery, live catalogd data extraction, and integrated deployment capabilities.
