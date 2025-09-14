@@ -9,7 +9,6 @@ import argparse
 import json
 import logging
 import sys
-import subprocess
 import time
 from pathlib import Path
 
@@ -44,7 +43,7 @@ class RBACManager:
                       openshift_token: str = None, package: str = None, 
                       channel: str = None, version: str = None):
         """Query catalogd service"""
-        port_forward_process = None
+        port_forward_manager = None
         port = None
         
         try:
@@ -78,17 +77,12 @@ class RBACManager:
             # Start port-forward if using catalogd service
             if not openshift_url:
                 print(f"Starting port-forward to catalogd service...", file=sys.stderr)
-                port_forward_process, port, is_https = self.catalog_manager.port_forward_catalogd()
-                if not port:
-                    print("Failed to start port-forward", file=sys.stderr)
-                    return
+                port_forward_manager, port, is_https = self.catalog_manager.port_forward_catalogd()
                 print(f"Port-forward established on port {port}", file=sys.stderr)
-                scheme = 'https' if is_https else 'http'
-                openshift_url = f"{scheme}://localhost:{port}"
             
             # Query packages
             if not package:
-                packages = self.catalog_manager.fetch_catalog_packages(catalog_name, None, openshift_url, openshift_token)
+                packages = self.catalog_manager.fetch_catalog_packages(catalog_name, port_forward_manager, openshift_url, openshift_token)
                 result = {
                     "catalog": catalog_name,
                     "type": "packages",
@@ -100,7 +94,7 @@ class RBACManager:
             
             # Query channels
             if not channel:
-                channels = self.catalog_manager.fetch_package_channels(catalog_name, package, None, openshift_url, openshift_token)
+                channels = self.catalog_manager.fetch_package_channels(catalog_name, package, port_forward_manager, openshift_url, openshift_token)
                 result = {
                     "catalog": catalog_name,
                     "package": package,
@@ -113,7 +107,7 @@ class RBACManager:
             
             # Query versions
             if not version:
-                versions = self.catalog_manager.fetch_channel_versions(catalog_name, package, channel, None, openshift_url, openshift_token)
+                versions = self.catalog_manager.fetch_channel_versions(catalog_name, package, channel, port_forward_manager, openshift_url, openshift_token)
                 result = {
                     "catalog": catalog_name,
                     "package": package,
@@ -126,7 +120,7 @@ class RBACManager:
                 return
             
             # Get version metadata
-            metadata = self.catalog_manager.fetch_version_metadata(catalog_name, package, channel, version, None, openshift_url, openshift_token)
+            metadata = self.catalog_manager.fetch_version_metadata(catalog_name, package, channel, version, port_forward_manager, openshift_url, openshift_token)
             result = {
                 "catalog": catalog_name,
                 "package": package,
@@ -143,13 +137,9 @@ class RBACManager:
             logger.error(f"Error querying catalogd: {e}")
             print(f"Error: {e}")
         finally:
-            if port_forward_process:
+            if port_forward_manager:
                 print("Stopping port-forward...", file=sys.stderr)
-                port_forward_process.terminate()
-                try:
-                    port_forward_process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    port_forward_process.kill()
+                port_forward_manager.stop()
     
     def extract_bundle(self, image: str, namespace: str = "default", registry_token: str = None,
                       helm: bool = False, output_dir: str = None, least_privileges: bool = False,

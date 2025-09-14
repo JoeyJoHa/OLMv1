@@ -6,7 +6,7 @@ Handles operations related to OpenShift catalogs and catalogd service.
 
 import json
 import logging
-import subprocess
+import socket
 import sys
 import time
 from typing import Dict, List, Optional, Any, Tuple
@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Any, Tuple
 import requests
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+from kubernetes.stream import portforward
 import urllib3
 
 logger = logging.getLogger(__name__)
@@ -206,21 +207,22 @@ class CatalogManager:
             print(f"Error listing ClusterCatalogs: {e}")
             return 1
     
-    def _discover_catalogd_service(self) -> Tuple[str, int, bool]:
+    def _discover_catalogd_service(self) -> Tuple[str, int, int, bool]:
         """Discover catalogd service name and preferred port.
 
         Returns:
-            Tuple[str, int, bool]: (target resource string, service port, is_https)
+            Tuple[str, int, int, bool]: (service name, service port, target port, is_https)
         """
         try:
             svc_list = self.core_api.list_namespaced_service(namespace="openshift-catalogd")
-            candidates: List[Tuple[str, int, bool]] = []
+            candidates: List[Tuple[str, int, int, bool]] = []
             for svc in svc_list.items:
                 name = svc.metadata.name or ""
                 if "catalogd" not in name:
                     continue
                 for port in (svc.spec.ports or []):
                     port_num = int(port.port)
+                    target_port = int(port.target_port) if port.target_port else port_num
                     name_lower = (port.name or "").lower()
                     is_https = port_num == 443 or "https" in name_lower
                     # prefer https then http
@@ -229,88 +231,83 @@ class CatalogManager:
                         pref = 2
                     elif port_num == 80 or "http" in name_lower:
                         pref = 1
-                    candidates.append((f"service/{name}", port_num, is_https, pref))
+                    candidates.append((name, port_num, target_port, is_https, pref))
             if candidates:
                 # sort by preference desc then by name for stability
-                candidates.sort(key=lambda x: (x[3], x[0]), reverse=True)
-                target, svc_port, is_https = candidates[0][0], candidates[0][1], candidates[0][2]
-                return target, svc_port, is_https
+                candidates.sort(key=lambda x: (x[4], x[0]), reverse=True)
+                service_name, svc_port, target_port, is_https = candidates[0][0], candidates[0][1], candidates[0][2], candidates[0][3]
+                return service_name, svc_port, target_port, is_https
         except Exception as e:
             logger.debug(f"Service discovery failed: {e}")
         # Fallback to common defaults
-        return "service/catalogd-service", 443, True
+        return "catalogd-service", 443, 8443, True
 
-    def port_forward_catalogd(self) -> Tuple[subprocess.Popen, int, bool]:
-        """Port-forward the catalogd service and return the process, local port and https flag"""
+    def port_forward_catalogd(self) -> Tuple['PortForwardManager', int, bool]:
+        """Port-forward the catalogd service using native Python Kubernetes client"""
         logger.info("Setting up port-forward to catalogd service...")
         
         # Find an available port
-        import socket
         sock = socket.socket()
         sock.bind(('', 0))
-        port = sock.getsockname()[1]
+        local_port = sock.getsockname()[1]
         sock.close()
         
         # Discover target service/port
-        target, target_port, is_https = self._discover_catalogd_service()
-        last_error: Optional[str] = None
+        service_name, service_port, target_port, is_https = self._discover_catalogd_service()
         
-        cmd = [
-            'kubectl', 'port-forward',
-            '-n', 'openshift-catalogd',
-            target,
-            f'{port}:{target_port}'
-        ]
         try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+            # Create port-forward connection
+            pf_manager = PortForwardManager(
+                self.core_api,
+                service_name,
+                "openshift-catalogd",
+                target_port,
+                local_port
             )
-            # Give it a moment to establish
-            time.sleep(2)
-            if process.poll() is None:
-                logger.info(f"Port-forward established to {target} ({target_port}) on local port {port}")
-                return process, port, is_https
-            # If it exited, capture stderr
-            stdout, stderr = process.communicate()
-            last_error = stderr or stdout
+            
+            # Establish the port-forward
+            pf_manager.start()
+            
+            logger.info(f"Port-forward established to service/{service_name} ({service_port}->{target_port}) on local port {local_port}")
+            return pf_manager, local_port, is_https
+            
         except Exception as e:
-            last_error = str(e)
-        
-        error_message = last_error or "Unknown error establishing port-forward to catalogd"
-        logger.error(f"Failed to establish port-forward: {error_message}")
-        raise Exception(f"Port-forward failed: {error_message}")
+            error_message = f"Failed to establish port-forward: {e}"
+            logger.error(error_message)
+            raise Exception(error_message)
     
     def make_catalogd_request(self, url: str, openshift_url: str = None, 
-                            openshift_token: str = None) -> Dict[str, Any]:
+                            openshift_token: str = None, port_forward_manager: 'PortForwardManager' = None) -> Dict[str, Any]:
         """Make API request to catalogd service"""
         headers = {}
         
         if openshift_token:
             headers['Authorization'] = f'Bearer {openshift_token}'
         
-        verify_ssl = not self.skip_tls
-        
         try:
             if openshift_url:
                 # Direct API call to OpenShift
                 full_url = f"{openshift_url.rstrip('/')}/{url.lstrip('/')}"
+                logger.debug(f"Making request to: {full_url}")
+                
+                verify_ssl = not self.skip_tls
+                response = requests.get(full_url, headers=headers, verify=verify_ssl, timeout=30)
+                response.raise_for_status()
+                text_body = response.text
+                
+            elif port_forward_manager:
+                # Use native port-forward socket
+                logger.debug(f"Making request through native port-forward: {url}")
+                text_body = port_forward_manager.make_http_request(url, headers)
+                
             else:
-                # Use port-forward
-                full_url = url
-            
-            logger.debug(f"Making request to: {full_url}")
-            response = requests.get(full_url, headers=headers, verify=verify_ssl, timeout=30)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
+                raise Exception("Either openshift_url or port_forward_manager must be provided")
+                
+        except Exception as e:
             logger.error(f"Request failed: {e}")
             raise
 
         # Parse body robustly (JSON array/object, concatenated JSON, or NDJSON)
-        content_type = (response.headers.get('Content-Type') or '').lower()
-        text_body = response.text
         import json as _json
 
         # First attempt: standard JSON parse
@@ -335,7 +332,7 @@ class CatalogManager:
 
         # Last resort: raise with snippet for diagnostics
         snippet = text_body[:400].replace('\n', ' ')
-        raise Exception(f"Failed to parse catalogd response as JSON. Content-Type={content_type}. Snippet: {snippet}")
+        raise Exception(f"Failed to parse catalogd response as JSON. Snippet: {snippet}")
     
     def interactive_catalog_selection(self, catalogs: List[Dict[str, Any]]) -> str:
         """Interactive prompt for catalog selection"""
@@ -368,22 +365,19 @@ class CatalogManager:
                 import sys
                 sys.exit(1)
     
-    def _fetch_catalog_metadata(self, catalog_name: str, port: int = None, 
+    def _fetch_catalog_metadata(self, catalog_name: str, port_forward_manager: 'PortForwardManager' = None, 
                                openshift_url: str = None, openshift_token: str = None) -> List[Dict[str, Any]]:
         """Fetch raw catalog metadata from catalogd API"""
-        if port:
-            url = f"http://localhost:{port}/catalogs/{catalog_name}/api/v1/all"
-        else:
-            url = f"/catalogs/{catalog_name}/api/v1/all"
+        url = f"/catalogs/{catalog_name}/api/v1/all"
         
         logger.debug(f"Making request to: {url}")
-        return self.make_catalogd_request(url, openshift_url, openshift_token)
+        return self.make_catalogd_request(url, openshift_url, openshift_token, port_forward_manager)
     
-    def fetch_catalog_packages(self, catalog_name: str, port: int = None, 
+    def fetch_catalog_packages(self, catalog_name: str, port_forward_manager: 'PortForwardManager' = None, 
                              openshift_url: str = None, openshift_token: str = None) -> List[Dict[str, Any]]:
         """Fetch all packages from a catalog"""
         logger.info(f"Fetching packages from catalog: {catalog_name}")
-        data = self._fetch_catalog_metadata(catalog_name, port, openshift_url, openshift_token)
+        data = self._fetch_catalog_metadata(catalog_name, port_forward_manager, openshift_url, openshift_token)
         
         # Parse the JSON output to extract packages
         packages = self._parse_catalog_data(data, 'packages')
@@ -391,11 +385,11 @@ class CatalogManager:
         
         return packages
     
-    def fetch_package_channels(self, catalog_name: str, package_name: str, port: int = None,
+    def fetch_package_channels(self, catalog_name: str, package_name: str, port_forward_manager: 'PortForwardManager' = None,
                              openshift_url: str = None, openshift_token: str = None) -> List[Dict[str, Any]]:
         """Fetch all channels for a package"""
         logger.info(f"Fetching channels for package: {package_name}")
-        data = self._fetch_catalog_metadata(catalog_name, port, openshift_url, openshift_token)
+        data = self._fetch_catalog_metadata(catalog_name, port_forward_manager, openshift_url, openshift_token)
         
         # Parse the JSON output to extract channels for the specific package
         channels = self._parse_catalog_data(data, 'channels', package_name)
@@ -404,10 +398,10 @@ class CatalogManager:
         return channels
     
     def fetch_channel_versions(self, catalog_name: str, package_name: str, channel_name: str, 
-                             port: int = None, openshift_url: str = None, openshift_token: str = None) -> List[Dict[str, Any]]:
+                             port_forward_manager: 'PortForwardManager' = None, openshift_url: str = None, openshift_token: str = None) -> List[Dict[str, Any]]:
         """Fetch all versions for a channel"""
         logger.info(f"Fetching versions for channel: {channel_name}")
-        data = self._fetch_catalog_metadata(catalog_name, port, openshift_url, openshift_token)
+        data = self._fetch_catalog_metadata(catalog_name, port_forward_manager, openshift_url, openshift_token)
         
         # Parse the JSON output to extract versions for the specific channel
         versions = self._parse_catalog_data(data, 'versions', package_name, channel_name)
@@ -416,11 +410,11 @@ class CatalogManager:
         return versions
     
     def fetch_version_metadata(self, catalog_name: str, package_name: str, channel_name: str, 
-                             version: str, port: int = None, openshift_url: str = None, 
+                             version: str, port_forward_manager: 'PortForwardManager' = None, openshift_url: str = None, 
                              openshift_token: str = None) -> Dict[str, Any]:
         """Fetch metadata for a specific version"""
         logger.info(f"Fetching metadata for version: {version}")
-        data = self._fetch_catalog_metadata(catalog_name, port, openshift_url, openshift_token)
+        data = self._fetch_catalog_metadata(catalog_name, port_forward_manager, openshift_url, openshift_token)
         
         # Parse the JSON output to extract metadata for the specific version
         metadata = self._parse_catalog_data(data, 'metadata', package_name, channel_name, version)
@@ -561,3 +555,265 @@ class CatalogManager:
                 break
         
         return essential_data
+
+
+class PortForwardManager:
+    """Manages native Python Kubernetes port-forwarding using direct socket communication"""
+    
+    def __init__(self, core_api: client.CoreV1Api, service_name: str, namespace: str, 
+                 target_port: int, local_port: int):
+        self.core_api = core_api
+        self.service_name = service_name
+        self.namespace = namespace
+        self.target_port = target_port
+        self.local_port = local_port
+        self.pf = None
+        self._socket = None
+        self._pod_name = None
+        
+    def _find_service_pod(self) -> str:
+        """Find a pod that backs the service"""
+        try:
+            # Get the service to find its selector
+            service = self.core_api.read_namespaced_service(
+                name=self.service_name, 
+                namespace=self.namespace
+            )
+            
+            if not service.spec.selector:
+                raise Exception(f"Service {self.service_name} has no selector")
+            
+            # Build label selector from service selector
+            label_selector = []
+            for key, value in service.spec.selector.items():
+                label_selector.append(f"{key}={value}")
+            
+            # Find pods matching the selector
+            pods = self.core_api.list_namespaced_pod(
+                namespace=self.namespace,
+                label_selector=",".join(label_selector)
+            )
+            
+            if not pods.items:
+                raise Exception(f"No pods found for service {self.service_name}")
+            
+            # Use the first running pod
+            for pod in pods.items:
+                if pod.status.phase == 'Running':
+                    return pod.metadata.name
+            
+            # If no running pods, use the first available
+            return pods.items[0].metadata.name
+            
+        except Exception as e:
+            logger.error(f"Failed to find pod for service {self.service_name}: {e}")
+            raise
+        
+    def start(self):
+        """Start the native port-forward connection"""
+        try:
+            # Find a pod that backs the service
+            self._pod_name = self._find_service_pod()
+            logger.debug(f"Using pod {self._pod_name} for port-forward to service {self.service_name}")
+            
+            # Create port-forward connection to the pod
+            self.pf = portforward(
+                self.core_api.connect_get_namespaced_pod_portforward,
+                name=self._pod_name,
+                namespace=self.namespace,
+                ports=str(self.target_port)
+            )
+            
+            # Get the socket for the target port
+            self._socket = self.pf.socket(self.target_port)
+            if not self._socket:
+                raise Exception(f"Failed to create socket for port {self.target_port}")
+                
+            logger.debug(f"Native port-forward socket created for pod {self._pod_name}:{self.target_port}")
+            
+        except Exception as e:
+            logger.error(f"Failed to start native port-forward: {e}")
+            raise
+    
+    def make_http_request(self, path: str, headers: Dict[str, str] = None) -> str:
+        """Make HTTPS request through the port-forward socket"""
+        if not self._socket:
+            raise Exception("Port-forward not established")
+        
+        headers = headers or {}
+        
+        # Wrap socket with SSL for HTTPS
+        import ssl
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE  # Skip certificate verification for port-forward
+        
+        try:
+            # Wrap the socket with SSL
+            ssl_socket = context.wrap_socket(self._socket, server_hostname=f"{self.service_name}.{self.namespace}.svc.cluster.local")
+            
+            # Build HTTPS request
+            request_lines = [
+                f"GET {path} HTTP/1.1",
+                f"Host: {self.service_name}.{self.namespace}.svc.cluster.local",
+                "Connection: close"
+            ]
+            
+            for key, value in headers.items():
+                request_lines.append(f"{key}: {value}")
+            
+            request_lines.append("")  # Empty line to end headers
+            request_lines.append("")  # Empty line to end request
+            
+            request_data = "\r\n".join(request_lines).encode('utf-8')
+            
+            # Send HTTPS request through the SSL socket
+            ssl_socket.sendall(request_data)
+            
+            # Read response
+            response_data = b""
+            while True:
+                try:
+                    chunk = ssl_socket.recv(4096)
+                    if not chunk:
+                        break
+                    response_data += chunk
+                    
+                    # Check if we have a complete HTTP response
+                    if b"\r\n\r\n" in response_data:
+                        # Split headers and body
+                        header_end = response_data.find(b"\r\n\r\n")
+                        headers_part = response_data[:header_end].decode('utf-8')
+                        body_part = response_data[header_end + 4:]
+                        
+                        # Check if we have Content-Length header
+                        content_length = None
+                        for line in headers_part.split('\r\n'):
+                            if line.lower().startswith('content-length:'):
+                                content_length = int(line.split(':')[1].strip())
+                                break
+                        
+                        # If we have content-length, read until we have all data
+                        if content_length is not None:
+                            while len(body_part) < content_length:
+                                chunk = ssl_socket.recv(4096)
+                                if not chunk:
+                                    break
+                                body_part += chunk
+                            break
+                        else:
+                            # For chunked or connection-close responses, continue reading
+                            continue
+                except ssl.SSLWantReadError:
+                    continue
+                except Exception as e:
+                    logger.debug(f"SSL read error: {e}")
+                    break
+            
+            # Parse HTTP response (handle chunked transfer and compression)
+            if b"\r\n\r\n" not in response_data:
+                raise Exception("Invalid HTTPS response received")
+
+            header_end = response_data.find(b"\r\n\r\n")
+            headers_raw = response_data[:header_end].decode('iso-8859-1')
+            body_bytes = response_data[header_end + 4:]
+
+            # Status line and headers
+            status_line = headers_raw.split("\r\n", 1)[0]
+            try:
+                status_code = int(status_line.split(" ")[1])
+            except Exception:
+                status_code = 0
+            if status_code < 200 or status_code >= 300:
+                raise Exception(f"HTTPS request failed: {status_line}")
+
+            headers_map: Dict[str, str] = {}
+            for line in headers_raw.split("\r\n")[1:]:
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    headers_map[k.strip().lower()] = v.strip()
+
+            # Handle chunked transfer-encoding
+            if 'transfer-encoding' in headers_map and 'chunked' in headers_map['transfer-encoding'].lower():
+                body_bytes = self._decode_chunked(body_bytes)
+
+            # Handle compression
+            content_encoding = headers_map.get('content-encoding', '').lower()
+            if 'gzip' in content_encoding:
+                import gzip
+                body_bytes = gzip.decompress(body_bytes)
+            elif 'deflate' in content_encoding:
+                import zlib
+                body_bytes = zlib.decompress(body_bytes)
+
+            # Decode to text
+            text_body = body_bytes.decode('utf-8', errors='replace')
+            return text_body
+                
+        except Exception as e:
+            logger.error(f"HTTPS request through socket failed: {e}")
+            raise
+        finally:
+            try:
+                ssl_socket.close()
+            except:
+                pass
+
+    def _decode_chunked(self, data: bytes) -> bytes:
+        """Decode HTTP/1.1 chunked transfer-encoding payload"""
+        i = 0
+        out = bytearray()
+        length = len(data)
+        while True:
+            j = data.find(b"\r\n", i)
+            if j == -1:
+                break
+            size_line = data[i:j].decode('ascii', errors='ignore').strip()
+            if ';' in size_line:
+                size_line = size_line.split(';', 1)[0]
+            try:
+                size = int(size_line, 16)
+            except Exception:
+                break
+            i = j + 2
+            if size == 0:
+                # optional trailers end with CRLF; we're done
+                break
+            if i + size > length:
+                # incomplete buffer
+                out += data[i:]
+                break
+            out += data[i:i + size]
+            i += size
+            # skip CRLF after chunk
+            if data[i:i + 2] == b"\r\n":
+                i += 2
+        return bytes(out)
+    
+    def stop(self):
+        """Stop the port-forward connection"""
+        try:
+            if self._socket:
+                self._socket.close()
+                self._socket = None
+            if self.pf:
+                # Check for any errors
+                error = self.pf.error(self.target_port)
+                if error:
+                    logger.warning(f"Port-forward error on port {self.target_port}: {error}")
+                self.pf = None
+            logger.debug("Port-forward connection closed")
+        except Exception as e:
+            logger.warning(f"Error closing port-forward: {e}")
+    
+    def poll(self) -> Optional[int]:
+        """Check if the port-forward is still active"""
+        return None if self._socket else 1
+    
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit"""
+        self.stop()
