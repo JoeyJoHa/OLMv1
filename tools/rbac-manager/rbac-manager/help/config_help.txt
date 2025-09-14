@@ -1,0 +1,59 @@
+Configuration Management
+
+USAGE:
+    rbac-manager --generate-config [--output DIR]
+    rbac-manager --config FILE [COMMAND] [FLAGS]
+
+DESCRIPTION:
+    Manage configuration files for RBAC Manager to provide default values
+    and streamline workflows. Configuration files allow you to set default
+    values for common flags and avoid repetitive command-line arguments.
+
+CONFIGURATION COMMANDS:
+    --generate-config     Generate a configuration file template
+    --config FILE         Use configuration file for default values
+
+CONFIGURATION FILE STRUCTURE:
+    rbac_manager:
+      defaults:
+        namespace: default
+        skip_tls: false
+        debug: false
+        least_privileges: false
+        helm: false
+      catalogd:
+        openshift_url: null
+        openshift_token: null
+        catalog_name: null
+      opm:
+        registry_token: null
+        output_dir: null
+
+EXAMPLES:
+    # Generate configuration template
+    rbac-manager --generate-config
+
+    # Generate configuration in specific directory
+    rbac-manager --generate-config --output ./configs/
+
+    # Use configuration file with OPM command
+    rbac-manager --config ~/.rbac-manager.yaml opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
+
+    # Use configuration file with catalogd command
+    rbac-manager --config ~/.rbac-manager.yaml catalogd --package quay-operator
+
+    # Configuration overrides command-line flags
+    rbac-manager --config ~/.rbac-manager.yaml opm --image <bundle-image> --helm
+
+BENEFITS:
+    - Set default values for frequently used flags
+    - Reduce command-line argument repetition
+    - Share configuration across team members
+    - Maintain consistent settings across environments
+    - Store sensitive tokens securely in configuration files
+
+NOTES:
+    - Configuration values are overridden by command-line flags
+    - Configuration files use YAML format
+    - Store sensitive information (tokens) securely
+    - Configuration files are loaded before command execution

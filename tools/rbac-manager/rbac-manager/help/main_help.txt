@@ -1,0 +1,41 @@
+RBAC Manager - Operator Bundle Metadata and RBAC Resource Generator
+
+USAGE:
+    rbac-manager [COMMAND FLAGS] [OPTIONS]
+
+DESCRIPTION:
+    A comprehensive tool to fetch operator bundle metadata using opm binary
+    and interact with OpenShift catalogs. Generates RBAC resources and 
+    Helm values for OLMv1 operators.
+
+COMMAND FLAGS:
+    --list-catalogs       List all available ClusterCatalogs with serving status and age
+    --catalogd            Query catalogd service for package information
+    --opm                 Extract metadata from operator bundle images
+    --generate-config     Generate configuration file template
+
+GLOBAL FLAGS:
+    --skip-tls            Make insecure requests (skip TLS verification)
+    --debug               Enable debug logging
+    --help                Show this help message
+    --examples            Show usage examples
+    --config FILE         Use configuration file for default values
+
+EXAMPLES:
+    # List all catalogs with serving status and age
+    rbac-manager --list-catalogs --skip-tls
+
+    # Query catalogd interactively
+    rbac-manager --catalogd
+
+    # Extract bundle metadata
+    rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
+
+    # Generate configuration
+    rbac-manager --generate-config --output ./configs/
+
+    # Show examples
+    rbac-manager --examples
+
+For more information about a specific command, use:
+    rbac-manager help <command>

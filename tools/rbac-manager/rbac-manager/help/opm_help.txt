@@ -1,0 +1,85 @@
+Extract Bundle Metadata Command
+
+USAGE:
+    rbac-manager opm --image IMAGE [FLAGS]
+
+DESCRIPTION:
+    Extracts metadata from operator bundle images using the opm binary.
+    Generates RBAC resources and Helm values for OLMv1 operators.
+    Automatically detects index vs bundle images and provides appropriate guidance.
+
+REQUIRED FLAGS:
+    --image IMAGE         Operator bundle image URL
+
+OPTIONAL FLAGS:
+    --namespace NAMESPACE Target namespace for generated manifests (default: default)
+    --registry-token TOKEN Authentication token for private registries
+    --helm                Generate Helm values files
+    --output DIR          Output directory for generated files
+    --least-privileges    Apply least-privilege principles to RBAC
+    --skip-tls            Skip TLS verification for insecure requests
+    --debug               Enable debug logging
+
+OUTPUT:
+    The command generates files in a 'generated-{operator-name}/' directory:
+
+    yaml/                 YAML manifest files
+    ├── 01-serviceaccount.yaml      ServiceAccount for operator installer
+    ├── 02-clusterrole.yaml         ClusterRoles for operator and RBAC permissions
+    ├── 03-clusterrolebinding.yaml  ClusterRoleBindings linking SA to roles
+    └── 04-clusterextension.yaml    ClusterExtension resource for OLMv1
+
+    helm/                 Helm values files
+    ├── rbac-only-example.yaml      RBAC-only deployment configuration
+    └── values-{operator-name}.yaml Full operator deployment values
+
+EXAMPLES:
+    # Extract from public bundle image
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
+
+    # Extract with custom namespace
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
+      --namespace quay-operator
+
+    # Extract from private registry
+    rbac-manager opm --image private-registry.com/operator-bundle:v1.0.0 \
+      --namespace my-operator --registry-token your-token
+
+    # Extract with debug output
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
+      --namespace quay-operator --debug
+
+    # Skip TLS verification
+    rbac-manager opm --image registry.local/operator-bundle:v1.0.0 \
+      --skip-tls
+
+    # Generate Helm values files
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --helm
+
+    # Apply least-privilege principles
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --least-privileges
+
+    # Custom output directory
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --output ./my-operator
+
+    # Combined flags
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
+      --helm --least-privileges --output ./quay-operator
+
+IMAGE TYPES:
+    - Bundle Image: Contains operator bundle metadata and manifests
+    - Index Image: Contains multiple packages (use catalogd command instead)
+
+NOTES:
+    - Requires opm binary to be installed and available in PATH
+    - Bundle images are extracted to temporary directory during processing
+    - Generated files follow OLMv1 and Kubernetes best practices
+    - RBAC permissions are extracted from ClusterServiceVersion manifests
+    - Helm values are compatible with the OLMv1 Helm chart
+
+TROUBLESHOOTING:
+    - "opm binary not found": Install opm CLI from operator-framework releases
+    - "Image appears to be an index image": Use catalogd command for index images
+    - "Failed to extract bundle": Check image accessibility and opm installation
+    - "Authentication failed": Verify registry token and image permissions
+    - "No RBAC rules found": Bundle may not contain ClusterServiceVersion with permissions

@@ -1,0 +1,76 @@
+Query Catalogd Service Command
+
+USAGE:
+    rbac-manager catalogd [FLAGS]
+
+DESCRIPTION:
+    Queries the catalogd service for package information using the /api/v1/all endpoint.
+    Can use either port-forwarding to the catalogd service or direct OpenShift API access.
+    Supports hierarchical queries: catalogs → packages → channels → versions → metadata.
+    All data is parsed from the JSON response of the /catalogs/{catalog_name}/api/v1/all endpoint.
+
+REQUIRED FLAGS (at least one):
+    --catalog-name NAME   Specify catalog name (interactive prompt if not provided)
+    --openshift-url URL   OpenShift cluster URL for direct API access
+    --openshift-token TOKEN OpenShift authentication token
+
+OPTIONAL FLAGS:
+    --package NAME        Show channels for specific package
+    --channel NAME        Show versions for specific channel (requires --package)
+    --version VERSION     Show metadata for specific version (requires --package and --channel)
+    --skip-tls            Skip TLS verification for insecure requests
+    --debug               Enable debug logging
+
+QUERY HIERARCHY:
+    1. List packages in catalog (no additional flags)
+    2. Show channels for package (--package NAME)
+    3. Show versions for channel (--package NAME --channel NAME)
+    4. Get version metadata (--package NAME --channel NAME --version VERSION)
+
+EXAMPLES:
+    # Interactive catalog selection with port-forwarding
+    rbac-manager catalogd
+
+    # Query specific catalog
+    rbac-manager catalogd --catalog-name operatorhubio-catalog
+
+    # Query with direct OpenShift API
+    rbac-manager catalogd --catalog-name operatorhubio-catalog \
+      --openshift-url https://api.cluster.example.com:6443 \
+      --openshift-token sha256~abc123...
+
+    # Show packages in catalog
+    rbac-manager catalogd --catalog-name operatorhubio-catalog
+
+    # Show channels for package
+    rbac-manager catalogd --catalog-name operatorhubio-catalog \
+      --package quay-operator
+
+    # Show versions for channel
+    rbac-manager catalogd --catalog-name operatorhubio-catalog \
+      --package quay-operator --channel stable-3.10
+
+    # Get detailed version metadata
+    rbac-manager catalogd --catalog-name operatorhubio-catalog \
+      --package quay-operator --channel stable-3.10 --version 3.10.13
+
+    # Debug mode with TLS skip
+    rbac-manager catalogd --catalog-name test-catalog --debug --skip-tls
+
+OUTPUT FORMATS:
+    - Packages: List of package names
+    - Channels: List of channel names
+    - Versions: List of version strings
+    - Metadata: JSON format with operator bundle information
+
+NOTES:
+    - Port-forwarding requires kubectl and cluster access
+    - Direct API access requires OpenShift URL and token
+    - Interactive mode prompts user to select from available catalogs
+    - All queries require a valid catalog name
+
+TROUBLESHOOTING:
+    - "Failed to establish port-forward": Check kubectl connectivity and catalogd service
+    - "No packages found": Verify catalog name and catalog status
+    - "Authentication failed": Check OpenShift token validity
+    - "Connection refused": Verify OpenShift URL and network connectivity
