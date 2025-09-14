@@ -102,7 +102,7 @@ class PortForwardManager:
                 self.core_api.connect_get_namespaced_pod_portforward,
                 pod_name,
                 self.namespace,
-                ports=[str(self.target_port)]
+                ports=str(self.target_port)
             )
             
             # Get the socket from port-forward
