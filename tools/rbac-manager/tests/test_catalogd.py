@@ -81,22 +81,51 @@ class CatalogdTestSuite:
             stdout_lines = result.stdout.strip().split('\n')
             
             # Look for JSON output (usually at the end)
+            # First, try to find the end of JSON (closing brace)
+            json_end = -1
             for i in range(len(stdout_lines) - 1, -1, -1):
-                line = stdout_lines[i].strip()
-                if line.startswith('{') and line.endswith('}'):
-                    try:
-                        json_data = json.loads(line)
-                        break
-                    except json.JSONDecodeError:
-                        continue
-                elif line.startswith('{'):
-                    # Multi-line JSON - try to parse from this line to end
-                    json_text = '\n'.join(stdout_lines[i:])
-                    try:
-                        json_data = json.loads(json_text)
-                        break
-                    except json.JSONDecodeError:
-                        continue
+                if stdout_lines[i].strip() == '}':
+                    json_end = i
+                    break
+            
+            # Now look for the start of JSON (opening brace)
+            if json_end >= 0:
+                for i in range(json_end, -1, -1):
+                    line = stdout_lines[i]
+                    if '{' in line:  # Look for line containing opening brace
+                        # Extract JSON part from the line (after the '{')
+                        json_start_pos = line.find('{')
+                        if json_start_pos >= 0:
+                            # Create a copy of lines and modify the first line
+                            temp_lines = stdout_lines[:]
+                            temp_lines[i] = line[json_start_pos:]
+                            json_text = '\n'.join(temp_lines[i:json_end+1])
+                            try:
+                                json_data = json.loads(json_text)
+                                break
+                            except json.JSONDecodeError:
+                                continue
+            
+            # Fallback: try the old method
+            if json_data is None:
+                for i in range(len(stdout_lines) - 1, -1, -1):
+                    line = stdout_lines[i].strip()
+                    if line.startswith('{'):
+                        if line.endswith('}'):
+                            # Single line JSON
+                            try:
+                                json_data = json.loads(line)
+                                break
+                            except json.JSONDecodeError:
+                                continue
+                        else:
+                            # Multi-line JSON - try to parse from this line to end
+                            json_text = '\n'.join(stdout_lines[i:])
+                            try:
+                                json_data = json.loads(json_text)
+                                break
+                            except json.JSONDecodeError:
+                                continue
             
             return {
                 "exit_code": result.returncode,
@@ -240,8 +269,10 @@ class CatalogdTestSuite:
             result["json_data"] is not None and
             result["json_data"].get("type") == "metadata" and
             isinstance(result["json_data"].get("data"), dict) and
-            "name" in result["json_data"]["data"] and
-            "image" in result["json_data"]["data"]
+            "bundle_image" in result["json_data"]["data"] and
+            "olmv1_compatible" in result["json_data"]["data"] and
+            "install_modes" in result["json_data"]["data"] and
+            "webhooks" in result["json_data"]["data"]
         )
         
         self.test_results.append({
@@ -250,8 +281,8 @@ class CatalogdTestSuite:
             "details": result
         })
         
-        bundle_name = result["json_data"]["data"].get("name") if result["json_data"] else "N/A"
-        print(f"   {'✅' if success else '❌'} Metadata retrieval: {bundle_name}")
+        bundle_image = result["json_data"]["data"].get("bundle_image") if result["json_data"] else "N/A"
+        print(f"   {'✅' if success else '❌'} Metadata retrieval: {bundle_image}")
         return success
     
     def test_interactive_catalog_selection(self) -> bool:
@@ -263,11 +294,15 @@ class CatalogdTestSuite:
             "--package", self.test_package
         ], input_data="4\n")
         
+        # Debug output removed - JSON parsing is now working correctly
+        
         success = (
             result["exit_code"] == 0 and
             result["json_data"] is not None and
             result["json_data"].get("type") == "channels" and
-            result["json_data"].get("catalog") == self.test_catalog
+            result["json_data"].get("catalog") == self.test_catalog and
+            isinstance(result["json_data"].get("data"), list) and
+            len(result["json_data"]["data"]) > 0
         )
         
         self.test_results.append({
@@ -276,7 +311,8 @@ class CatalogdTestSuite:
             "details": result
         })
         
-        print(f"   {'✅' if success else '❌'} Interactive selection: catalog selected")
+        catalog_name = result["json_data"].get("catalog") if result["json_data"] else "None"
+        print(f"   {'✅' if success else '❌'} Interactive selection: {catalog_name}")
         return success
     
     def test_invalid_catalog(self) -> bool:
@@ -409,14 +445,16 @@ class CatalogdTestSuite:
             isinstance(result["json_data"]["data"], dict)
         )
         
-        # Additional check: ensure we have the complete metadata structure
+        # Additional check: ensure we have the complete minimal metadata structure
         if success and result["json_data"]:
             data = result["json_data"]["data"]
             success = (
-                "name" in data and
-                "image" in data and
-                "properties" in data and
-                isinstance(data["properties"], list)
+                "bundle_image" in data and
+                "olmv1_compatible" in data and
+                "install_modes" in data and
+                "webhooks" in data and
+                isinstance(data["install_modes"], dict) and
+                isinstance(data["webhooks"], dict)
             )
         
         self.test_results.append({
