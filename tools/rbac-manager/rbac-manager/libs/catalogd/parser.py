@@ -227,30 +227,24 @@ class NDJSONParser:
     
     def _extract_bundle_metadata(self, bundle_item: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Extract relevant metadata from bundle item with enhanced parsing
+        Extract essential metadata from bundle item - focused on key fields only
         
         Args:
             bundle_item: Bundle JSON object
             
         Returns:
-            Structured metadata dictionary with parsed fields
+            Minimal metadata dictionary with essential fields
         """
         try:
-            # Base metadata
+            # Essential metadata only
             metadata = {
-                'bundle_name': bundle_item.get('name'),
-                'package': bundle_item.get('package'),
                 'bundle_image': bundle_item.get('image'),
                 'olmv1_compatible': False,
                 'install_modes': {},
                 'webhooks': {
                     'has_webhooks': False,
                     'webhook_types': []
-                },
-                'csv_metadata': {},
-                'dependencies': [],
-                'related_images': [],
-                'properties_summary': {}
+                }
             }
             
             # Parse properties for detailed information
@@ -265,32 +259,14 @@ class NDJSONParser:
                     bundle_data = prop_value.get('data', {})
                     metadata['olmv1_compatible'] = True
                     
-                    # Extract CSV metadata
-                    csv_metadata = self._extract_csv_metadata(bundle_data)
-                    metadata['csv_metadata'] = csv_metadata
-                    
-                    # Extract install modes
+                    # Extract install modes and webhooks only
                     spec = bundle_data.get('spec', {})
                     metadata['install_modes'] = self._extract_install_modes(spec)
-                    
-                    # Extract webhook information
-                    metadata['webhooks'] = self._extract_webhook_info(spec)
-                    
-                    # Extract related images
-                    metadata['related_images'] = self._extract_related_images(spec)
-                    
-                elif prop_type == 'olm.package':
-                    # Package-level metadata
-                    metadata['properties_summary']['package_info'] = prop_value
-                    
-                elif prop_type == 'olm.bundle.mediatype':
-                    # Bundle media type
-                    metadata['properties_summary']['media_type'] = prop_value.get('type')
+                    metadata['webhooks'] = self._extract_webhook_info_minimal(spec)
                     
                 elif prop_type == 'olm.csv.metadata':
                     # This is the main CSV metadata - indicates OLMv1 compatibility
                     metadata['olmv1_compatible'] = True
-                    metadata['csv_metadata'] = self._extract_csv_from_metadata(prop_value)
                     
                     # Extract install modes from CSV metadata
                     install_modes = {}
@@ -300,50 +276,18 @@ class NDJSONParser:
                         if mode_type:
                             install_modes[mode_type] = supported
                     metadata['install_modes'] = install_modes
-                    
-                elif prop_type == 'olm.gvk':
-                    # Group/Version/Kind information
-                    if 'provided_apis' not in metadata:
-                        metadata['provided_apis'] = []
-                    metadata['provided_apis'].append({
-                        'group': prop_value.get('group'),
-                        'version': prop_value.get('version'), 
-                        'kind': prop_value.get('kind')
-                    })
-                    
-                elif prop_type == 'olm.gvk.required':
-                    # Required APIs
-                    if 'required_apis' not in metadata:
-                        metadata['required_apis'] = []
-                    metadata['required_apis'].append({
-                        'group': prop_value.get('group'),
-                        'version': prop_value.get('version'),
-                        'kind': prop_value.get('kind')
-                    })
-            
-            # Clean up empty sections
-            if not metadata['dependencies']:
-                del metadata['dependencies']
-            if not metadata['related_images']:
-                del metadata['related_images']
-            if not metadata['properties_summary']:
-                del metadata['properties_summary']
-            if not metadata.get('provided_apis'):
-                metadata.pop('provided_apis', None)
-            if not metadata.get('required_apis'):
-                metadata.pop('required_apis', None)
             
             return metadata
             
         except Exception as e:
             logger.error(f"Error extracting bundle metadata: {e}")
-            # Fallback to basic metadata if parsing fails
+            # Fallback to minimal metadata if parsing fails
             return {
-                'bundle_name': bundle_item.get('name'),
-                'package': bundle_item.get('package'),
                 'bundle_image': bundle_item.get('image'),
-                'error': f"Failed to parse detailed metadata: {e}",
-                'raw_properties_count': len(bundle_item.get('properties', []))
+                'olmv1_compatible': False,
+                'install_modes': {},
+                'webhooks': {'has_webhooks': False, 'webhook_types': []},
+                'error': f"Failed to parse metadata: {e}"
             }
     
     def _extract_install_modes(self, spec: Dict[str, Any]) -> Dict[str, bool]:
@@ -405,8 +349,29 @@ class NDJSONParser:
             logger.debug(f"Error extracting CSV from metadata: {e}")
             return {}
     
+    def _extract_webhook_info_minimal(self, spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract minimal webhook information from bundle spec"""
+        try:
+            webhooks = spec.get('webhookdefinitions', [])
+            webhook_types = []
+            
+            for webhook in webhooks:
+                webhook_type = webhook.get('type', 'unknown')
+                webhook_types.append(webhook_type)
+            
+            # Remove duplicates
+            webhook_types = list(set(webhook_types))
+            
+            return {
+                'has_webhooks': len(webhooks) > 0,
+                'webhook_types': webhook_types
+            }
+        except Exception as e:
+            logger.debug(f"Error extracting webhook info: {e}")
+            return {'has_webhooks': False, 'webhook_types': []}
+    
     def _extract_webhook_info(self, spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract webhook information from bundle spec"""
+        """Extract webhook information from bundle spec (legacy method for compatibility)"""
         try:
             webhooks = spec.get('webhookdefinitions', [])
             webhook_info = {
