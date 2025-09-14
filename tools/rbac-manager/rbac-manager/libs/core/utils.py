@@ -1,0 +1,189 @@
+"""
+Core Utilities
+
+Common utility functions used across the RBAC Manager tool.
+"""
+
+import logging
+import re
+import sys
+import urllib3
+from typing import Optional
+from .exceptions import ConfigurationError
+
+
+def setup_logging(debug: bool = False) -> None:
+    """
+    Set up logging configuration for the application.
+    
+    Args:
+        debug: Enable debug logging level
+    """
+    level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    if debug:
+        logger = logging.getLogger(__name__)
+        logger.debug("Debug mode enabled")
+
+
+def disable_ssl_warnings() -> None:
+    """Disable SSL warnings when --skip-tls is used"""
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def is_output_piped() -> bool:
+    """
+    Check if output is being piped (not connected to terminal).
+    
+    Returns:
+        bool: True if output is piped, False if connected to terminal
+    """
+    return not sys.stdout.isatty()
+
+
+def validate_image_url(image: str) -> bool:
+    """
+    Validate if the provided string is a valid container image URL.
+    
+    Args:
+        image: Container image URL to validate
+        
+    Returns:
+        bool: True if valid image URL
+        
+    Raises:
+        ConfigurationError: If image URL is invalid
+    """
+    if not image or not isinstance(image, str):
+        raise ConfigurationError("Image URL cannot be empty")
+    
+    # Basic validation for container image format
+    # registry.com/namespace/image:tag or registry.com/namespace/image@sha256:hash
+    image_pattern = r'^([a-zA-Z0-9.-]+(?:\:[0-9]+)?\/)?[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\:[a-zA-Z0-9._-]+|@sha256\:[a-fA-F0-9]{64})?$'
+    
+    if not re.match(image_pattern, image):
+        raise ConfigurationError(f"Invalid container image URL format: {image}")
+    
+    return True
+
+
+def validate_namespace(namespace: str) -> bool:
+    """
+    Validate if the provided string is a valid Kubernetes namespace.
+    
+    Args:
+        namespace: Kubernetes namespace to validate
+        
+    Returns:
+        bool: True if valid namespace
+        
+    Raises:
+        ConfigurationError: If namespace is invalid
+    """
+    if not namespace or not isinstance(namespace, str):
+        raise ConfigurationError("Namespace cannot be empty")
+    
+    # Kubernetes namespace validation
+    # Must be lowercase alphanumeric with hyphens, max 63 chars
+    if not re.match(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$', namespace):
+        raise ConfigurationError(f"Invalid Kubernetes namespace format: {namespace}")
+    
+    if len(namespace) > 63:
+        raise ConfigurationError(f"Namespace too long (max 63 chars): {namespace}")
+    
+    return True
+
+
+def validate_openshift_url(url: str) -> bool:
+    """
+    Validate if the provided string is a valid OpenShift API URL.
+    
+    Args:
+        url: OpenShift API URL to validate
+        
+    Returns:
+        bool: True if valid URL
+        
+    Raises:
+        ConfigurationError: If URL is invalid
+    """
+    if not url or not isinstance(url, str):
+        raise ConfigurationError("OpenShift URL cannot be empty")
+    
+    # Basic URL validation for OpenShift API
+    url_pattern = r'^https?:\/\/[a-zA-Z0-9.-]+(?:\:[0-9]+)?(?:\/.*)?$'
+    
+    if not re.match(url_pattern, url):
+        raise ConfigurationError(f"Invalid OpenShift URL format: {url}")
+    
+    return True
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize a filename by removing or replacing invalid characters.
+    
+    Args:
+        filename: Original filename
+        
+    Returns:
+        str: Sanitized filename safe for filesystem use
+    """
+    # Replace invalid characters with underscores
+    sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    
+    # Remove leading/trailing dots and spaces
+    sanitized = sanitized.strip('. ')
+    
+    # Ensure filename is not empty
+    if not sanitized:
+        sanitized = "unnamed"
+    
+    return sanitized
+
+
+def format_bytes(bytes_count: int) -> str:
+    """
+    Format byte count into human-readable string.
+    
+    Args:
+        bytes_count: Number of bytes
+        
+    Returns:
+        str: Human-readable byte count (e.g., "1.5 MB")
+    """
+    if bytes_count == 0:
+        return "0 B"
+    
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
+    unit_index = 0
+    size = float(bytes_count)
+    
+    while size >= 1024 and unit_index < len(units) - 1:
+        size /= 1024
+        unit_index += 1
+    
+    return f"{size:.1f} {units[unit_index]}"
+
+
+def truncate_string(text: str, max_length: int = 100, suffix: str = "...") -> str:
+    """
+    Truncate a string to a maximum length with optional suffix.
+    
+    Args:
+        text: String to truncate
+        max_length: Maximum length including suffix
+        suffix: Suffix to add when truncating
+        
+    Returns:
+        str: Truncated string
+    """
+    if len(text) <= max_length:
+        return text
+    
+    return text[:max_length - len(suffix)] + suffix
