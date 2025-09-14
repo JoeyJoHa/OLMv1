@@ -83,7 +83,7 @@ class CatalogManager:
             List[Dict[str, Any]]: Raw ClusterCatalog data from Kubernetes API
         """
         if not self.k8s_client:
-            raise Exception("Kubernetes client not available. Please ensure kubeconfig is properly configured.")
+            raise Exception("Kubernetes client not available. Please ensure kubeconfig is properly configured or use --openshift-url and --openshift-token flags.")
         
         try:
             logger.info("Fetching ClusterCatalogs from the cluster...")
