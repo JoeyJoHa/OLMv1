@@ -16,6 +16,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import portforward
 import urllib3
+from .openshift_auth import OpenShiftAuth
 
 logger = logging.getLogger(__name__)
 
@@ -35,39 +36,35 @@ class CatalogManager:
         if skip_tls:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         
-        # Initialize Kubernetes client
+        # Initialize authentication handler
+        self.auth = OpenShiftAuth(skip_tls=skip_tls)
+        
+        # Initialize Kubernetes client using default context discovery
         self.k8s_client = None
         self.custom_api = None
         self.core_api = None
-        try:
-            config.load_kube_config()
-            configuration = client.Configuration.get_default_copy()
-            if skip_tls:
-                configuration.verify_ssl = False
-                configuration.ssl_ca_cert = None
-            else:
-                configuration.verify_ssl = True
-            self.k8s_client = client.ApiClient(configuration)
-            self.custom_api = client.CustomObjectsApi(self.k8s_client)
-            self.core_api = client.CoreV1Api(self.k8s_client)
-            logger.debug("Kubernetes client initialized (kubeconfig)")
-        except Exception as e:
-            logger.warning(f"Failed to initialize Kubernetes client from kubeconfig: {e}")
-            try:
-                config.load_incluster_config()
-                configuration = client.Configuration.get_default_copy()
-                if skip_tls:
-                    configuration.verify_ssl = False
-                    configuration.ssl_ca_cert = None
-                else:
-                    configuration.verify_ssl = True
-                self.k8s_client = client.ApiClient(configuration)
-                self.custom_api = client.CustomObjectsApi(self.k8s_client)
-                self.core_api = client.CoreV1Api(self.k8s_client)
-                logger.debug("Kubernetes client initialized (in-cluster)")
-            except Exception as e2:
-                logger.warning(f"Failed to initialize Kubernetes client in-cluster: {e2}")
-                # Leave apis as None; guarded methods will raise clear errors
+        
+        # Try to configure with default context (no explicit URL/token)
+        if self.auth.configure_auth():
+            self.k8s_client, self.custom_api, self.core_api = self.auth.get_kubernetes_clients()
+            logger.debug("Kubernetes client initialized via OpenShiftAuth")
+    
+    def configure_openshift_auth(self, openshift_url: str = None, openshift_token: str = None) -> bool:
+        """
+        Configure OpenShift authentication with explicit URL and token
+        
+        Args:
+            openshift_url: OpenShift cluster URL
+            openshift_token: OpenShift authentication token
+            
+        Returns:
+            bool: True if authentication was configured successfully
+        """
+        if self.auth.configure_auth(openshift_url, openshift_token):
+            self.k8s_client, self.custom_api, self.core_api = self.auth.get_kubernetes_clients()
+            logger.debug("Kubernetes client reconfigured with explicit auth")
+            return True
+        return False
     
     def is_output_piped(self) -> bool:
         """
@@ -299,31 +296,31 @@ class CatalogManager:
     
     def make_catalogd_request(self, url: str, openshift_url: str = None, 
                             openshift_token: str = None, port_forward_manager: 'PortForwardManager' = None) -> Dict[str, Any]:
-        """Make API request to catalogd service"""
-        headers = {}
+        """
+        Make API request to catalogd service via port-forward.
         
+        Note: openshift_url is ignored for catalogd queries; only token is used for auth.
+        All catalogd requests go through port-forward to the catalogd service.
+        
+        Args:
+            url: The API endpoint path
+            openshift_url: Ignored (kept for compatibility)
+            openshift_token: Token for authentication (optional)
+            port_forward_manager: Port-forward manager instance (required)
+        """
+        if not port_forward_manager:
+            raise Exception("Port-forward is required for catalogd queries. Ensure port-forward is established and retry.")
+        
+        # Get authentication headers (token only)
+        headers = self.auth.get_auth_headers()
+        
+        # Override with explicit token if provided
         if openshift_token:
             headers['Authorization'] = f'Bearer {openshift_token}'
         
         try:
-            if openshift_url:
-                # Direct API call to OpenShift
-                full_url = f"{openshift_url.rstrip('/')}/{url.lstrip('/')}"
-                logger.debug(f"Making request to: {full_url}")
-                
-                verify_ssl = not self.skip_tls
-                response = requests.get(full_url, headers=headers, verify=verify_ssl, timeout=30)
-                response.raise_for_status()
-                text_body = response.text
-                
-            elif port_forward_manager:
-                # Use native port-forward socket
-                logger.debug(f"Making request through native port-forward: {url}")
-                text_body = port_forward_manager.make_http_request(url, headers)
-                
-            else:
-                raise Exception("Either openshift_url or port_forward_manager must be provided")
-                
+            logger.debug(f"Making request through native port-forward: {url}")
+            text_body = port_forward_manager.make_http_request(url, headers)
         except Exception as e:
             logger.error(f"Request failed: {e}")
             raise

@@ -47,6 +47,11 @@ class RBACManager:
         port = None
         
         try:
+            # Configure authentication if URL and token are provided
+            if openshift_url and openshift_token:
+                if not self.catalog_manager.configure_openshift_auth(openshift_url, openshift_token):
+                    print("Failed to configure OpenShift authentication")
+                    return
             # Get catalog name if not provided
             if not catalog_name:
                 catalogs = self.catalog_manager.list_catalogs()
@@ -74,11 +79,10 @@ class RBACManager:
                         print("\nOperation cancelled.")
                         return
             
-            # Start port-forward if using catalogd service
-            if not openshift_url:
-                print(f"Starting port-forward to catalogd service...", file=sys.stderr)
-                port_forward_manager, port, is_https = self.catalog_manager.port_forward_catalogd()
-                print(f"Port-forward established on port {port}", file=sys.stderr)
+            # Always start port-forward for catalogd service (regardless of openshift_url)
+            print(f"Starting port-forward to catalogd service...", file=sys.stderr)
+            port_forward_manager, port, is_https = self.catalog_manager.port_forward_catalogd()
+            print(f"Port-forward established on port {port}", file=sys.stderr)
             
             # Query packages
             if not package:
@@ -404,6 +408,12 @@ def main():
     try:
         # Execute commands based on flags
         if args.list_catalogs:
+            # Configure authentication if URL and token are provided
+            if args.openshift_url and args.openshift_token:
+                if not rbac_manager.catalog_manager.configure_openshift_auth(args.openshift_url, args.openshift_token):
+                    print("Failed to configure OpenShift authentication")
+                    sys.exit(1)
+            
             exit_code = rbac_manager.catalog_manager.display_catalogs_enhanced()
             sys.exit(exit_code)
         
