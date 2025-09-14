@@ -426,6 +426,11 @@ def main():
             channel = args.channel
             version = args.version
             
+            # If user passed only --catalogd (no operational flags), show help for catalogd
+            if not any([catalog_name, package, channel, version]):
+                print("No catalogd operation specified. Use --help to see available options for --catalogd.\n")
+                return
+
             if config and 'catalogd' in config:
                 catalogd_config = config['catalogd']
                 catalog_name = catalog_name or catalogd_config.get('catalog_name')

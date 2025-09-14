@@ -103,6 +103,11 @@ class CatalogManager:
                     "SSL certificate verification failed. This cluster appears to use self-signed certificates. "
                     "Please use the --skip-tls flag to bypass certificate verification."
                 )
+            if "unauthorized" in error_msg or "401" in error_msg:
+                raise Exception(
+                    "Unauthorized (401). Verify that your token is valid and has permissions. "
+                    "If passing via shell, ensure correct syntax (zsh/bash: $TOKEN, PowerShell: $env:TOKEN)."
+                )
             logger.error(f"Failed to list ClusterCatalogs: {e}")
             raise
         except Exception as e:
@@ -111,6 +116,11 @@ class CatalogManager:
                 raise Exception(
                     "SSL certificate verification failed. This cluster appears to use self-signed certificates. "
                     "Please use the --skip-tls flag to bypass certificate verification."
+                )
+            if "unauthorized" in error_msg or "401" in error_msg:
+                raise Exception(
+                    "Unauthorized (401). Verify that your token is valid and has permissions. "
+                    "If passing via shell, ensure correct syntax (zsh/bash: $TOKEN, PowerShell: $env:TOKEN)."
                 )
             logger.error(f"Failed to list ClusterCatalogs: {e}")
             raise
