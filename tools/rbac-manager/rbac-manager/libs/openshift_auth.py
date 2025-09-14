@@ -59,7 +59,7 @@ class OpenShiftAuth:
             # Create configuration with token
             configuration = client.Configuration()
             configuration.host = self.openshift_url
-            configuration.api_key = {"authorization": f"Bearer {self.openshift_token}"}
+            configuration.api_key = {"authorization": self.openshift_token}
             configuration.api_key_prefix = {"authorization": "Bearer"}
             
             if self.skip_tls:
