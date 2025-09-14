@@ -227,39 +227,124 @@ class NDJSONParser:
     
     def _extract_bundle_metadata(self, bundle_item: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Extract relevant metadata from bundle item
+        Extract relevant metadata from bundle item with enhanced parsing
         
         Args:
             bundle_item: Bundle JSON object
             
         Returns:
-            Extracted metadata dictionary
+            Structured metadata dictionary with parsed fields
         """
         try:
+            # Base metadata
             metadata = {
-                'name': bundle_item.get('name'),
+                'bundle_name': bundle_item.get('name'),
                 'package': bundle_item.get('package'),
-                'image': bundle_item.get('image'),
-                'properties': bundle_item.get('properties', [])
+                'bundle_image': bundle_item.get('image'),
+                'olmv1_compatible': False,
+                'install_modes': {},
+                'webhooks': {
+                    'has_webhooks': False,
+                    'webhook_types': []
+                },
+                'csv_metadata': {},
+                'dependencies': [],
+                'related_images': [],
+                'properties_summary': {}
             }
             
-            # Extract additional metadata from properties
-            for prop in metadata['properties']:
-                if prop.get('type') == 'olm.bundle.object':
-                    bundle_data = prop.get('value', {}).get('data', {})
-                    spec = bundle_data.get('spec', {})
+            # Parse properties for detailed information
+            properties = bundle_item.get('properties', [])
+            
+            for prop in properties:
+                prop_type = prop.get('type')
+                prop_value = prop.get('value', {})
+                
+                if prop_type == 'olm.bundle.object':
+                    # This contains the ClusterServiceVersion (CSV) data
+                    bundle_data = prop_value.get('data', {})
+                    metadata['olmv1_compatible'] = True
                     
-                    metadata.update({
-                        'olmv1_compatible': True,
-                        'install_modes': self._extract_install_modes(spec),
-                        'has_webhooks': self._has_webhooks(spec)
+                    # Extract CSV metadata
+                    csv_metadata = self._extract_csv_metadata(bundle_data)
+                    metadata['csv_metadata'] = csv_metadata
+                    
+                    # Extract install modes
+                    spec = bundle_data.get('spec', {})
+                    metadata['install_modes'] = self._extract_install_modes(spec)
+                    
+                    # Extract webhook information
+                    metadata['webhooks'] = self._extract_webhook_info(spec)
+                    
+                    # Extract related images
+                    metadata['related_images'] = self._extract_related_images(spec)
+                    
+                elif prop_type == 'olm.package':
+                    # Package-level metadata
+                    metadata['properties_summary']['package_info'] = prop_value
+                    
+                elif prop_type == 'olm.bundle.mediatype':
+                    # Bundle media type
+                    metadata['properties_summary']['media_type'] = prop_value.get('type')
+                    
+                elif prop_type == 'olm.csv.metadata':
+                    # This is the main CSV metadata - indicates OLMv1 compatibility
+                    metadata['olmv1_compatible'] = True
+                    metadata['csv_metadata'] = self._extract_csv_from_metadata(prop_value)
+                    
+                    # Extract install modes from CSV metadata
+                    install_modes = {}
+                    for mode in prop_value.get('installModes', []):
+                        mode_type = mode.get('type')
+                        supported = mode.get('supported', False)
+                        if mode_type:
+                            install_modes[mode_type] = supported
+                    metadata['install_modes'] = install_modes
+                    
+                elif prop_type == 'olm.gvk':
+                    # Group/Version/Kind information
+                    if 'provided_apis' not in metadata:
+                        metadata['provided_apis'] = []
+                    metadata['provided_apis'].append({
+                        'group': prop_value.get('group'),
+                        'version': prop_value.get('version'), 
+                        'kind': prop_value.get('kind')
                     })
-                    break
+                    
+                elif prop_type == 'olm.gvk.required':
+                    # Required APIs
+                    if 'required_apis' not in metadata:
+                        metadata['required_apis'] = []
+                    metadata['required_apis'].append({
+                        'group': prop_value.get('group'),
+                        'version': prop_value.get('version'),
+                        'kind': prop_value.get('kind')
+                    })
+            
+            # Clean up empty sections
+            if not metadata['dependencies']:
+                del metadata['dependencies']
+            if not metadata['related_images']:
+                del metadata['related_images']
+            if not metadata['properties_summary']:
+                del metadata['properties_summary']
+            if not metadata.get('provided_apis'):
+                metadata.pop('provided_apis', None)
+            if not metadata.get('required_apis'):
+                metadata.pop('required_apis', None)
             
             return metadata
             
         except Exception as e:
-            raise ParsingError(f"Failed to extract bundle metadata: {e}")
+            logger.error(f"Error extracting bundle metadata: {e}")
+            # Fallback to basic metadata if parsing fails
+            return {
+                'bundle_name': bundle_item.get('name'),
+                'package': bundle_item.get('package'),
+                'bundle_image': bundle_item.get('image'),
+                'error': f"Failed to parse detailed metadata: {e}",
+                'raw_properties_count': len(bundle_item.get('properties', []))
+            }
     
     def _extract_install_modes(self, spec: Dict[str, Any]) -> Dict[str, bool]:
         """Extract install modes from bundle spec"""
@@ -273,7 +358,117 @@ class NDJSONParser:
         
         return install_modes
     
+    def _extract_csv_metadata(self, bundle_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract CSV metadata from bundle data (olm.bundle.object)"""
+        try:
+            metadata = bundle_data.get('metadata', {})
+            spec = bundle_data.get('spec', {})
+            
+            return {
+                'name': metadata.get('name'),
+                'namespace': metadata.get('namespace'),
+                'display_name': spec.get('displayName'),
+                'description': spec.get('description'),
+                'version': spec.get('version'),
+                'provider': spec.get('provider', {}).get('name'),
+                'maturity': spec.get('maturity'),
+                'keywords': spec.get('keywords', []),
+                'maintainers': spec.get('maintainers', []),
+                'links': spec.get('links', []),
+                'icon': spec.get('icon', [{}])[0] if spec.get('icon') else {}
+            }
+        except Exception as e:
+            logger.debug(f"Error extracting CSV metadata: {e}")
+            return {}
+    
+    def _extract_csv_from_metadata(self, csv_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract CSV metadata from olm.csv.metadata property"""
+        try:
+            return {
+                'display_name': csv_metadata.get('displayName'),
+                'description': csv_metadata.get('description'),
+                'version': csv_metadata.get('version'),
+                'provider': csv_metadata.get('provider', {}).get('name') if csv_metadata.get('provider') else None,
+                'maturity': csv_metadata.get('maturity'),
+                'keywords': csv_metadata.get('keywords', []),
+                'maintainers': csv_metadata.get('maintainers', []),
+                'links': csv_metadata.get('links', []),
+                'annotations': csv_metadata.get('annotations', {}),
+                'labels': csv_metadata.get('labels', {}),
+                'capabilities': csv_metadata.get('annotations', {}).get('capabilities'),
+                'categories': csv_metadata.get('annotations', {}).get('categories'),
+                'container_image': csv_metadata.get('annotations', {}).get('containerImage'),
+                'repository': csv_metadata.get('annotations', {}).get('repository'),
+                'created_at': csv_metadata.get('annotations', {}).get('createdAt')
+            }
+        except Exception as e:
+            logger.debug(f"Error extracting CSV from metadata: {e}")
+            return {}
+    
+    def _extract_webhook_info(self, spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract webhook information from bundle spec"""
+        try:
+            webhooks = spec.get('webhookdefinitions', [])
+            webhook_info = {
+                'has_webhooks': len(webhooks) > 0,
+                'webhook_types': [],
+                'webhook_details': []
+            }
+            
+            for webhook in webhooks:
+                webhook_type = webhook.get('type', 'unknown')
+                webhook_info['webhook_types'].append(webhook_type)
+                webhook_info['webhook_details'].append({
+                    'type': webhook_type,
+                    'admission_review_versions': webhook.get('admissionReviewVersions', []),
+                    'container_port': webhook.get('containerPort'),
+                    'deployment_name': webhook.get('deploymentName'),
+                    'generate_name': webhook.get('generateName'),
+                    'rules': webhook.get('rules', [])
+                })
+            
+            # Remove duplicates from webhook_types
+            webhook_info['webhook_types'] = list(set(webhook_info['webhook_types']))
+            
+            return webhook_info
+        except Exception as e:
+            logger.debug(f"Error extracting webhook info: {e}")
+            return {'has_webhooks': False, 'webhook_types': []}
+    
+    def _extract_related_images(self, spec: Dict[str, Any]) -> List[Dict[str, str]]:
+        """Extract related images from bundle spec"""
+        try:
+            related_images = []
+            
+            # From relatedImages field
+            for img in spec.get('relatedImages', []):
+                related_images.append({
+                    'name': img.get('name'),
+                    'image': img.get('image'),
+                    'source': 'relatedImages'
+                })
+            
+            # From install strategy deployments
+            install_strategy = spec.get('install', {}).get('spec', {})
+            deployments = install_strategy.get('deployments', [])
+            
+            for deployment in deployments:
+                containers = deployment.get('spec', {}).get('template', {}).get('spec', {}).get('containers', [])
+                for container in containers:
+                    image = container.get('image')
+                    if image:
+                        related_images.append({
+                            'name': container.get('name'),
+                            'image': image,
+                            'source': 'deployment_containers'
+                        })
+            
+            return related_images
+        except Exception as e:
+            logger.debug(f"Error extracting related images: {e}")
+            return []
+    
     def _has_webhooks(self, spec: Dict[str, Any]) -> bool:
-        """Check if bundle has webhooks"""
+        """Check if bundle has webhooks (legacy method for compatibility)"""
         webhooks = spec.get('webhookdefinitions', [])
         return len(webhooks) > 0
