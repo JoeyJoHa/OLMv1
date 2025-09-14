@@ -383,7 +383,18 @@ def main():
     
     if args.examples:
         help_manager = HelpManager()
-        help_manager.show_examples()
+        # Show command-specific examples if a command is specified
+        if args.catalogd:
+            help_manager.show_help("catalogd_examples")
+        elif args.opm:
+            help_manager.show_help("opm_examples")
+        elif args.list_catalogs:
+            help_manager.show_help("list_catalogs_examples")
+        elif args.generate_config:
+            help_manager.show_help("generate_config_examples")
+        else:
+            # Show general examples if no specific command
+            help_manager.show_examples()
         return
     
     if command_count == 0:

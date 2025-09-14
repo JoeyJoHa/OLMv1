@@ -1,0 +1,55 @@
+Generate Config Command Examples
+
+BASIC USAGE:
+    # Generate default configuration template
+    python3 rbac-manager.py --generate-config
+
+    # Generate config in specific directory
+    python3 rbac-manager.py --generate-config --output ./config
+
+    # Generate with debug logging
+    python3 rbac-manager.py --generate-config --debug
+
+CONFIGURATION FILE USAGE:
+    # After generating config, edit the file and use it
+    python3 rbac-manager.py --generate-config --output ./my-config
+    # Edit ./my-config/rbac-manager-config.yaml
+    python3 rbac-manager.py --catalogd --config ./my-config/rbac-manager-config.yaml
+
+    # Use config with specific command
+    python3 rbac-manager.py --opm --config ./rbac-manager-config.yaml
+
+EXAMPLE CONFIGURATION:
+    # Generated config file structure:
+    # rbac-manager-config.yaml
+    skip_tls: false
+    debug: false
+    
+    catalogd:
+      catalog_name: ""
+      openshift_url: ""
+      openshift_token: ""
+      package: ""
+      channel: ""
+      version: ""
+    
+    opm:
+      image: ""
+      namespace: "default"
+      registry_token: ""
+      helm: false
+      output: "./output"
+      least_privileges: false
+
+WORKFLOW EXAMPLES:
+    # 1. Generate config template
+    python3 rbac-manager.py --generate-config --output ./project-config
+
+    # 2. Edit the generated config file
+    # Edit ./project-config/rbac-manager-config.yaml with your values
+
+    # 3. Use config for catalogd operations
+    python3 rbac-manager.py --catalogd --config ./project-config/rbac-manager-config.yaml
+
+    # 4. Use config for opm operations
+    python3 rbac-manager.py --opm --config ./project-config/rbac-manager-config.yaml
