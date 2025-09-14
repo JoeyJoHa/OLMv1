@@ -41,6 +41,10 @@ This document outlines comprehensive best practices and coding standards for Pyt
 * **Modules:**  Lowercase, with underscores for readability (e.g., `my_module.py`).
 * **Packages:** Lowercase (e.g., `my_package`). Avoid underscores unless necessary.
 * **Tests:** Start with `test_` (e.g., `test_my_module.py`).
+* **Variables and Functions:** Use snake_case (e.g., user_profile, calculate_total()).
+* **Classes:** Use PascalCase or CapWords (e.g., UserProfile, DatabaseConnection).
+* **Constants:** Use UPPER_SNAKE_CASE (e.g., MAX_CONNECTIONS = 10).
+* **Protected/Private:** Use a single leading underscore _ for protected members and a double leading underscore __ for name mangling (_internal_method, __private_attribute).
 
 ### 1.3. Module Organization Best Practices
 
