@@ -4,6 +4,7 @@ OPM Client
 Handles low-level OPM binary operations and bundle extraction.
 """
 
+import base64
 import json
 import logging
 import subprocess
@@ -96,13 +97,13 @@ class OPMClient:
             
             opm_binary = self._find_opm_binary()
             
-            # Try to inspect the image
-            cmd = [opm_binary, 'alpha', 'list', 'bundles', image]
+            # For bundle images, use 'opm render' to validate
+            cmd = [opm_binary, 'render', image]
             
             if self.skip_tls:
-                cmd.extend(['--use-http'])
+                cmd.extend(['--skip-tls'])
             
-            logger.debug(f"Validating image with command: {' '.join(cmd)}")
+            logger.debug(f"Validating bundle image with command: {' '.join(cmd)}")
             
             result = subprocess.run(
                 cmd,
@@ -112,10 +113,13 @@ class OPMClient:
             )
             
             if result.returncode == 0:
-                logger.debug(f"Image validation successful: {image}")
+                # Check if we got valid JSON output
+                if not result.stdout.strip():
+                    raise BundleProcessingError(f"No output from opm render for image: {image}")
+                logger.debug(f"Bundle image validation successful: {image}")
                 return True
             else:
-                logger.debug(f"Image validation failed: {result.stderr}")
+                logger.debug(f"Bundle image validation failed: {result.stderr}")
                 raise BundleProcessingError(f"Image validation failed: {result.stderr}")
                 
         except subprocess.TimeoutExpired:
@@ -165,14 +169,14 @@ class OPMClient:
     
     def extract_bundle_metadata(self, image: str, registry_token: str = None) -> Dict[str, Any]:
         """
-        Extract bundle metadata from container image using OPM
+        Extract bundle metadata from container image using OPM render
         
         Args:
             image: Container image URL
             registry_token: Registry authentication token (optional)
             
         Returns:
-            Dict containing bundle metadata
+            Dict containing bundle metadata with decoded manifests
             
         Raises:
             BundleProcessingError: If extraction fails
@@ -181,39 +185,37 @@ class OPMClient:
             validate_image_url(image)
             opm_binary = self._find_opm_binary()
             
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_path = Path(temp_dir)
-                
-                # Extract bundle to temporary directory
-                cmd = [opm_binary, 'alpha', 'bundle', 'extract', image, '--output', str(temp_path)]
-                
-                if self.skip_tls:
-                    cmd.extend(['--use-http'])
-                
-                # Set up environment for registry authentication
-                env = {}
-                if registry_token:
-                    env['REGISTRY_AUTH_FILE'] = self._create_auth_file(registry_token, temp_path)
-                
-                logger.debug(f"Extracting bundle with command: {' '.join(cmd)}")
-                
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                    env={**subprocess.os.environ, **env} if env else None
-                )
-                
-                if result.returncode != 0:
-                    raise BundleProcessingError(f"Failed to extract bundle: {result.stderr}")
-                
-                # Parse extracted metadata
-                metadata = self._parse_extracted_bundle(temp_path)
-                metadata['image'] = image
-                
-                logger.info(f"Successfully extracted bundle metadata from: {image}")
-                return metadata
+            # Use opm render to get JSON output
+            cmd = [opm_binary, 'render', image]
+            
+            if self.skip_tls:
+                cmd.extend(['--skip-tls'])
+            
+            # Set up environment for registry authentication
+            env = {}
+            if registry_token:
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    env['REGISTRY_AUTH_FILE'] = self._create_auth_file(registry_token, Path(temp_dir))
+            
+            logger.debug(f"Rendering bundle with command: {' '.join(cmd)}")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env={**subprocess.os.environ, **env} if env else None
+            )
+            
+            if result.returncode != 0:
+                raise BundleProcessingError(f"Failed to render bundle: {result.stderr}")
+            
+            # Parse the JSON output (multiple JSON objects, one per line)
+            metadata = self._parse_opm_render_output(result.stdout)
+            metadata['image'] = image
+            
+            logger.info(f"Successfully extracted bundle metadata from: {image}")
+            return metadata
                 
         except subprocess.TimeoutExpired:
             raise BundleProcessingError(f"Bundle extraction timed out for: {image}")
@@ -252,6 +254,140 @@ class OPMClient:
         
         return str(auth_file)
     
+    def _parse_opm_render_output(self, output: str) -> Dict[str, Any]:
+        """
+        Parse opm render output (NDJSON format) and decode base64 manifests
+        
+        Args:
+            output: Raw output from opm render command
+            
+        Returns:
+            Dict containing parsed bundle metadata with decoded manifests
+            
+        Raises:
+            BundleProcessingError: If parsing fails
+        """
+        try:
+            bundle_metadata = {
+                'name': None,
+                'version': None,
+                'package': None,
+                'manifests': {},
+                'permissions': [],
+                'cluster_permissions': [],
+                'csv_metadata': {},
+                'crds': []
+            }
+            
+            # Parse the single JSON object from opm render output
+            try:
+                obj = json.loads(output.strip())
+                logger.debug(f"Successfully parsed JSON object from opm render output")
+                
+                schema = obj.get('schema')
+                
+                if schema == 'olm.bundle':
+                    # Extract basic bundle information
+                    bundle_metadata['name'] = obj.get('name')
+                    bundle_metadata['package'] = obj.get('package')
+                    bundle_metadata['image'] = obj.get('image')
+                    
+                    # Process properties to extract manifests
+                    properties = obj.get('properties', [])
+                    for prop in properties:
+                        if prop.get('type') == 'olm.bundle.object':
+                            # Decode base64 data to get the actual Kubernetes manifest
+                            encoded_data = prop.get('value', {}).get('data', '')
+                            if encoded_data:
+                                try:
+                                    decoded_data = base64.b64decode(encoded_data).decode('utf-8')
+                                    manifest = json.loads(decoded_data)
+                                    
+                                    # Store manifest by kind
+                                    kind = manifest.get('kind')
+                                    if kind:
+                                        bundle_metadata['manifests'][kind] = manifest
+                                        
+                                        # Extract specific data based on manifest type
+                                        if kind == 'ClusterServiceVersion':
+                                            self._extract_csv_data(manifest, bundle_metadata)
+                                        elif kind == 'CustomResourceDefinition':
+                                            bundle_metadata['crds'].append(manifest)
+                                            
+                                except (base64.binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as e:
+                                    logger.warning(f"Failed to decode manifest data: {e}")
+                                    continue
+                        
+                        elif prop.get('type') == 'olm.package':
+                            # Extract package metadata
+                            package_data = prop.get('value', {})
+                            bundle_metadata['package'] = package_data.get('packageName')
+                            bundle_metadata['version'] = package_data.get('version')
+                            
+            except json.JSONDecodeError as e:
+                raise BundleProcessingError(f"Failed to parse JSON from opm render output: {e}")
+            
+            # Validate that we got essential data
+            if not bundle_metadata.get('name'):
+                raise BundleProcessingError("No bundle name found in opm render output")
+            
+            if not bundle_metadata.get('manifests'):
+                raise BundleProcessingError("No manifests found in bundle")
+            
+            logger.debug(f"Successfully parsed bundle: {bundle_metadata.get('name')}")
+            return bundle_metadata
+            
+        except Exception as e:
+            raise BundleProcessingError(f"Failed to parse opm render output: {e}")
+    
+    def _extract_csv_data(self, csv_manifest: Dict[str, Any], bundle_metadata: Dict[str, Any]) -> None:
+        """
+        Extract data from ClusterServiceVersion manifest
+        
+        Args:
+            csv_manifest: The CSV manifest dictionary
+            bundle_metadata: Bundle metadata dictionary to update
+        """
+        try:
+            spec = csv_manifest.get('spec', {})
+            metadata = csv_manifest.get('metadata', {})
+            
+            # Extract CSV metadata
+            bundle_metadata['csv_metadata'] = {
+                'name': metadata.get('name'),
+                'display_name': spec.get('displayName'),
+                'description': spec.get('description'),
+                'version': spec.get('version'),
+                'provider': spec.get('provider', {}).get('name'),
+                'maintainers': spec.get('maintainers', []),
+                'keywords': spec.get('keywords', []),
+                'links': spec.get('links', []),
+                'maturity': spec.get('maturity'),
+                'install_modes': spec.get('installModes', [])
+            }
+            
+            # Extract RBAC permissions
+            install_spec = spec.get('install', {}).get('spec', {})
+            
+            # Namespace-scoped permissions
+            permissions = install_spec.get('permissions', [])
+            for perm in permissions:
+                bundle_metadata['permissions'].append({
+                    'service_account': perm.get('serviceAccountName', 'default'),
+                    'rules': perm.get('rules', [])
+                })
+            
+            # Cluster-scoped permissions
+            cluster_permissions = install_spec.get('clusterPermissions', [])
+            for perm in cluster_permissions:
+                bundle_metadata['cluster_permissions'].append({
+                    'service_account': perm.get('serviceAccountName', 'default'),
+                    'rules': perm.get('rules', [])
+                })
+                
+        except Exception as e:
+            logger.warning(f"Failed to extract CSV data: {e}")
+
     def _parse_extracted_bundle(self, bundle_path: Path) -> Dict[str, Any]:
         """
         Parse extracted bundle directory for metadata
