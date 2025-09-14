@@ -19,7 +19,7 @@ from .core.exceptions import RBACManagerError, AuthenticationError, Configuratio
 from .catalogd import CatalogdService
 
 # OPM libraries
-from .opm import BundleProcessor, YAMLGenerator, HelmGenerator
+from .opm import BundleProcessor
 
 # Help manager (keeping existing)
 from .help_manager import HelpManager
@@ -57,8 +57,6 @@ class RBACManager:
         
         # Initialize OPM services
         self.bundle_processor = BundleProcessor(skip_tls=skip_tls, debug=debug)
-        self.yaml_generator = YAMLGenerator()
-        self.helm_generator = HelmGenerator()
     
     def configure_authentication(self, openshift_url: str = None, openshift_token: str = None) -> bool:
         """
@@ -233,12 +231,6 @@ class RBACManager:
             stdout: Output to stdout instead of files
         """
         try:
-            # Check if image is index image
-            if self.bundle_processor.is_index_image(image):
-                print(f"Error: {image} appears to be an index image.")
-                print("Please create a ClusterCatalog for this index image and query it using --catalogd instead.")
-                return
-            
             # Extract bundle metadata
             print(f"Extracting metadata from bundle image: {image}")
             metadata = self.bundle_processor.extract_bundle_metadata(image, registry_token)
@@ -251,9 +243,9 @@ class RBACManager:
             
             # Generate outputs based on flags
             if helm:
-                self._generate_helm_output(metadata, least_privileges, output_dir, stdout)
+                self._generate_helm_output(metadata, output_dir, stdout)
             else:
-                self._generate_yaml_output(metadata, namespace, least_privileges, output_dir, stdout)
+                self._generate_yaml_output(metadata, namespace, output_dir, stdout)
                 
         except Exception as e:
             logger.error(f"Error extracting bundle: {e}")
@@ -305,60 +297,58 @@ class RBACManager:
             logger.error(f"Failed to select catalog interactively: {e}")
             return None
     
-    def _generate_yaml_output(self, metadata: Dict[str, Any], namespace: str, 
-                             least_privileges: bool, output_dir: str, stdout: bool) -> None:
+    def _generate_yaml_output(self, metadata: Dict[str, Any], namespace: str, output_dir: str, stdout: bool) -> None:
         """Generate YAML manifest output"""
-        manifests = self.yaml_generator.generate_manifests(metadata, namespace, least_privileges)
+        package_name = metadata.get('package_name', 'my-operator')
         
-        if stdout or not output_dir:
-            # Output to stdout
-            for manifest_name, manifest_content in manifests.items():
-                print(f"\n{'='*50}")
-                print(f"{manifest_name.upper()}")
-                print("="*50)
-                print(manifest_content)
-        else:
-            # Save to files
-            output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
+        try:
+            # Generate manifests using the bundle processor
+            manifests = self.bundle_processor.generate_yaml_manifests(metadata, namespace, package_name)
             
-            timestamp = int(time.time())
-            hex_suffix = hex(hash(metadata.get('image', '')))[-8:]
-            
-            for manifest_name, manifest_content in manifests.items():
-                filename = f"{manifest_name}-{timestamp}-{hex_suffix}.yaml"
-                file_path = output_path / filename
+            if stdout or not output_dir:
+                # Print to stdout
+                for manifest_name, manifest_content in manifests.items():
+                    print(f"\n{'='*50}")
+                    print(f"{manifest_name.upper()}")
+                    print("="*50)
+                    print(manifest_content)
+            else:
+                # Save to files
+                import os
+                os.makedirs(output_dir, exist_ok=True)
+                for filename, content in manifests.items():
+                    manifest_file = os.path.join(output_dir, f"{filename}.yaml")
+                    with open(manifest_file, 'w') as f:
+                        f.write(content)
+                    logger.info(f"Manifest saved to: {manifest_file}")
+                print(f"YAML manifests generated successfully")
                 
-                with open(file_path, 'w') as f:
-                    f.write(manifest_content)
-                
-                print(f"{manifest_name} saved to: {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to generate YAML manifests: {e}")
+            raise
     
-    def _generate_helm_output(self, metadata: Dict[str, Any], least_privileges: bool,
-                             output_dir: str, stdout: bool) -> None:
+    def _generate_helm_output(self, metadata: Dict[str, Any], output_dir: str, stdout: bool) -> None:
         """Generate Helm values output"""
-        helm_values = self.helm_generator.generate_helm_values(metadata, least_privileges)
+        package_name = metadata.get('package_name', 'my-operator')
         
         if stdout or not output_dir:
+            # Generate and print to stdout
+            helm_values = self.bundle_processor.generate_helm_values(metadata, package_name)
             print("\n" + "="*50)
             print("HELM VALUES")
             print("="*50)
             print(helm_values)
         else:
-            # Save to files
-            output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
-            
-            timestamp = int(time.time())
-            hex_suffix = hex(hash(metadata.get('image', '')))[-8:]
-            
-            filename = f"values-{timestamp}-{hex_suffix}.yaml"
-            file_path = output_path / filename
-            
-            with open(file_path, 'w') as f:
+            # Generate and save to file
+            helm_values = self.bundle_processor.generate_helm_values(metadata, package_name)
+            # Save to file
+            import os
+            os.makedirs(output_dir, exist_ok=True)
+            values_file = os.path.join(output_dir, 'values.yaml')
+            with open(values_file, 'w') as f:
                 f.write(helm_values)
-            
-            print(f"Helm values saved to: {file_path}")
+            logger.info(f"Helm values saved to: {values_file}")
+            print(f"Helm values generated successfully")
     
     def _print_json_output(self, data: Dict[str, Any]) -> None:
         """

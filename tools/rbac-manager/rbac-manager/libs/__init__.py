@@ -15,7 +15,7 @@ from .core.exceptions import RBACManagerError, AuthenticationError, Configuratio
 from .catalogd import CatalogdService, CatalogdClient, NDJSONParser
 
 # OPM libraries
-from .opm import BundleProcessor, YAMLGenerator, HelmGenerator
+from .opm import BundleProcessor, YAMLManifestGenerator, HelmValuesGenerator
 
 # Main application and help
 from .help_manager import HelpManager
@@ -34,8 +34,8 @@ __all__ = [
     'NDJSONParser',
     # OPM
     'BundleProcessor', 
-    'YAMLGenerator',
-    'HelmGenerator',
+    'YAMLManifestGenerator',
+    'HelmValuesGenerator',
     # Main
     'HelpManager',
     'RBACManager',

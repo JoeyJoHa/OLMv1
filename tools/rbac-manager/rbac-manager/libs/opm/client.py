@@ -7,6 +7,7 @@ Handles low-level OPM binary operations and bundle extraction.
 import base64
 import json
 import logging
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,6 +32,7 @@ class OPMClient:
         """
         self.skip_tls = skip_tls
         self.debug = debug
+        self.logger = logger
         self._opm_binary = None
     
     def _find_opm_binary(self) -> str:
@@ -276,7 +278,8 @@ class OPMClient:
                 'permissions': [],
                 'cluster_permissions': [],
                 'csv_metadata': {},
-                'crds': []
+                'csv_crds': [],
+                'api_groups': []
             }
             
             # Parse the single JSON object from opm render output
@@ -292,10 +295,17 @@ class OPMClient:
                     bundle_metadata['package'] = obj.get('package')
                     bundle_metadata['image'] = obj.get('image')
                     
-                    # Process properties to extract manifests
+                    # Process properties to extract manifests and API groups
                     properties = obj.get('properties', [])
                     for prop in properties:
-                        if prop.get('type') == 'olm.bundle.object':
+                        if prop.get('type') == 'olm.gvk':
+                            # Extract API group information
+                            gvk_data = prop.get('value', {})
+                            api_group = gvk_data.get('group')
+                            if api_group and api_group not in bundle_metadata['api_groups']:
+                                bundle_metadata['api_groups'].append(api_group)
+                        
+                        elif prop.get('type') == 'olm.bundle.object':
                             # Decode base64 data to get the actual Kubernetes manifest
                             encoded_data = prop.get('value', {}).get('data', '')
                             if encoded_data:
@@ -312,7 +322,8 @@ class OPMClient:
                                         if kind == 'ClusterServiceVersion':
                                             self._extract_csv_data(manifest, bundle_metadata)
                                         elif kind == 'CustomResourceDefinition':
-                                            bundle_metadata['crds'].append(manifest)
+                                            # CRD manifests are now handled via CSV spec.customresourcedefinitions.owned
+                                            pass
                                             
                                 except (base64.binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as e:
                                     logger.warning(f"Failed to decode manifest data: {e}")
@@ -322,6 +333,7 @@ class OPMClient:
                             # Extract package metadata
                             package_data = prop.get('value', {})
                             bundle_metadata['package'] = package_data.get('packageName')
+                            bundle_metadata['package_name'] = package_data.get('packageName')  # For consistency
                             bundle_metadata['version'] = package_data.get('version')
                             
             except json.JSONDecodeError as e:
@@ -384,114 +396,23 @@ class OPMClient:
                     'service_account': perm.get('serviceAccountName', 'default'),
                     'rules': perm.get('rules', [])
                 })
+            
+            # Extract CRDs from CSV spec
+            crd_definitions = spec.get('customresourcedefinitions', {})
+            owned_crds = crd_definitions.get('owned', [])
+            for crd in owned_crds:
+                crd_name = crd.get('name')
+                if crd_name:
+                    bundle_metadata['csv_crds'].append({
+                        'name': crd_name,
+                        'kind': crd.get('kind'),
+                        'version': crd.get('version'),
+                        'description': crd.get('description', ''),
+                        'displayName': crd.get('displayName', '')
+                    })
                 
         except Exception as e:
             logger.warning(f"Failed to extract CSV data: {e}")
 
-    def _parse_extracted_bundle(self, bundle_path: Path) -> Dict[str, Any]:
-        """
-        Parse extracted bundle directory for metadata
-        
-        Args:
-            bundle_path: Path to extracted bundle directory
-            
-        Returns:
-            Dict containing parsed metadata
-            
-        Raises:
-            BundleProcessingError: If parsing fails
-        """
-        try:
-            metadata = {
-                'manifests': [],
-                'permissions': [],
-                'cluster_permissions': [],
-                'service_account': None,
-                'install_modes': {},
-                'has_webhooks': False
-            }
-            
-            # Look for manifests directory
-            manifests_dir = bundle_path / 'manifests'
-            if not manifests_dir.exists():
-                raise BundleProcessingError("No manifests directory found in extracted bundle")
-            
-            # Parse YAML files in manifests directory
-            for yaml_file in manifests_dir.glob('*.yaml'):
-                try:
-                    import yaml
-                    with open(yaml_file, 'r') as f:
-                        docs = list(yaml.safe_load_all(f))
-                    
-                    for doc in docs:
-                        if not doc:
-                            continue
-                        
-                        kind = doc.get('kind')
-                        if kind == 'ClusterServiceVersion':
-                            metadata.update(self._parse_csv(doc))
-                        elif kind in ['Role', 'ClusterRole']:
-                            metadata['manifests'].append(doc)
-                        elif kind in ['RoleBinding', 'ClusterRoleBinding']:
-                            metadata['manifests'].append(doc)
-                        elif kind == 'ServiceAccount':
-                            metadata['manifests'].append(doc)
-                        else:
-                            metadata['manifests'].append(doc)
-                            
-                except Exception as e:
-                    logger.warning(f"Failed to parse {yaml_file}: {e}")
-                    continue
-            
-            return metadata
-            
-        except Exception as e:
-            raise BundleProcessingError(f"Failed to parse extracted bundle: {e}")
     
-    def _parse_csv(self, csv_doc: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Parse ClusterServiceVersion document for RBAC and metadata
-        
-        Args:
-            csv_doc: ClusterServiceVersion document
-            
-        Returns:
-            Dict containing parsed CSV metadata
-        """
-        metadata = {}
-        
-        spec = csv_doc.get('spec', {})
-        
-        # Extract install modes
-        install_modes = {}
-        for mode in spec.get('installModes', []):
-            install_modes[mode.get('type')] = mode.get('supported', False)
-        metadata['install_modes'] = install_modes
-        
-        # Check for webhooks
-        webhooks = spec.get('webhookdefinitions', [])
-        metadata['has_webhooks'] = len(webhooks) > 0
-        
-        # Extract permissions
-        permissions = []
-        cluster_permissions = []
-        
-        # Get permissions from install strategy
-        install_strategy = spec.get('install', {}).get('spec', {})
-        
-        for permission in install_strategy.get('permissions', []):
-            permissions.append(permission)
-        
-        for cluster_permission in install_strategy.get('clusterPermissions', []):
-            cluster_permissions.append(cluster_permission)
-        
-        metadata['permissions'] = permissions
-        metadata['cluster_permissions'] = cluster_permissions
-        
-        # Extract service account name
-        if permissions:
-            metadata['service_account'] = permissions[0].get('serviceAccountName', 'default')
-        elif cluster_permissions:
-            metadata['service_account'] = cluster_permissions[0].get('serviceAccountName', 'default')
-        
-        return metadata
+    

@@ -6,11 +6,12 @@ Handles OPM (Operator Package Manager) operations for extracting and processing 
 
 from .client import OPMClient
 from .processor import BundleProcessor
-from .generator import YAMLGenerator, HelmGenerator
+from .yaml_generator import YAMLManifestGenerator
+from .helm_generator import HelmValuesGenerator
 
 __all__ = [
     'OPMClient',
     'BundleProcessor',
-    'YAMLGenerator',
-    'HelmGenerator'
+    'HelmValuesGenerator',
+    'YAMLManifestGenerator'
 ]

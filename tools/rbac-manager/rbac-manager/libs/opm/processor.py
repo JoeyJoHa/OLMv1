@@ -9,6 +9,8 @@ from typing import Dict, Any, Optional
 
 from ..core.exceptions import BundleProcessingError
 from .client import OPMClient
+from .helm_generator import HelmValuesGenerator
+from .yaml_generator import YAMLManifestGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,8 @@ class BundleProcessor:
         self.skip_tls = skip_tls
         self.debug = debug
         self.client = OPMClient(skip_tls, debug)
+        self.helm_generator = HelmValuesGenerator()
+        self.yaml_generator = YAMLManifestGenerator()
     
     def is_index_image(self, image: str) -> bool:
         """
@@ -153,3 +157,31 @@ class BundleProcessor:
         }
         
         return summary
+    
+    def generate_helm_values(self, bundle_metadata: Dict[str, Any], operator_name: Optional[str] = None) -> str:
+        """
+        Generate Helm values from processed bundle metadata
+        
+        Args:
+            bundle_metadata: Processed bundle metadata
+            operator_name: Optional custom operator name
+            
+        Returns:
+            Helm values YAML string
+        """
+        return self.helm_generator.generate(bundle_metadata, operator_name)
+    
+    def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = "default", 
+                              operator_name: Optional[str] = None) -> Dict[str, str]:
+        """
+        Generate Kubernetes YAML manifests from processed bundle metadata
+        
+        Args:
+            bundle_metadata: Processed bundle metadata
+            namespace: Target namespace
+            operator_name: Optional custom operator name
+            
+        Returns:
+            Dict mapping manifest names to YAML content
+        """
+        return self.yaml_generator.generate(bundle_metadata, namespace, operator_name)
