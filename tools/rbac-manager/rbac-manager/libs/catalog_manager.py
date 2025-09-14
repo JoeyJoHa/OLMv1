@@ -36,25 +36,38 @@ class CatalogManager:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         
         # Initialize Kubernetes client
+        self.k8s_client = None
+        self.custom_api = None
+        self.core_api = None
         try:
             config.load_kube_config()
-            
-            # Configure SSL verification based on skip_tls flag
             configuration = client.Configuration.get_default_copy()
             if skip_tls:
                 configuration.verify_ssl = False
                 configuration.ssl_ca_cert = None
             else:
-                # Ensure SSL verification is enabled
                 configuration.verify_ssl = True
-            
             self.k8s_client = client.ApiClient(configuration)
             self.custom_api = client.CustomObjectsApi(self.k8s_client)
             self.core_api = client.CoreV1Api(self.k8s_client)
-            logger.debug("Kubernetes client initialized")
+            logger.debug("Kubernetes client initialized (kubeconfig)")
         except Exception as e:
-            logger.warning(f"Failed to initialize Kubernetes client: {e}")
-            self.k8s_client = None
+            logger.warning(f"Failed to initialize Kubernetes client from kubeconfig: {e}")
+            try:
+                config.load_incluster_config()
+                configuration = client.Configuration.get_default_copy()
+                if skip_tls:
+                    configuration.verify_ssl = False
+                    configuration.ssl_ca_cert = None
+                else:
+                    configuration.verify_ssl = True
+                self.k8s_client = client.ApiClient(configuration)
+                self.custom_api = client.CustomObjectsApi(self.k8s_client)
+                self.core_api = client.CoreV1Api(self.k8s_client)
+                logger.debug("Kubernetes client initialized (in-cluster)")
+            except Exception as e2:
+                logger.warning(f"Failed to initialize Kubernetes client in-cluster: {e2}")
+                # Leave apis as None; guarded methods will raise clear errors
     
     def is_output_piped(self) -> bool:
         """
@@ -213,6 +226,10 @@ class CatalogManager:
         Returns:
             Tuple[str, int, int, bool]: (service name, service port, target port, is_https)
         """
+        if not self.core_api:
+            raise Exception(
+                "Kubernetes client not initialized. Provide a valid kubeconfig or use --openshift-url/--openshift-token to query without port-forwarding."
+            )
         try:
             svc_list = self.core_api.list_namespaced_service(namespace="openshift-catalogd")
             candidates: List[Tuple[str, int, int, bool]] = []
@@ -245,6 +262,10 @@ class CatalogManager:
     def port_forward_catalogd(self) -> Tuple['PortForwardManager', int, bool]:
         """Port-forward the catalogd service using native Python Kubernetes client"""
         logger.info("Setting up port-forward to catalogd service...")
+        if not self.core_api:
+            raise Exception(
+                "Kubernetes client not initialized. Provide a valid kubeconfig or use --openshift-url/--openshift-token to query without port-forwarding."
+            )
         
         # Find an available port
         sock = socket.socket()
