@@ -101,7 +101,7 @@ class OPMClient:
             cmd = [opm_binary, 'render', image]
             
             if self.skip_tls:
-                cmd.extend(['--skip-tls'])
+                cmd.extend(['--skip-tls-verify'])
             
             logger.debug(f"Validating bundle image with command: {' '.join(cmd)}")
             
@@ -189,7 +189,7 @@ class OPMClient:
             cmd = [opm_binary, 'render', image]
             
             if self.skip_tls:
-                cmd.extend(['--skip-tls'])
+                cmd.extend(['--skip-tls-verify'])
             
             # Set up environment for registry authentication
             env = {}
