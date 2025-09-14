@@ -46,17 +46,24 @@ class YAMLManifestGenerator(BaseGenerator):
             operator_name, namespace
         )
         
-        # Generate Roles (if operator has namespace-scoped permissions)
-        namespace_rules = self._generate_namespace_rules(bundle_metadata)
-        if namespace_rules:
-            manifests['04-role'] = self._generate_roles(
-                bundle_metadata, operator_name, namespace
-            )
-            
-            # Generate RoleBindings
-            manifests['05-rolebinding'] = self._generate_role_bindings(
-                operator_name, namespace
-            )
+        # Generate Roles and RoleBindings based on permissions logic
+        has_cluster_permissions = bool(bundle_metadata.get('cluster_permissions', []))
+        has_namespace_permissions = bool(bundle_metadata.get('permissions', []))
+        
+        # Only generate Roles if both clusterPermissions and permissions exist
+        if has_cluster_permissions and has_namespace_permissions:
+            # Both exist (e.g., ArgoCD) - generate grantor Role for namespace permissions
+            namespace_rules = self._generate_namespace_rules(bundle_metadata)
+            if namespace_rules:
+                manifests['04-role'] = self._generate_roles(
+                    bundle_metadata, operator_name, namespace
+                )
+                
+                # Generate RoleBindings
+                manifests['05-rolebinding'] = self._generate_role_bindings(
+                    operator_name, namespace
+                )
+        # For cluster-only permissions (Quay) or permissions-only (legacy), no Roles needed
         
         return manifests
     

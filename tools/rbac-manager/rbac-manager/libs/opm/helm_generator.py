@@ -95,9 +95,9 @@ class HelmValuesGenerator(BaseGenerator):
         has_namespace_permissions = bool(bundle_metadata.get('permissions', []))
         
         if has_cluster_permissions and has_namespace_permissions:
-            # Operator has both cluster and namespace permissions
-            # ClusterRole = operator (management) + grantor (cluster permissions)
-            # Role = grantor (namespace permissions)
+            # Both clusterPermissions and permissions exist (e.g., ArgoCD)
+            # ClusterRoles: operator (management) + grantor (clusterPermissions from CSV)
+            # Roles: grantor only (permissions from CSV) - NO operator Role for namespace scope
             
             # Generate operator ClusterRole (management permissions)
             operator_rules = self._generate_operator_rules(bundle_metadata)
@@ -107,7 +107,7 @@ class HelmValuesGenerator(BaseGenerator):
             )
             permissions['clusterRoles'].append(operator_cluster_role)
             
-            # Generate grantor ClusterRole (cluster permissions from CSV)
+            # Generate grantor ClusterRole (clusterPermissions from CSV)
             cluster_grantor_rules = []
             for perm in bundle_metadata.get('cluster_permissions', []):
                 cluster_grantor_rules.extend(perm.get('rules', []))
@@ -118,21 +118,18 @@ class HelmValuesGenerator(BaseGenerator):
                 )
                 permissions['clusterRoles'].append(grantor_cluster_role)
             
-            # Generate grantor Role (namespace permissions from CSV)
+            # Generate grantor Role ONLY (permissions from CSV) - no operator Role
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
             if namespace_rules:
                 grantor_role = PermissionStructure.create_role_structure(
                     '', 'grantor', self._format_rules_for_helm(namespace_rules), True
                 )
                 permissions['roles'].append(grantor_role)
-            else:
-                # Add empty role if no namespace permissions
-                empty_role = PermissionStructure.create_role_structure('', 'operator', [], False)
-                permissions['roles'].append(empty_role)
                 
         elif has_cluster_permissions:
-            # Operator has only cluster permissions (traditional cluster-scoped operator)
-            # ClusterRole = operator + grantor combined
+            # Only clusterPermissions exist
+            # ClusterRoles: operator (management) + grantor (clusterPermissions from CSV)
+            # Roles: none (empty roles array)
             
             # Generate operator ClusterRole
             operator_rules = self._generate_operator_rules(bundle_metadata)
@@ -142,24 +139,25 @@ class HelmValuesGenerator(BaseGenerator):
             )
             permissions['clusterRoles'].append(operator_cluster_role)
             
-            # Generate grantor ClusterRole
-            grantor_rules = self._generate_grantor_rules(bundle_metadata)
-            if grantor_rules:
+            # Generate grantor ClusterRole (clusterPermissions from CSV)
+            cluster_grantor_rules = []
+            for perm in bundle_metadata.get('cluster_permissions', []):
+                cluster_grantor_rules.extend(perm.get('rules', []))
+            
+            if cluster_grantor_rules:
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
-                    '', 'grantor', self._format_rules_for_helm(grantor_rules), True
+                    '', 'grantor', self._format_rules_for_helm(cluster_grantor_rules), True
                 )
                 permissions['clusterRoles'].append(grantor_cluster_role)
             
-            # Add empty operator Role (not used for cluster-only operators)
-            operator_role = PermissionStructure.create_role_structure('', 'operator', [], False)
-            permissions['roles'].append(operator_role)
+            # No Roles needed for cluster-only operators - leave roles array empty
             
         elif has_namespace_permissions:
-            # Operator has only namespace permissions (namespace-scoped operator)
-            # ClusterRole = operator (management only)
-            # Role = grantor (namespace permissions)
+            # Only permissions exist (e.g., Quay operator - treat as ClusterRoles)
+            # ClusterRoles: operator (management) + grantor (permissions treated as cluster-scoped)
+            # Roles: none (empty roles array)
             
-            # Generate operator ClusterRole (management permissions only)
+            # Generate operator ClusterRole (management permissions)
             operator_rules = self._generate_operator_rules(bundle_metadata)
             formatted_operator_rules = self._format_rules_for_helm(operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
@@ -167,13 +165,15 @@ class HelmValuesGenerator(BaseGenerator):
             )
             permissions['clusterRoles'].append(operator_cluster_role)
             
-            # Generate grantor Role (namespace permissions from CSV)
+            # Generate grantor ClusterRole (treat permissions as cluster-scoped)
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
             if namespace_rules:
-                grantor_role = PermissionStructure.create_role_structure(
+                grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
                     '', 'grantor', self._format_rules_for_helm(namespace_rules), True
                 )
-                permissions['roles'].append(grantor_role)
+                permissions['clusterRoles'].append(grantor_cluster_role)
+            
+            # No Roles needed - leave roles array empty
         else:
             # Operator has no permissions defined (unusual case)
             # Generate minimal operator ClusterRole
