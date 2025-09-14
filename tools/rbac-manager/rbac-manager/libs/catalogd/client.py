@@ -330,7 +330,21 @@ class CatalogdClient:
             logger.debug(f"Service discovery failed: {e}")
             raise CatalogdError(f"Failed to discover catalogd service: {e}")
         except Exception as e:
-            raise CatalogdError(f"Failed to discover catalogd service: {e}")
+            # Check for SSL certificate errors and provide user-friendly message
+            error_str = str(e)
+            if "certificate verify failed" in error_str or "CERTIFICATE_VERIFY_FAILED" in error_str:
+                raise CatalogdError(
+                    "SSL certificate verification failed. The OpenShift cluster is using self-signed certificates.\n"
+                    "To resolve this issue, add the --skip-tls flag to your command.\n"
+                    f"Example: python3 rbac-manager.py --catalogd --skip-tls [other options]"
+                )
+            elif "SSLError" in error_str or "SSL:" in error_str:
+                raise CatalogdError(
+                    f"SSL connection error occurred. If using self-signed certificates, add --skip-tls flag.\n"
+                    f"Original error: {e}"
+                )
+            else:
+                raise CatalogdError(f"Failed to discover catalogd service: {e}")
     
     def create_port_forward(self) -> Tuple[PortForwardManager, int, bool]:
         """
