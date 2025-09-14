@@ -97,13 +97,12 @@ class PortForwardManager:
         try:
             pod_name = self._find_service_pod()
             
-            # Create port-forward connection
+            # Create port-forward connection using the correct API
             self._pf = portforward(
-                self.core_api.api_client,
-                self.namespace,
+                self.core_api.connect_get_namespaced_pod_portforward,
                 pod_name,
-                self.target_port,
-                self.local_port
+                self.namespace,
+                ports=[str(self.target_port)]
             )
             
             # Get the socket from port-forward
