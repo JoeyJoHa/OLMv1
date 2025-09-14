@@ -1,16 +1,22 @@
-# OPM Metadata Tool
+# RBAC Manager Tool
 
-A comprehensive Python tool to fetch operator bundle metadata using the `opm` binary and interact with OpenShift catalogs. This tool helps generate RBAC resources and Helm values for OLMv1 operators.
+A comprehensive Python tool for extracting and managing RBAC permissions from operator bundles using the `opm` binary and interacting with OpenShift catalogs via `catalogd`. This tool automates the generation of secure RBAC resources and Helm values for OLMv1 operator deployments.
 
 ## Features
 
-- **List ClusterCatalogs**: Query OpenShift cluster for available catalogs
-- **Query Catalogd**: Port-forward to catalogd service and fetch package information
-- **Extract Bundle Metadata**: Use `opm` binary to extract metadata from operator bundle images
-- **Generate RBAC Resources**: Auto-generate ServiceAccount, ClusterRole, ClusterRoleBinding, and ClusterExtension YAML files
-- **Generate Helm Values**: Create Helm chart values files for both RBAC-only and full operator deployments
-- **Interactive Mode**: User-friendly prompts for catalog selection
-- **Comprehensive Logging**: Debug mode with detailed logging
+- **🔍 Catalog Discovery**: List and query OpenShift ClusterCatalogs for available operators
+- **📡 Catalogd Integration**: Port-forward to catalogd service and fetch real-time package information
+- **📦 Bundle Analysis**: Extract comprehensive metadata from operator bundle images using `opm render`
+- **🔐 Smart RBAC Generation**: Auto-generate secure RBAC resources with proper permissions logic:
+  - **Both `clusterPermissions` + `permissions`**: ClusterRoles + grantor Roles (e.g., ArgoCD)
+  - **Only `permissions`**: Treat as ClusterRoles (e.g., Quay operator)
+  - **Only `clusterPermissions`**: ClusterRoles only
+- **⚙️ Helm Integration**: Generate Helm values with mixed block/flow YAML style and security notices
+- **🏗️ Microservice Architecture**: Clean separation with BundleProcessor orchestrator
+- **🛡️ Security Best Practices**: Implements OLMv1 security patterns with least-privilege principles
+- **📋 Comprehensive Output**: ServiceAccount, ClusterRole, ClusterRoleBinding, Role, RoleBinding manifests
+- **🔧 Interactive Mode**: User-friendly prompts for catalog and package selection
+- **📊 Debug Logging**: Detailed logging for troubleshooting and analysis
 
 ## Prerequisites
 
@@ -24,15 +30,16 @@ pip install -r requirements.txt
 
 ### Required Tools
 
-1. **kubectl**: Kubernetes command-line tool
-2. **opm**: Operator Package Manager CLI tool
+1. **opm**: Operator Package Manager CLI tool
    - Download from [operator-framework/operator-registry releases](https://github.com/operator-framework/operator-registry/releases)
    - Or install via package manager (e.g., `brew install operator-framework/tap/opm`)
 
-### Kubernetes Access
+### Kubernetes Access (for catalogd features only)
 
-- Valid kubeconfig file configured for your OpenShift/Kubernetes cluster
-- Or provide OpenShift URL and token for direct API access
+- **Option 1**: Valid kubeconfig file configured for your OpenShift/Kubernetes cluster
+- **Option 2**: Provide OpenShift URL and token for direct API access (`--openshift-url` and `--openshift-token`)
+
+> **💡 Note**: Kubernetes access is only required for catalogd integration (listing catalogs, querying packages). The core `--opm` functionality works offline with just the bundle image URL.
 
 ## Installation
 
@@ -42,17 +49,33 @@ pip install -r requirements.txt
    cd tools/rbac-manager
    ```
 
-2. Install dependencies:
+2. **Create and activate a Python virtual environment** (recommended):
+
+   ```bash
+   # Create virtual environment
+   python3 -m venv rbac-manager-env
+   
+   # Activate virtual environment
+   # On Linux/macOS:
+   source rbac-manager-env/bin/activate
+   
+   # On Windows:
+   # rbac-manager-env\Scripts\activate
+   ```
+
+3. Install dependencies:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Make the script executable:
+4. Make the script executable:
 
    ```bash
-   chmod +x opm_metadata_tool.py
+   chmod +x rbac-manager.py
    ```
+
+> **💡 Tip**: Always use a virtual environment to avoid conflicts with system Python packages. To deactivate the virtual environment when done, simply run `deactivate`.
 
 ## Usage
 
@@ -70,7 +93,7 @@ pip install -r requirements.txt
 List all available ClusterCatalogs in your cluster:
 
 ```bash
-python3 opm_metadata_tool.py --list-catalogs
+python3 rbac-manager.py --list-catalogs
 ```
 
 #### 2. Query Catalogd Service
@@ -80,20 +103,20 @@ Query the catalogd service for package information. The tool can either use port
 **Basic usage with interactive catalog selection:**
 
 ```bash
-python3 opm_metadata_tool.py --catalogd
+python3 rbac-manager.py --catalogd
 ```
 
 **With specific catalog:**
 
 ```bash
-python3 opm_metadata_tool.py --catalogd --catalog-name operatorhubio-catalog
+python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators
 ```
 
 **Using direct OpenShift API:**
 
 ```bash
-python3 opm_metadata_tool.py --catalogd \
-  --catalog-name operatorhubio-catalog \
+python3 rbac-manager.py --catalogd \
+  --catalog-name openshift-redhat-operators \
   --openshift-url https://api.cluster.example.com:6443 \
   --openshift-token sha256~your-token-here
 ```
@@ -101,16 +124,16 @@ python3 opm_metadata_tool.py --catalogd \
 **Query specific package channels:**
 
 ```bash
-python3 opm_metadata_tool.py --catalogd \
-  --catalog-name operatorhubio-catalog \
+python3 rbac-manager.py --catalogd \
+  --catalog-name openshift-redhat-operators \
   --package quay-operator
 ```
 
 **Query specific channel versions:**
 
 ```bash
-python3 opm_metadata_tool.py --catalogd \
-  --catalog-name operatorhubio-catalog \
+python3 rbac-manager.py --catalogd \
+  --catalog-name openshift-redhat-operators \
   --package quay-operator \
   --channel stable-3.10
 ```
@@ -118,8 +141,8 @@ python3 opm_metadata_tool.py --catalogd \
 **Get detailed version metadata:**
 
 ```bash
-python3 opm_metadata_tool.py --catalogd \
-  --catalog-name operatorhubio-catalog \
+python3 rbac-manager.py --catalogd \
+  --catalog-name openshift-redhat-operators \
   --package quay-operator \
   --channel stable-3.10 \
   --version 3.10.13
@@ -129,28 +152,43 @@ python3 opm_metadata_tool.py --catalogd \
 
 Extract metadata from operator bundle images and generate RBAC resources:
 
-**Basic bundle extraction:**
+**Basic bundle extraction (YAML manifests):**
 
 ```bash
-python3 opm_metadata_tool.py --opm \
-  --image quay.io/redhat/quay-operator-bundle:v3.10.13
+python3 rbac-manager.py --opm \
+  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2
+```
+
+**Generate Helm values:**
+
+```bash
+python3 rbac-manager.py --opm \
+  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
+  --helm
 ```
 
 **With custom namespace:**
 
 ```bash
-python3 opm_metadata_tool.py --opm \
-  --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
+python3 rbac-manager.py --opm \
+  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
   --namespace quay-operator
 ```
 
-**With private registry authentication:**
+**Save to files:**
 
 ```bash
-python3 opm_metadata_tool.py --opm \
-  --image private-registry.com/operator-bundle:v1.0.0 \
-  --namespace my-operator \
-  --registry-token your-registry-token
+python3 rbac-manager.py --opm \
+  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
+  --output ./rbac-files
+```
+
+**With TLS skip (for development):**
+
+```bash
+python3 rbac-manager.py --opm \
+  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
+  --skip-tls --helm
 ```
 
 ### Catalogd Flags
@@ -165,26 +203,33 @@ python3 opm_metadata_tool.py --opm \
 ### OPM Flags
 
 - `--image IMAGE`: Operator bundle image URL (required)
+- `--helm`: Generate Helm values instead of YAML manifests
 - `--namespace NAMESPACE`: Target namespace for generated manifests (default: default)
+- `--output DIR`: Save output files to directory (default: stdout)
 - `--registry-token TOKEN`: Authentication token for private registries
 
 ## Output
 
 ### Generated Files
 
-When using the `--opm` command, the tool generates:
+The tool generates different outputs based on the command used:
 
-#### YAML Manifests Directory (`yaml/`)
+#### YAML Manifests (default `--opm` output)
 
 - `01-serviceaccount.yaml`: ServiceAccount for the operator installer
-- `02-clusterrole.yaml`: ClusterRoles for operator and RBAC permissions
+- `02-clusterrole.yaml`: ClusterRoles for operator management and grantor permissions
 - `03-clusterrolebinding.yaml`: ClusterRoleBindings linking ServiceAccount to ClusterRoles
-- `04-clusterextension.yaml`: ClusterExtension resource for OLMv1
+- `04-role.yaml`: Roles for namespace-scoped permissions (when both `clusterPermissions` and `permissions` exist)
+- `05-rolebinding.yaml`: RoleBindings for namespace-scoped permissions
 
-#### Helm Values Directory (`helm/`)
+#### Helm Values (`--helm` flag)
 
-- `rbac-only-example.yaml`: Helm values for RBAC-only deployment
-- `values-{operator-name}.yaml`: Complete Helm values for full operator deployment
+- **Security Notice Header**: Comprehensive post-installation hardening instructions
+- **Operator Configuration**: Package name, version, channel information
+- **ServiceAccount**: Configuration for installer service account
+- **ClusterRoles**: Operator management + grantor permissions (from `clusterPermissions`)
+- **Roles**: Grantor permissions only (from `permissions` when both types exist)
+- **Mixed YAML Style**: Block style with flow arrays for clean readability
 
 ### Example Output Structure
 
@@ -207,20 +252,20 @@ generated-quay-operator/
 1. **List available catalogs:**
 
    ```bash
-   python3 opm_metadata_tool.py --list-catalogs
+   python3 rbac-manager.py --list-catalogs
    ```
 
 2. **Explore a catalog interactively:**
 
    ```bash
-   python3 opm_metadata_tool.py --catalogd
+   python3 rbac-manager.py --catalogd
    ```
 
 3. **Find a specific operator version:**
 
    ```bash
-   python3 opm_metadata_tool.py --catalogd \
-     --catalog-name operatorhubio-catalog \
+   python3 rbac-manager.py --catalogd \
+     --catalog-name openshift-redhat-operators \
      --package quay-operator \
      --channel stable-3.10
    ```
@@ -228,7 +273,7 @@ generated-quay-operator/
 4. **Extract bundle and generate resources:**
 
    ```bash
-   python3 opm_metadata_tool.py --opm \
+   python3 rbac-manager.py --opm \
      --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
      --namespace quay-operator
    ```
@@ -238,7 +283,7 @@ generated-quay-operator/
 Enable debug logging for troubleshooting:
 
 ```bash
-python3 opm_metadata_tool.py --debug --catalogd --catalog-name test-catalog
+python3 rbac-manager.py --debug --catalogd --catalog-name test-catalog
 ```
 
 ### Skip TLS Verification
@@ -246,7 +291,7 @@ python3 opm_metadata_tool.py --debug --catalogd --catalog-name test-catalog
 For development environments with self-signed certificates:
 
 ```bash
-python3 opm_metadata_tool.py --skip-tls --catalogd \
+python3 rbac-manager.py --skip-tls --catalogd \
   --openshift-url https://api.dev-cluster.local:6443 \
   --openshift-token your-token
 ```
@@ -279,23 +324,29 @@ The generated Helm values files are designed to work with the generic OLMv1 Helm
    - Ensure opm is in your PATH
 
 2. **"Failed to establish port-forward"**
-   - Ensure kubectl is configured and connected to your cluster
+   - Ensure kubeconfig is configured and connected to your cluster, OR
+   - Use `--openshift-url` and `--openshift-token` for direct API access
    - Check that catalogd service exists in openshift-catalogd namespace
 
 3. **"No ClusterCatalogs found"**
    - Verify you're connected to an OpenShift cluster with OLMv1
    - Check cluster permissions for listing ClusterCatalogs
+   - Try using direct API access with `--openshift-url` and `--openshift-token`
 
 4. **"Image appears to be an index image"**
    - Use --catalogd instead of --opm for index images
    - Create a ClusterCatalog resource first
+
+5. **"Kubernetes client not initialized"**
+   - Either configure kubeconfig, OR
+   - Use `--openshift-url https://api.cluster.com:6443 --openshift-token <token>`
 
 ### Detailed Logging
 
 Use `--debug` flag to see detailed logging:
 
 ```bash
-python3 opm_metadata_tool.py --debug --opm --image your-bundle-image
+python3 rbac-manager.py --debug --opm --image your-bundle-image
 ```
 
 ## Contributing

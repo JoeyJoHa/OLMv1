@@ -103,8 +103,18 @@ OLMv1/
 │   └── PROJECT_STRUCTURE.md          # Repository organization guide
 ├── examples/                          # Example configurations and use cases
 │   ├── bundle/                       # Example bundle files
-│   ├── values/                       # Example Helm values files
-│   │   └── values-quay-operator.yaml # Quay operator example
+│   │   ├── ClusterServiceVersion.json # Example CSV
+│   │   ├── CustomResourceDefinition.json # Example CRD
+│   │   └── Service.json              # Example service
+│   ├── helm/                         # Example Helm values files
+│   │   ├── additional-resources-example.yaml # Additional resources example
+│   │   ├── rbac-only-example.yaml    # RBAC-only deployment example
+│   │   └── values-quay-operator.yaml # Quay operator Helm values
+│   ├── rbac-manager/                 # RBAC Manager tool output examples
+│   │   ├── cluster-role-bindings-*.yaml # Generated ClusterRoleBindings
+│   │   ├── cluster-roles-*.yaml      # Generated ClusterRoles
+│   │   ├── service-accounts-*.yaml   # Generated ServiceAccounts
+│   │   └── values-*.yaml             # Generated Helm values
 │   └── yamls/                        # Example Kubernetes YAML files
 │       ├── 00-namespace.yaml         # Namespace definition
 │       ├── 01-serviceaccount.yaml    # Service account for operator
@@ -131,12 +141,35 @@ OLMv1/
 │       └── 02-clusterextension.yaml  # ClusterExtension example
 ├── tools/                            # Development and management tools
 │   └── rbac-manager/                 # RBAC Manager tool
-│       ├── help_text/                # External help documentation
-│       │   ├── catalogd_help.txt     # Catalogd command help
-│       │   ├── examples.txt          # Comprehensive examples
-│       │   ├── list_catalogs_help.txt # List catalogs help
-│       │   └── opm_help.txt          # OPM command help
-│       ├── rbac_manager.py           # Single-file implementation
+│       ├── rbac-manager/             # Main tool package
+│       │   ├── help/                 # Help text files
+│       │   │   ├── catalogd_help.txt # Catalogd command help
+│       │   │   ├── examples_help.txt # Comprehensive examples
+│       │   │   ├── main_help.txt     # Main command help
+│       │   │   └── opm_help.txt      # OPM command help
+│       │   └── libs/                 # Core libraries
+│       │       ├── catalogd/         # Catalogd integration
+│       │       │   ├── cache.py      # Caching functionality
+│       │       │   ├── client.py     # Low-level catalogd client
+│       │       │   ├── parser.py     # Response parsing
+│       │       │   ├── service.py    # High-level service
+│       │       │   └── session.py    # Session management
+│       │       ├── core/             # Core utilities
+│       │       │   ├── auth.py       # Authentication handling
+│       │       │   ├── config.py     # Configuration management
+│       │       │   ├── exceptions.py # Custom exceptions
+│       │       │   └── utils.py      # Utility functions
+│       │       ├── opm/              # OPM integration
+│       │       │   ├── base_generator.py # Base generator class
+│       │       │   ├── client.py     # OPM binary client
+│       │       │   ├── helm_generator.py # Helm values generator
+│       │       │   ├── processor.py  # Bundle processor
+│       │       │   └── yaml_generator.py # YAML manifest generator
+│       │       ├── help_manager.py   # Help system manager
+│       │       └── main_app.py       # Main application logic
+│       ├── tests/                    # Test suite
+│       │   └── test_catalogd.py      # Catalogd integration tests
+│       ├── rbac-manager.py           # CLI entry point
 │       ├── requirements.txt          # Python dependencies
 │       └── README.md                 # Tool documentation
 ├── config/                           # Configuration files (future use)
@@ -174,40 +207,46 @@ The project includes an advanced RBAC Manager tool (`tools/rbac-manager/`) that 
 # Navigate to the tool directory
 cd tools/rbac-manager/
 
+# Create and activate virtual environment (recommended)
+python3 -m venv rbac-manager-env
+source rbac-manager-env/bin/activate  # On Linux/macOS
+# rbac-manager-env\Scripts\activate   # On Windows
+
 # Install dependencies
 pip install -r requirements.txt
 
 # Get help for specific commands
-python3 rbac_manager.py --catalogd --help
-python3 rbac_manager.py --opm --help
+python3 rbac-manager.py --catalogd --help
+python3 rbac-manager.py --opm --help
 
 # View comprehensive examples
-python3 rbac_manager.py --examples
+python3 rbac-manager.py --examples
 
 # Extract RBAC for an operator using OPM workflow
-python3 rbac_manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --helm
-
+python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --helm
 
 # Save RBAC files for later use
-python3 rbac_manager.py --opm --image <bundle-image> --output ./rbac-files
+python3 rbac-manager.py --opm --image <bundle-image> --output ./rbac-files
 
-# Apply least-privilege principles
-python3 rbac_manager.py --opm --image <bundle-image> --least-privileges
+# Generate YAML manifests (default)
+python3 rbac-manager.py --opm --image <bundle-image>
 
-# Generate configuration files for reusable workflows
-python3 rbac_manager.py --generate-config ~/.rbac-opm.yaml --opm
-python3 rbac_manager.py --config ~/.rbac-opm.yaml --opm --image <bundle-image> --helm
+# Generate Helm values with security notices
+python3 rbac-manager.py --opm --image <bundle-image> --helm
 ```
 
 ### Benefits for OLMv1 Deployment
 
-1. **Accurate RBAC Extraction**: Automatically extracts the exact permissions required by operators
+1. **Smart RBAC Logic**: Correctly handles different permission patterns:
+   - **Both `clusterPermissions` + `permissions`**: ClusterRoles + grantor Roles (e.g., ArgoCD)
+   - **Only `permissions`**: Treat as ClusterRoles (e.g., Quay operator)
+   - **Only `clusterPermissions`**: ClusterRoles only
 2. **Kubernetes-Native Output**: Generates proper Kubernetes RBAC YAML with consistent naming
-3. **Helm Integration**: Outputs include Helm template syntax for easy chart integration
-4. **Security Best Practices**: Follows least-privilege principles and proper role separation
-5. **Configuration Management**: Generate templates or extract live data from catalogd for reusable workflows
-6. **Automation Ready**: Supports scripting and CI/CD integration with configuration files
-7. **Live Metadata Access**: Query catalogd directly for real-time operator bundle information and compatibility data
+3. **Helm Integration**: Mixed block/flow YAML style with comprehensive security notices
+4. **Security Best Practices**: Implements OLMv1 security patterns with post-installation hardening guidance
+5. **Microservice Architecture**: Clean BundleProcessor orchestrator with separated concerns
+6. **Live Catalog Access**: Query catalogd directly for real-time operator bundle information
+7. **Automation Ready**: Supports scripting and CI/CD integration for GitOps workflows
 
 ### Integration with OLMv1 Workflow
 
