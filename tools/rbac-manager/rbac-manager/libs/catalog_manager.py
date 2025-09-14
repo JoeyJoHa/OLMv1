@@ -307,32 +307,38 @@ class CatalogManager:
             logger.error(f"Request failed: {e}")
             raise
 
-        # Parse body robustly (JSON array/object, concatenated JSON, or NDJSON)
+        # Parse body as NDJSON (newline-delimited JSON) efficiently
+        return self._parse_ndjson_stream(text_body)
+    
+    def _parse_ndjson_stream(self, text_body: str) -> List[Dict[str, Any]]:
+        """Parse NDJSON (newline-delimited JSON) stream efficiently"""
         import json as _json
-
-        # First attempt: standard JSON parse
-        try:
-            return _json.loads(text_body)
-        except Exception:
-            pass
-
-        # If body looks like concatenated JSON objects, split and parse lines
-        lines = [ln for ln in text_body.splitlines() if ln.strip()]
-        if len(lines) > 1:
-            items = []
-            all_lines_json = True
-            for ln in lines:
-                try:
-                    items.append(_json.loads(ln))
-                except Exception:
-                    all_lines_json = False
-                    break
-            if all_lines_json:
-                return items
-
-        # Last resort: raise with snippet for diagnostics
-        snippet = text_body[:400].replace('\n', ' ')
-        raise Exception(f"Failed to parse catalogd response as JSON. Snippet: {snippet}")
+        
+        logger.debug(f"Parsing NDJSON response ({len(text_body)} bytes)")
+        logger.debug(f"First 500 chars: {text_body[:500]}")
+        logger.debug(f"Last 500 chars: {text_body[-500:]}")
+        
+        # Parse line by line (NDJSON format)
+        items = []
+        lines = text_body.strip().split('\n')
+        logger.debug(f"Split into {len(lines)} lines")
+        
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line:
+                continue
+                
+            try:
+                obj = _json.loads(line)
+                items.append(obj)
+            except _json.JSONDecodeError as e:
+                logger.debug(f"Failed to parse JSON line {line_num}: {e}")
+                logger.debug(f"Problematic line: {line[:200]}...")
+                # Continue parsing other lines
+                continue
+        
+        logger.info(f"Successfully parsed {len(items)} JSON objects from NDJSON stream")
+        return items
     
     def interactive_catalog_selection(self, catalogs: List[Dict[str, Any]]) -> str:
         """Interactive prompt for catalog selection"""
@@ -672,38 +678,42 @@ class PortForwardManager:
             
             # Read response
             response_data = b""
+            headers_complete = False
+            content_length = None
+            body_start = 0
+            
             while True:
                 try:
-                    chunk = ssl_socket.recv(4096)
+                    chunk = ssl_socket.recv(8192)  # Increased buffer size
                     if not chunk:
                         break
                     response_data += chunk
                     
-                    # Check if we have a complete HTTP response
-                    if b"\r\n\r\n" in response_data:
-                        # Split headers and body
+                    # Parse headers if not done yet
+                    if not headers_complete and b"\r\n\r\n" in response_data:
                         header_end = response_data.find(b"\r\n\r\n")
                         headers_part = response_data[:header_end].decode('utf-8')
-                        body_part = response_data[header_end + 4:]
+                        body_start = header_end + 4
+                        headers_complete = True
                         
-                        # Check if we have Content-Length header
-                        content_length = None
+                        # Parse Content-Length
                         for line in headers_part.split('\r\n'):
                             if line.lower().startswith('content-length:'):
                                 content_length = int(line.split(':')[1].strip())
+                                logger.debug(f"Content-Length: {content_length}")
                                 break
-                        
-                        # If we have content-length, read until we have all data
+                    
+                    # Check if we have all the data
+                    if headers_complete:
+                        body_length = len(response_data) - body_start
                         if content_length is not None:
-                            while len(body_part) < content_length:
-                                chunk = ssl_socket.recv(4096)
-                                if not chunk:
-                                    break
-                                body_part += chunk
-                            break
+                            if body_length >= content_length:
+                                logger.debug(f"Received complete response: {body_length}/{content_length} bytes")
+                                break
                         else:
-                            # For chunked or connection-close responses, continue reading
+                            # For responses without Content-Length, continue until connection closes
                             continue
+                            
                 except ssl.SSLWantReadError:
                     continue
                 except Exception as e:
@@ -711,12 +721,11 @@ class PortForwardManager:
                     break
             
             # Parse HTTP response (handle chunked transfer and compression)
-            if b"\r\n\r\n" not in response_data:
-                raise Exception("Invalid HTTPS response received")
+            if not headers_complete:
+                raise Exception("Invalid HTTPS response received - no headers")
 
-            header_end = response_data.find(b"\r\n\r\n")
-            headers_raw = response_data[:header_end].decode('iso-8859-1')
-            body_bytes = response_data[header_end + 4:]
+            headers_raw = response_data[:body_start - 4].decode('utf-8')
+            body_bytes = response_data[body_start:]
 
             # Status line and headers
             status_line = headers_raw.split("\r\n", 1)[0]
