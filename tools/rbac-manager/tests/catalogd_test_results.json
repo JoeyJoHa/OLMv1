@@ -1,0 +1,774 @@
+{
+  "test_suite": "catalogd",
+  "timestamp": 1757872684.848947,
+  "configuration": {
+    "openshift_url": "https://api.opslab-joe.rh-igc.com:6443",
+    "skip_tls": true,
+    "test_catalog": "openshift-redhat-operators",
+    "test_package": "quay-operator",
+    "test_channel": "stable-3.10",
+    "test_version": "3.10.0"
+  },
+  "results": [
+    {
+      "test": "basic_catalogd_help",
+      "success": true,
+      "details": {
+        "exit_code": 0,
+        "stdout": "No catalogd operation specified. Use --help to see available options for --catalogd.\n\n",
+        "stderr": "",
+        "json_data": null,
+        "command": "python3 rbac-manager.py --catalogd --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g --skip-tls"
+      }
+    },
+    {
+      "test": "list_packages",
+      "success": true,
+      "details": {
+        "exit_code": 0,
+        "stdout": "{\n  \"catalog\": \"openshift-redhat-operators\",\n  \"type\": \"packages\",\n  \"data\": [\n    \"3scale-operator\",\n    \"advanced-cluster-management\",\n    \"amq-broker-rhel8\",\n    \"amq-broker-rhel9\",\n    \"amq-online\",\n    \"amq-streams\",\n    \"amq-streams-console\",\n    \"amq-streams-proxy\",\n    \"amq7-interconnect-operator\",\n    \"ansible-automation-platform-operator\",\n    \"ansible-cloud-addons-operator\",\n    \"apicast-operator\",\n    \"apicurio-registry-3\",\n    \"authorino-operator\",\n    \"aws-efs-csi-driver-operator\",\n    \"aws-load-balancer-operator\",\n    \"bamoe-businessautomation-operator\",\n    \"bamoe-kogito-operator\",\n    \"bpfman-operator\",\n    \"businessautomation-operator\",\n    \"cephcsi-operator\",\n    \"cincinnati-operator\",\n    \"cli-manager\",\n    \"cluster-kube-descheduler-operator\",\n    \"cluster-logging\",\n    \"cluster-observability-operator\",\n    \"clusterresourceoverride\",\n    \"compliance-operator\",\n    \"container-security-operator\",\n    \"costmanagement-metrics-operator\",\n    \"cryostat-operator\",\n    \"datagrid\",\n    \"deployment-validation-operator\",\n    \"devspaces\",\n    \"devworkspace-operator\",\n    \"dns-operator\",\n    \"dpu-network-operator\",\n    \"dpu-operator\",\n    \"eap\",\n    \"elasticsearch-operator\",\n    \"external-dns-operator\",\n    \"fence-agents-remediation\",\n    \"file-integrity-operator\",\n    \"fuse-apicurito\",\n    \"fuse-console\",\n    \"fuse-online\",\n    \"gatekeeper-operator-product\",\n    \"gcp-filestore-csi-driver-operator\",\n    \"helloworld-operator\",\n    \"ingress-node-firewall\",\n    \"jaeger-product\",\n    \"jws-operator\",\n    \"kernel-module-management\",\n    \"kernel-module-management-hub\",\n    \"kiali-ossm\",\n    \"kubernetes-nmstate-operator\",\n    \"kubevirt-hyperconverged\",\n    \"kueue-operator\",\n    \"lifecycle-agent\",\n    \"lightspeed-operator\",\n    \"limitador-operator\",\n    \"local-storage-operator\",\n    \"logic-operator-rhel8\",\n    \"loki-operator\",\n    \"lvms-operator\",\n    \"machine-deletion-remediation\",\n    \"mcg-operator\",\n    \"metallb-operator\",\n    \"mta-operator\",\n    \"mtc-operator\",\n    \"mtr-operator\",\n    \"mtv-operator\",\n    \"multiarch-tuning-operator\",\n    \"multicluster-engine\",\n    \"multicluster-global-hub-operator-rh\",\n    \"nbde-tang-server\",\n    \"netobserv-operator\",\n    \"nfd\",\n    \"node-healthcheck-operator\",\n    \"node-maintenance-operator\",\n    \"node-observability-operator\",\n    \"numaresources-operator\",\n    \"ocs-client-operator\",\n    \"ocs-operator\",\n    \"odf-csi-addons-operator\",\n    \"odf-dependencies\",\n    \"odf-multicluster-orchestrator\",\n    \"odf-operator\",\n    \"odf-prometheus-operator\",\n    \"odr-cluster-operator\",\n    \"odr-hub-operator\",\n    \"openshift-builds-operator\",\n    \"openshift-cert-manager-operator\",\n    \"openshift-custom-metrics-autoscaler-operator\",\n    \"openshift-gitops-operator\",\n    \"openshift-pipelines-operator-rh\",\n    \"openshift-secondary-scheduler-operator\",\n    \"openshift-zero-trust-workload-identity-manager\",\n    \"openstack-operator\",\n    \"opentelemetry-product\",\n    \"orchestrator-operator\",\n    \"pf-status-relay-operator\",\n    \"power-monitoring-operator\",\n    \"ptp-operator\",\n    \"quay-bridge-operator\",\n    \"quay-operator\",\n    \"recipe\",\n    \"red-hat-camel-k\",\n    \"red-hat-hawtio-operator\",\n    \"redhat-oadp-operator\",\n    \"rh-service-binding-operator\",\n    \"rhacs-operator\",\n    \"rhbk-operator\",\n    \"rhcl-operator\",\n    \"rhdh\",\n    \"rhods-operator\",\n    \"rhpam-kogito-operator\",\n    \"rhsso-operator\",\n    \"rhtas-operator\",\n    \"rhtpa-operator\",\n    \"rook-ceph-operator\",\n    \"run-once-duration-override-operator\",\n    \"sandboxed-containers-operator\",\n    \"secrets-store-csi-driver-operator\",\n    \"security-profiles-operator\",\n    \"self-node-remediation\",\n    \"serverless-operator\",\n    \"service-registry-operator\",\n    \"service-telemetry-operator\",\n    \"servicemeshoperator\",\n    \"servicemeshoperator3\",\n    \"skupper-netobs-operator\",\n    \"skupper-operator\",\n    \"smart-gateway-operator\",\n    \"smb-csi-driver-operator\",\n    \"sriov-network-operator\",\n    \"submariner\",\n    \"tang-operator\",\n    \"tempo-product\",\n    \"topology-aware-lifecycle-manager\",\n    \"trustee-operator\",\n    \"vertical-pod-autoscaler\",\n    \"volsync-product\",\n    \"watcher-operator\",\n    \"web-terminal\",\n    \"windows-machine-config-operator\"\n  ],\n  \"total\": 146\n}\n",
+        "stderr": "2025-09-14 20:57:59 - INFO - Using provided OpenShift URL and token for authentication\n2025-09-14 20:57:59 - INFO - Successfully configured Kubernetes client for https://api.opslab-joe.rh-igc.com:6443\n2025-09-14 20:57:59 - INFO - Setting up port-forward to catalogd service...\n2025-09-14 20:57:59 - INFO - Port-forward established to service/catalogd-service (443->8443) on local port 49446\n2025-09-14 20:57:59 - INFO - Fetching catalog data for: openshift-redhat-operators\n2025-09-14 20:57:59 - INFO - Successfully parsed 3488 JSON objects from NDJSON stream\n",
+        "json_data": {
+          "catalog": "openshift-redhat-operators",
+          "type": "packages",
+          "data": [
+            "3scale-operator",
+            "advanced-cluster-management",
+            "amq-broker-rhel8",
+            "amq-broker-rhel9",
+            "amq-online",
+            "amq-streams",
+            "amq-streams-console",
+            "amq-streams-proxy",
+            "amq7-interconnect-operator",
+            "ansible-automation-platform-operator",
+            "ansible-cloud-addons-operator",
+            "apicast-operator",
+            "apicurio-registry-3",
+            "authorino-operator",
+            "aws-efs-csi-driver-operator",
+            "aws-load-balancer-operator",
+            "bamoe-businessautomation-operator",
+            "bamoe-kogito-operator",
+            "bpfman-operator",
+            "businessautomation-operator",
+            "cephcsi-operator",
+            "cincinnati-operator",
+            "cli-manager",
+            "cluster-kube-descheduler-operator",
+            "cluster-logging",
+            "cluster-observability-operator",
+            "clusterresourceoverride",
+            "compliance-operator",
+            "container-security-operator",
+            "costmanagement-metrics-operator",
+            "cryostat-operator",
+            "datagrid",
+            "deployment-validation-operator",
+            "devspaces",
+            "devworkspace-operator",
+            "dns-operator",
+            "dpu-network-operator",
+            "dpu-operator",
+            "eap",
+            "elasticsearch-operator",
+            "external-dns-operator",
+            "fence-agents-remediation",
+            "file-integrity-operator",
+            "fuse-apicurito",
+            "fuse-console",
+            "fuse-online",
+            "gatekeeper-operator-product",
+            "gcp-filestore-csi-driver-operator",
+            "helloworld-operator",
+            "ingress-node-firewall",
+            "jaeger-product",
+            "jws-operator",
+            "kernel-module-management",
+            "kernel-module-management-hub",
+            "kiali-ossm",
+            "kubernetes-nmstate-operator",
+            "kubevirt-hyperconverged",
+            "kueue-operator",
+            "lifecycle-agent",
+            "lightspeed-operator",
+            "limitador-operator",
+            "local-storage-operator",
+            "logic-operator-rhel8",
+            "loki-operator",
+            "lvms-operator",
+            "machine-deletion-remediation",
+            "mcg-operator",
+            "metallb-operator",
+            "mta-operator",
+            "mtc-operator",
+            "mtr-operator",
+            "mtv-operator",
+            "multiarch-tuning-operator",
+            "multicluster-engine",
+            "multicluster-global-hub-operator-rh",
+            "nbde-tang-server",
+            "netobserv-operator",
+            "nfd",
+            "node-healthcheck-operator",
+            "node-maintenance-operator",
+            "node-observability-operator",
+            "numaresources-operator",
+            "ocs-client-operator",
+            "ocs-operator",
+            "odf-csi-addons-operator",
+            "odf-dependencies",
+            "odf-multicluster-orchestrator",
+            "odf-operator",
+            "odf-prometheus-operator",
+            "odr-cluster-operator",
+            "odr-hub-operator",
+            "openshift-builds-operator",
+            "openshift-cert-manager-operator",
+            "openshift-custom-metrics-autoscaler-operator",
+            "openshift-gitops-operator",
+            "openshift-pipelines-operator-rh",
+            "openshift-secondary-scheduler-operator",
+            "openshift-zero-trust-workload-identity-manager",
+            "openstack-operator",
+            "opentelemetry-product",
+            "orchestrator-operator",
+            "pf-status-relay-operator",
+            "power-monitoring-operator",
+            "ptp-operator",
+            "quay-bridge-operator",
+            "quay-operator",
+            "recipe",
+            "red-hat-camel-k",
+            "red-hat-hawtio-operator",
+            "redhat-oadp-operator",
+            "rh-service-binding-operator",
+            "rhacs-operator",
+            "rhbk-operator",
+            "rhcl-operator",
+            "rhdh",
+            "rhods-operator",
+            "rhpam-kogito-operator",
+            "rhsso-operator",
+            "rhtas-operator",
+            "rhtpa-operator",
+            "rook-ceph-operator",
+            "run-once-duration-override-operator",
+            "sandboxed-containers-operator",
+            "secrets-store-csi-driver-operator",
+            "security-profiles-operator",
+            "self-node-remediation",
+            "serverless-operator",
+            "service-registry-operator",
+            "service-telemetry-operator",
+            "servicemeshoperator",
+            "servicemeshoperator3",
+            "skupper-netobs-operator",
+            "skupper-operator",
+            "smart-gateway-operator",
+            "smb-csi-driver-operator",
+            "sriov-network-operator",
+            "submariner",
+            "tang-operator",
+            "tempo-product",
+            "topology-aware-lifecycle-manager",
+            "trustee-operator",
+            "vertical-pod-autoscaler",
+            "volsync-product",
+            "watcher-operator",
+            "web-terminal",
+            "windows-machine-config-operator"
+          ],
+          "total": 146
+        },
+        "command": "python3 rbac-manager.py --catalogd --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g --skip-tls --catalog-name openshift-redhat-operators"
+      }
+    },
+    {
+      "test": "list_channels",
+      "success": true,
+      "details": {
+        "exit_code": 0,
+        "stdout": "{\n  \"catalog\": \"openshift-redhat-operators\",\n  \"package\": \"quay-operator\",\n  \"type\": \"channels\",\n  \"data\": [\n    \"quay-v3.4\",\n    \"quay-v3.5\",\n    \"stable-3.10\",\n    \"stable-3.11\",\n    \"stable-3.12\",\n    \"stable-3.13\",\n    \"stable-3.14\",\n    \"stable-3.15\",\n    \"stable-3.6\",\n    \"stable-3.7\",\n    \"stable-3.8\",\n    \"stable-3.9\"\n  ],\n  \"total\": 12\n}\n",
+        "stderr": "2025-09-14 20:57:59 - INFO - Using provided OpenShift URL and token for authentication\n2025-09-14 20:57:59 - INFO - Successfully configured Kubernetes client for https://api.opslab-joe.rh-igc.com:6443\n2025-09-14 20:57:59 - INFO - Setting up port-forward to catalogd service...\n2025-09-14 20:58:00 - INFO - Port-forward established to service/catalogd-service (443->8443) on local port 49450\n2025-09-14 20:58:00 - INFO - Fetching catalog data for: openshift-redhat-operators\n2025-09-14 20:58:00 - INFO - Successfully parsed 3488 JSON objects from NDJSON stream\n",
+        "json_data": {
+          "catalog": "openshift-redhat-operators",
+          "package": "quay-operator",
+          "type": "channels",
+          "data": [
+            "quay-v3.4",
+            "quay-v3.5",
+            "stable-3.10",
+            "stable-3.11",
+            "stable-3.12",
+            "stable-3.13",
+            "stable-3.14",
+            "stable-3.15",
+            "stable-3.6",
+            "stable-3.7",
+            "stable-3.8",
+            "stable-3.9"
+          ],
+          "total": 12
+        },
+        "command": "python3 rbac-manager.py --catalogd --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g --skip-tls --catalog-name openshift-redhat-operators --package quay-operator"
+      }
+    },
+    {
+      "test": "list_versions",
+      "success": true,
+      "details": {
+        "exit_code": 0,
+        "stdout": "{\n  \"catalog\": \"openshift-redhat-operators\",\n  \"package\": \"quay-operator\",\n  \"channel\": \"stable-3.10\",\n  \"type\": \"versions\",\n  \"data\": [\n    \"3.10.0\",\n    \"3.10.1\",\n    \"3.10.10\",\n    \"3.10.11\",\n    \"3.10.12\",\n    \"3.10.13\",\n    \"3.10.14\",\n    \"3.10.2\",\n    \"3.10.3\",\n    \"3.10.4\",\n    \"3.10.5\",\n    \"3.10.6\",\n    \"3.10.7\",\n    \"3.10.8\",\n    \"3.10.9\"\n  ],\n  \"total\": 15\n}\n",
+        "stderr": "2025-09-14 20:58:00 - INFO - Using provided OpenShift URL and token for authentication\n2025-09-14 20:58:00 - INFO - Successfully configured Kubernetes client for https://api.opslab-joe.rh-igc.com:6443\n2025-09-14 20:58:00 - INFO - Setting up port-forward to catalogd service...\n2025-09-14 20:58:01 - INFO - Port-forward established to service/catalogd-service (443->8443) on local port 49455\n2025-09-14 20:58:01 - INFO - Fetching catalog data for: openshift-redhat-operators\n2025-09-14 20:58:01 - INFO - Successfully parsed 3488 JSON objects from NDJSON stream\n",
+        "json_data": {
+          "catalog": "openshift-redhat-operators",
+          "package": "quay-operator",
+          "channel": "stable-3.10",
+          "type": "versions",
+          "data": [
+            "3.10.0",
+            "3.10.1",
+            "3.10.10",
+            "3.10.11",
+            "3.10.12",
+            "3.10.13",
+            "3.10.14",
+            "3.10.2",
+            "3.10.3",
+            "3.10.4",
+            "3.10.5",
+            "3.10.6",
+            "3.10.7",
+            "3.10.8",
+            "3.10.9"
+          ],
+          "total": 15
+        },
+        "command": "python3 rbac-manager.py --catalogd --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g --skip-tls --catalog-name openshift-redhat-operators --package quay-operator --channel stable-3.10"
+      }
+    },
+    {
+      "test": "get_metadata",
+      "success": true,
+      "details": {
+        "exit_code": 0,
+        "stdout": "{\n  \"catalog\": \"openshift-redhat-operators\",\n  \"package\": \"quay-operator\",\n  \"channel\": \"stable-3.10\",\n  \"version\": \"3.10.0\",\n  \"type\": \"metadata\",\n  \"data\": {\n    \"name\": \"quay-operator.v3.10.0\",\n    \"package\": \"quay-operator\",\n    \"image\": \"registry.redhat.io/quay/quay-operator-bundle@sha256:0e0b3af9b4b673ea2b1f0276caf82fb51c8b6fa9c15874c79028d18a3344bd4c\",\n    \"properties\": [\n      {\n        \"type\": \"olm.gvk\",\n        \"value\": {\n          \"group\": \"quay.redhat.com\",\n          \"kind\": \"QuayRegistry\",\n          \"version\": \"v1\"\n        }\n      },\n      {\n        \"type\": \"olm.package\",\n        \"value\": {\n          \"packageName\": \"quay-operator\",\n          \"version\": \"3.10.0\"\n        }\n      },\n      {\n        \"type\": \"olm.csv.metadata\",\n        \"value\": {\n          \"annotations\": {\n            \"alm-examples\": \"[\\n  {\\n    \\\"apiVersion\\\": \\\"quay.redhat.com/v1\\\",\\n    \\\"kind\\\": \\\"QuayRegistry\\\",\\n    \\\"metadata\\\": {\\n      \\\"name\\\": \\\"example-registry\\\"\\n    },\\n    \\\"spec\\\": {\\n      \\\"components\\\": [\\n        {\\\"kind\\\": \\\"clair\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"postgres\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"objectstorage\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"redis\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"horizontalpodautoscaler\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"route\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"mirror\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"monitoring\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"tls\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"quay\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"clairpostgres\\\", \\\"managed\\\": true}\\n      ]\\n    }\\n  }\\n]\",\n            \"capabilities\": \"Full Lifecycle\",\n            \"categories\": \"Integration & Delivery\",\n            \"containerImage\": \"registry.redhat.io/quay/quay-operator-rhel8@sha256:57fb7c4e48c26da530ae6c7efff9d4b02d2627d3d8b7bbaa329612636eceae28\",\n            \"createdAt\": \"2021-04-23 10:04 UTC\",\n            \"description\": \"Opinionated deployment of Red Hat on Kubernetes.\",\n            \"olm.skipRange\": \">=3.7.x <3.10.0\",\n            \"operators.openshift.io/infrastructure-features\": \"[\\\"disconnected\\\", \\\"proxy-aware\\\", \\\"fips\\\"]\",\n            \"operators.openshift.io/valid-subscription\": \"[\\\"OpenShift Platform Plus\\\", \\\"Red Hat Quay\\\"]\",\n            \"quay-version\": \"v3.10.0\",\n            \"repository\": \"https://github.com/quay/quay-operator\",\n            \"tectonic-visibility\": \"ocs\"\n          },\n          \"apiServiceDefinitions\": {},\n          \"crdDescriptions\": {\n            \"owned\": [\n              {\n                \"description\": \"Represents a full Quay registry installation.\",\n                \"displayName\": \"Quay Registry\",\n                \"kind\": \"QuayRegistry\",\n                \"name\": \"quayregistries.quay.redhat.com\",\n                \"resources\": [\n                  {\n                    \"kind\": \"Deployment\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"ReplicaSet\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Pod\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Secret\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Job\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"ConfigMap\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"ServiceAccount\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"PersistentVolumeClaim\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Ingress\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Route\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Role\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Rolebinding\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"HorizontalPodAutoscaler\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"ServiceMonitor\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"PrometheusRule\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  }\n                ],\n                \"specDescriptors\": [\n                  {\n                    \"description\": \"Name of the Quay config secret containing base configuration and custom SSL certificates.\",\n                    \"displayName\": \"Config Bundle Secret\",\n                    \"path\": \"configBundleSecret\",\n                    \"x-descriptors\": [\n                      \"urn:alm:descriptor:io.kubernetes:Secret\"\n                    ]\n                  },\n                  {\n                    \"description\": \"Declares how the Operator should handle supplemental Quay services.\",\n                    \"displayName\": \"Components\",\n                    \"path\": \"components\",\n                    \"x-descriptors\": [\n                      \"urn:alm:descriptor:com.tectonic.ui:advanced\"\n                    ]\n                  },\n                  {\n                    \"description\": \"The unique name of this type of component.\",\n                    \"displayName\": \"Kind\",\n                    \"path\": \"components[0].kind\"\n                  },\n                  {\n                    \"description\": \"Indicates whether lifecycle of this component is managed by the Operator or externally.\",\n                    \"displayName\": \"Managed\",\n                    \"path\": \"components[0].managed\"\n                  }\n                ],\n                \"statusDescriptors\": [\n                  {\n                    \"description\": \"The currently installed version of all Quay components.\",\n                    \"displayName\": \"Current Version\",\n                    \"path\": \"currentVersion\"\n                  },\n                  {\n                    \"description\": \"Observed conditions of Quay components.\",\n                    \"displayName\": \"Conditions\",\n                    \"path\": \"conditions\",\n                    \"x-descriptors\": [\n                      \"urn:alm:descriptor:io.kubernetes.conditions\"\n                    ]\n                  },\n                  {\n                    \"description\": \"Externally accessible URL for container pull/push and web frontend.\",\n                    \"displayName\": \"Registry Endpoint\",\n                    \"path\": \"registryEndpoint\",\n                    \"x-descriptors\": [\n                      \"urn:alm:descriptor:org.w3:link\"\n                    ]\n                  }\n                ],\n                \"version\": \"v1\"\n              }\n            ]\n          },\n          \"description\": \"The Red Hat Quay Operator deploys and manages a production-ready\\n[Red Hat Quay](https://www.openshift.com/products/quay) private container registry.\\nThis operator provides an opinionated installation and configuration of Red Hat Quay.\\nAll components required, including Clair, database, and storage, are provided in an\\noperator-managed fashion. Each component may optionally be self-managed.\\n\\n## Operator Features\\n\\n* Automated installation of Red Hat Quay\\n* Provisions instance of Redis\\n* Provisions PostgreSQL to support both Quay and Clair\\n* Installation of Clair for container scanning and integration with Quay\\n* Provisions and configures RHOCS for supported registry object storage\\n* Enables and configures Quay's registry mirroring feature\\n\\n## Prerequisites\\n\\nBy default, the Red Hat Quay operator expects RHOCS to be installed on the cluster to\\nprovide the _ObjectBucketClaim_ API for object storage. For instructions installing and\\nconfiguring the RHOCS Operator, see the \\\"Enabling OpenShift Container Storage\\\" in the\\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html-single/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index#enabling_openshift_container_storage).\\n\\n## Simplified Deployment\\n\\nThe following example provisions a fully operator-managed deployment of Red Hat Quay,\\nincluding all services necessary for production:\\n\\n```\\napiVersion: quay.redhat.com/v1\\nkind: QuayRegistry\\nmetadata:\\n  name: my-registry\\n```\\n\\n## Documentation\\n\\nSee the\\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index)\\nfor more complex deployment scenarios and information.\",\n          \"displayName\": \"Red Hat Quay\",\n          \"installModes\": [\n            {\n              \"supported\": true,\n              \"type\": \"OwnNamespace\"\n            },\n            {\n              \"supported\": true,\n              \"type\": \"SingleNamespace\"\n            },\n            {\n              \"supported\": true,\n              \"type\": \"MultiNamespace\"\n            },\n            {\n              \"supported\": true,\n              \"type\": \"AllNamespaces\"\n            }\n          ],\n          \"keywords\": [\n            \"open source\",\n            \"containers\",\n            \"registry\"\n          ],\n          \"labels\": {\n            \"operatorframework.io/arch.amd64\": \"supported\",\n            \"operatorframework.io/arch.ppc64le\": \"supported\",\n            \"operatorframework.io/arch.s390x\": \"supported\",\n            \"operatorframework.io/os.linux\": \"supported\"\n          },\n          \"links\": [\n            {\n              \"name\": \"Source Code\",\n              \"url\": \"https://github.com/quay/quay-operator\"\n            }\n          ],\n          \"maintainers\": [\n            {\n              \"email\": \"support@redhat.com\",\n              \"name\": \"Red Hat\"\n            }\n          ],\n          \"maturity\": \"stable\",\n          \"provider\": {\n            \"name\": \"Red Hat\"\n          }\n        }\n      }\n    ]\n  }\n}\n",
+        "stderr": "2025-09-14 20:58:01 - INFO - Using provided OpenShift URL and token for authentication\n2025-09-14 20:58:01 - INFO - Successfully configured Kubernetes client for https://api.opslab-joe.rh-igc.com:6443\n2025-09-14 20:58:01 - INFO - Setting up port-forward to catalogd service...\n2025-09-14 20:58:01 - INFO - Port-forward established to service/catalogd-service (443->8443) on local port 49459\n2025-09-14 20:58:01 - INFO - Fetching catalog data for: openshift-redhat-operators\n2025-09-14 20:58:02 - INFO - Successfully parsed 3488 JSON objects from NDJSON stream\n",
+        "json_data": {
+          "catalog": "openshift-redhat-operators",
+          "package": "quay-operator",
+          "channel": "stable-3.10",
+          "version": "3.10.0",
+          "type": "metadata",
+          "data": {
+            "name": "quay-operator.v3.10.0",
+            "package": "quay-operator",
+            "image": "registry.redhat.io/quay/quay-operator-bundle@sha256:0e0b3af9b4b673ea2b1f0276caf82fb51c8b6fa9c15874c79028d18a3344bd4c",
+            "properties": [
+              {
+                "type": "olm.gvk",
+                "value": {
+                  "group": "quay.redhat.com",
+                  "kind": "QuayRegistry",
+                  "version": "v1"
+                }
+              },
+              {
+                "type": "olm.package",
+                "value": {
+                  "packageName": "quay-operator",
+                  "version": "3.10.0"
+                }
+              },
+              {
+                "type": "olm.csv.metadata",
+                "value": {
+                  "annotations": {
+                    "alm-examples": "[\n  {\n    \"apiVersion\": \"quay.redhat.com/v1\",\n    \"kind\": \"QuayRegistry\",\n    \"metadata\": {\n      \"name\": \"example-registry\"\n    },\n    \"spec\": {\n      \"components\": [\n        {\"kind\": \"clair\", \"managed\": true},\n        {\"kind\": \"postgres\", \"managed\": true},\n        {\"kind\": \"objectstorage\", \"managed\": true},\n        {\"kind\": \"redis\", \"managed\": true},\n        {\"kind\": \"horizontalpodautoscaler\", \"managed\": true},\n        {\"kind\": \"route\", \"managed\": true},\n        {\"kind\": \"mirror\", \"managed\": true},\n        {\"kind\": \"monitoring\", \"managed\": true},\n        {\"kind\": \"tls\", \"managed\": true},\n        {\"kind\": \"quay\", \"managed\": true},\n        {\"kind\": \"clairpostgres\", \"managed\": true}\n      ]\n    }\n  }\n]",
+                    "capabilities": "Full Lifecycle",
+                    "categories": "Integration & Delivery",
+                    "containerImage": "registry.redhat.io/quay/quay-operator-rhel8@sha256:57fb7c4e48c26da530ae6c7efff9d4b02d2627d3d8b7bbaa329612636eceae28",
+                    "createdAt": "2021-04-23 10:04 UTC",
+                    "description": "Opinionated deployment of Red Hat on Kubernetes.",
+                    "olm.skipRange": ">=3.7.x <3.10.0",
+                    "operators.openshift.io/infrastructure-features": "[\"disconnected\", \"proxy-aware\", \"fips\"]",
+                    "operators.openshift.io/valid-subscription": "[\"OpenShift Platform Plus\", \"Red Hat Quay\"]",
+                    "quay-version": "v3.10.0",
+                    "repository": "https://github.com/quay/quay-operator",
+                    "tectonic-visibility": "ocs"
+                  },
+                  "apiServiceDefinitions": {},
+                  "crdDescriptions": {
+                    "owned": [
+                      {
+                        "description": "Represents a full Quay registry installation.",
+                        "displayName": "Quay Registry",
+                        "kind": "QuayRegistry",
+                        "name": "quayregistries.quay.redhat.com",
+                        "resources": [
+                          {
+                            "kind": "Deployment",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "ReplicaSet",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Pod",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Secret",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Job",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "ConfigMap",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "ServiceAccount",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "PersistentVolumeClaim",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Ingress",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Route",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Role",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Rolebinding",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "HorizontalPodAutoscaler",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "ServiceMonitor",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "PrometheusRule",
+                            "name": "",
+                            "version": ""
+                          }
+                        ],
+                        "specDescriptors": [
+                          {
+                            "description": "Name of the Quay config secret containing base configuration and custom SSL certificates.",
+                            "displayName": "Config Bundle Secret",
+                            "path": "configBundleSecret",
+                            "x-descriptors": [
+                              "urn:alm:descriptor:io.kubernetes:Secret"
+                            ]
+                          },
+                          {
+                            "description": "Declares how the Operator should handle supplemental Quay services.",
+                            "displayName": "Components",
+                            "path": "components",
+                            "x-descriptors": [
+                              "urn:alm:descriptor:com.tectonic.ui:advanced"
+                            ]
+                          },
+                          {
+                            "description": "The unique name of this type of component.",
+                            "displayName": "Kind",
+                            "path": "components[0].kind"
+                          },
+                          {
+                            "description": "Indicates whether lifecycle of this component is managed by the Operator or externally.",
+                            "displayName": "Managed",
+                            "path": "components[0].managed"
+                          }
+                        ],
+                        "statusDescriptors": [
+                          {
+                            "description": "The currently installed version of all Quay components.",
+                            "displayName": "Current Version",
+                            "path": "currentVersion"
+                          },
+                          {
+                            "description": "Observed conditions of Quay components.",
+                            "displayName": "Conditions",
+                            "path": "conditions",
+                            "x-descriptors": [
+                              "urn:alm:descriptor:io.kubernetes.conditions"
+                            ]
+                          },
+                          {
+                            "description": "Externally accessible URL for container pull/push and web frontend.",
+                            "displayName": "Registry Endpoint",
+                            "path": "registryEndpoint",
+                            "x-descriptors": [
+                              "urn:alm:descriptor:org.w3:link"
+                            ]
+                          }
+                        ],
+                        "version": "v1"
+                      }
+                    ]
+                  },
+                  "description": "The Red Hat Quay Operator deploys and manages a production-ready\n[Red Hat Quay](https://www.openshift.com/products/quay) private container registry.\nThis operator provides an opinionated installation and configuration of Red Hat Quay.\nAll components required, including Clair, database, and storage, are provided in an\noperator-managed fashion. Each component may optionally be self-managed.\n\n## Operator Features\n\n* Automated installation of Red Hat Quay\n* Provisions instance of Redis\n* Provisions PostgreSQL to support both Quay and Clair\n* Installation of Clair for container scanning and integration with Quay\n* Provisions and configures RHOCS for supported registry object storage\n* Enables and configures Quay's registry mirroring feature\n\n## Prerequisites\n\nBy default, the Red Hat Quay operator expects RHOCS to be installed on the cluster to\nprovide the _ObjectBucketClaim_ API for object storage. For instructions installing and\nconfiguring the RHOCS Operator, see the \"Enabling OpenShift Container Storage\" in the\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html-single/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index#enabling_openshift_container_storage).\n\n## Simplified Deployment\n\nThe following example provisions a fully operator-managed deployment of Red Hat Quay,\nincluding all services necessary for production:\n\n```\napiVersion: quay.redhat.com/v1\nkind: QuayRegistry\nmetadata:\n  name: my-registry\n```\n\n## Documentation\n\nSee the\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index)\nfor more complex deployment scenarios and information.",
+                  "displayName": "Red Hat Quay",
+                  "installModes": [
+                    {
+                      "supported": true,
+                      "type": "OwnNamespace"
+                    },
+                    {
+                      "supported": true,
+                      "type": "SingleNamespace"
+                    },
+                    {
+                      "supported": true,
+                      "type": "MultiNamespace"
+                    },
+                    {
+                      "supported": true,
+                      "type": "AllNamespaces"
+                    }
+                  ],
+                  "keywords": [
+                    "open source",
+                    "containers",
+                    "registry"
+                  ],
+                  "labels": {
+                    "operatorframework.io/arch.amd64": "supported",
+                    "operatorframework.io/arch.ppc64le": "supported",
+                    "operatorframework.io/arch.s390x": "supported",
+                    "operatorframework.io/os.linux": "supported"
+                  },
+                  "links": [
+                    {
+                      "name": "Source Code",
+                      "url": "https://github.com/quay/quay-operator"
+                    }
+                  ],
+                  "maintainers": [
+                    {
+                      "email": "support@redhat.com",
+                      "name": "Red Hat"
+                    }
+                  ],
+                  "maturity": "stable",
+                  "provider": {
+                    "name": "Red Hat"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "command": "python3 rbac-manager.py --catalogd --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g --skip-tls --catalog-name openshift-redhat-operators --package quay-operator --channel stable-3.10 --version 3.10.0"
+      }
+    },
+    {
+      "test": "interactive_catalog_selection",
+      "success": false,
+      "details": {
+        "exit_code": 0,
+        "stdout": "\nAvailable ClusterCatalogs:\n1. openshift-certified-operators (\u2713 Serving)\n2. openshift-community-operators (\u2713 Serving)\n3. openshift-redhat-marketplace (\u2713 Serving)\n4. openshift-redhat-operators (\u2713 Serving)\n\nSelect a catalog (1-4): {\n  \"catalog\": \"openshift-redhat-operators\",\n  \"package\": \"quay-operator\",\n  \"type\": \"channels\",\n  \"data\": [\n    \"quay-v3.4\",\n    \"quay-v3.5\",\n    \"stable-3.10\",\n    \"stable-3.11\",\n    \"stable-3.12\",\n    \"stable-3.13\",\n    \"stable-3.14\",\n    \"stable-3.15\",\n    \"stable-3.6\",\n    \"stable-3.7\",\n    \"stable-3.8\",\n    \"stable-3.9\"\n  ],\n  \"total\": 12\n}\n",
+        "stderr": "2025-09-14 20:58:02 - INFO - Using provided OpenShift URL and token for authentication\n2025-09-14 20:58:02 - INFO - Successfully configured Kubernetes client for https://api.opslab-joe.rh-igc.com:6443\n2025-09-14 20:58:02 - INFO - Fetching ClusterCatalogs from the cluster...\n2025-09-14 20:58:02 - INFO - Found 4 ClusterCatalogs\n2025-09-14 20:58:02 - INFO - Setting up port-forward to catalogd service...\n2025-09-14 20:58:02 - INFO - Port-forward established to service/catalogd-service (443->8443) on local port 49464\n2025-09-14 20:58:02 - INFO - Fetching catalog data for: openshift-redhat-operators\n2025-09-14 20:58:03 - INFO - Successfully parsed 3488 JSON objects from NDJSON stream\n",
+        "json_data": null,
+        "command": "python3 rbac-manager.py --catalogd --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g --skip-tls --package quay-operator"
+      }
+    },
+    {
+      "test": "invalid_catalog",
+      "success": true,
+      "details": {
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "2025-09-14 20:58:03 - INFO - Using provided OpenShift URL and token for authentication\n2025-09-14 20:58:03 - INFO - Successfully configured Kubernetes client for https://api.opslab-joe.rh-igc.com:6443\n2025-09-14 20:58:03 - INFO - Setting up port-forward to catalogd service...\n2025-09-14 20:58:03 - INFO - Port-forward established to service/catalogd-service (443->8443) on local port 49468\n2025-09-14 20:58:03 - INFO - Fetching catalog data for: invalid-catalog-name\n2025-09-14 20:58:03 - ERROR - Request failed: Session request failed: Failed to read response: HTTP request failed with status 404: HTTP/1.1 404 Not Found\n2025-09-14 20:58:03 - ERROR - Error querying catalogd: Failed to query catalog data: Request failed: Session request failed: Failed to read response: HTTP request failed with status 404: HTTP/1.1 404 Not Found\nError: Failed to query catalog data: Request failed: Session request failed: Failed to read response: HTTP request failed with status 404: HTTP/1.1 404 Not Found\n",
+        "json_data": null,
+        "command": "python3 rbac-manager.py --catalogd --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g --skip-tls --catalog-name invalid-catalog-name --package quay-operator"
+      }
+    },
+    {
+      "test": "ssl_error_handling",
+      "success": true,
+      "details": {
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "2025-09-14 20:58:03 - INFO - Using provided OpenShift URL and token for authentication\n2025-09-14 20:58:03 - INFO - Successfully configured Kubernetes client for https://api.opslab-joe.rh-igc.com:6443\n2025-09-14 20:58:03 - INFO - Setting up port-forward to catalogd service...\n2025-09-14 20:58:03 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))': /api/v1/namespaces/openshift-catalogd/services\n2025-09-14 20:58:03 - WARNING - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))': /api/v1/namespaces/openshift-catalogd/services\n2025-09-14 20:58:03 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1000)'))': /api/v1/namespaces/openshift-catalogd/services\n2025-09-14 20:58:04 - ERROR - Failed to establish port-forward: SSL certificate verification failed. The OpenShift cluster is using self-signed certificates.\nTo resolve this issue, add the --skip-tls flag to your command.\nExample: python3 rbac-manager.py --catalogd --skip-tls [other options]\n2025-09-14 20:58:04 - ERROR - Error querying catalogd: Failed to query catalog data: Failed to establish port-forward: SSL certificate verification failed. The OpenShift cluster is using self-signed certificates.\nTo resolve this issue, add the --skip-tls flag to your command.\nExample: python3 rbac-manager.py --catalogd --skip-tls [other options]\nError: Failed to query catalog data: Failed to establish port-forward: SSL certificate verification failed. The OpenShift cluster is using self-signed certificates.\nTo resolve this issue, add the --skip-tls flag to your command.\nExample: python3 rbac-manager.py --catalogd --skip-tls [other options]\n",
+        "command": "python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g"
+      }
+    },
+    {
+      "test": "output_truncation_handling",
+      "success": true,
+      "details": {
+        "exit_code": 0,
+        "stdout": "{\n  \"catalog\": \"openshift-redhat-operators\",\n  \"package\": \"quay-operator\",\n  \"channel\": \"stable-3.10\",\n  \"version\": \"3.10.0\",\n  \"type\": \"metadata\",\n  \"data\": {\n    \"name\": \"quay-operator.v3.10.0\",\n    \"package\": \"quay-operator\",\n    \"image\": \"registry.redhat.io/quay/quay-operator-bundle@sha256:0e0b3af9b4b673ea2b1f0276caf82fb51c8b6fa9c15874c79028d18a3344bd4c\",\n    \"properties\": [\n      {\n        \"type\": \"olm.gvk\",\n        \"value\": {\n          \"group\": \"quay.redhat.com\",\n          \"kind\": \"QuayRegistry\",\n          \"version\": \"v1\"\n        }\n      },\n      {\n        \"type\": \"olm.package\",\n        \"value\": {\n          \"packageName\": \"quay-operator\",\n          \"version\": \"3.10.0\"\n        }\n      },\n      {\n        \"type\": \"olm.csv.metadata\",\n        \"value\": {\n          \"annotations\": {\n            \"alm-examples\": \"[\\n  {\\n    \\\"apiVersion\\\": \\\"quay.redhat.com/v1\\\",\\n    \\\"kind\\\": \\\"QuayRegistry\\\",\\n    \\\"metadata\\\": {\\n      \\\"name\\\": \\\"example-registry\\\"\\n    },\\n    \\\"spec\\\": {\\n      \\\"components\\\": [\\n        {\\\"kind\\\": \\\"clair\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"postgres\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"objectstorage\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"redis\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"horizontalpodautoscaler\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"route\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"mirror\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"monitoring\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"tls\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"quay\\\", \\\"managed\\\": true},\\n        {\\\"kind\\\": \\\"clairpostgres\\\", \\\"managed\\\": true}\\n      ]\\n    }\\n  }\\n]\",\n            \"capabilities\": \"Full Lifecycle\",\n            \"categories\": \"Integration & Delivery\",\n            \"containerImage\": \"registry.redhat.io/quay/quay-operator-rhel8@sha256:57fb7c4e48c26da530ae6c7efff9d4b02d2627d3d8b7bbaa329612636eceae28\",\n            \"createdAt\": \"2021-04-23 10:04 UTC\",\n            \"description\": \"Opinionated deployment of Red Hat on Kubernetes.\",\n            \"olm.skipRange\": \">=3.7.x <3.10.0\",\n            \"operators.openshift.io/infrastructure-features\": \"[\\\"disconnected\\\", \\\"proxy-aware\\\", \\\"fips\\\"]\",\n            \"operators.openshift.io/valid-subscription\": \"[\\\"OpenShift Platform Plus\\\", \\\"Red Hat Quay\\\"]\",\n            \"quay-version\": \"v3.10.0\",\n            \"repository\": \"https://github.com/quay/quay-operator\",\n            \"tectonic-visibility\": \"ocs\"\n          },\n          \"apiServiceDefinitions\": {},\n          \"crdDescriptions\": {\n            \"owned\": [\n              {\n                \"description\": \"Represents a full Quay registry installation.\",\n                \"displayName\": \"Quay Registry\",\n                \"kind\": \"QuayRegistry\",\n                \"name\": \"quayregistries.quay.redhat.com\",\n                \"resources\": [\n                  {\n                    \"kind\": \"Deployment\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"ReplicaSet\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Pod\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Secret\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Job\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"ConfigMap\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"ServiceAccount\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"PersistentVolumeClaim\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Ingress\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Route\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Role\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"Rolebinding\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"HorizontalPodAutoscaler\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"ServiceMonitor\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  },\n                  {\n                    \"kind\": \"PrometheusRule\",\n                    \"name\": \"\",\n                    \"version\": \"\"\n                  }\n                ],\n                \"specDescriptors\": [\n                  {\n                    \"description\": \"Name of the Quay config secret containing base configuration and custom SSL certificates.\",\n                    \"displayName\": \"Config Bundle Secret\",\n                    \"path\": \"configBundleSecret\",\n                    \"x-descriptors\": [\n                      \"urn:alm:descriptor:io.kubernetes:Secret\"\n                    ]\n                  },\n                  {\n                    \"description\": \"Declares how the Operator should handle supplemental Quay services.\",\n                    \"displayName\": \"Components\",\n                    \"path\": \"components\",\n                    \"x-descriptors\": [\n                      \"urn:alm:descriptor:com.tectonic.ui:advanced\"\n                    ]\n                  },\n                  {\n                    \"description\": \"The unique name of this type of component.\",\n                    \"displayName\": \"Kind\",\n                    \"path\": \"components[0].kind\"\n                  },\n                  {\n                    \"description\": \"Indicates whether lifecycle of this component is managed by the Operator or externally.\",\n                    \"displayName\": \"Managed\",\n                    \"path\": \"components[0].managed\"\n                  }\n                ],\n                \"statusDescriptors\": [\n                  {\n                    \"description\": \"The currently installed version of all Quay components.\",\n                    \"displayName\": \"Current Version\",\n                    \"path\": \"currentVersion\"\n                  },\n                  {\n                    \"description\": \"Observed conditions of Quay components.\",\n                    \"displayName\": \"Conditions\",\n                    \"path\": \"conditions\",\n                    \"x-descriptors\": [\n                      \"urn:alm:descriptor:io.kubernetes.conditions\"\n                    ]\n                  },\n                  {\n                    \"description\": \"Externally accessible URL for container pull/push and web frontend.\",\n                    \"displayName\": \"Registry Endpoint\",\n                    \"path\": \"registryEndpoint\",\n                    \"x-descriptors\": [\n                      \"urn:alm:descriptor:org.w3:link\"\n                    ]\n                  }\n                ],\n                \"version\": \"v1\"\n              }\n            ]\n          },\n          \"description\": \"The Red Hat Quay Operator deploys and manages a production-ready\\n[Red Hat Quay](https://www.openshift.com/products/quay) private container registry.\\nThis operator provides an opinionated installation and configuration of Red Hat Quay.\\nAll components required, including Clair, database, and storage, are provided in an\\noperator-managed fashion. Each component may optionally be self-managed.\\n\\n## Operator Features\\n\\n* Automated installation of Red Hat Quay\\n* Provisions instance of Redis\\n* Provisions PostgreSQL to support both Quay and Clair\\n* Installation of Clair for container scanning and integration with Quay\\n* Provisions and configures RHOCS for supported registry object storage\\n* Enables and configures Quay's registry mirroring feature\\n\\n## Prerequisites\\n\\nBy default, the Red Hat Quay operator expects RHOCS to be installed on the cluster to\\nprovide the _ObjectBucketClaim_ API for object storage. For instructions installing and\\nconfiguring the RHOCS Operator, see the \\\"Enabling OpenShift Container Storage\\\" in the\\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html-single/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index#enabling_openshift_container_storage).\\n\\n## Simplified Deployment\\n\\nThe following example provisions a fully operator-managed deployment of Red Hat Quay,\\nincluding all services necessary for production:\\n\\n```\\napiVersion: quay.redhat.com/v1\\nkind: QuayRegistry\\nmetadata:\\n  name: my-registry\\n```\\n\\n## Documentation\\n\\nSee the\\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index)\\nfor more complex deployment scenarios and information.\",\n          \"displayName\": \"Red Hat Quay\",\n          \"installModes\": [\n            {\n              \"supported\": true,\n              \"type\": \"OwnNamespace\"\n            },\n            {\n              \"supported\": true,\n              \"type\": \"SingleNamespace\"\n            },\n            {\n              \"supported\": true,\n              \"type\": \"MultiNamespace\"\n            },\n            {\n              \"supported\": true,\n              \"type\": \"AllNamespaces\"\n            }\n          ],\n          \"keywords\": [\n            \"open source\",\n            \"containers\",\n            \"registry\"\n          ],\n          \"labels\": {\n            \"operatorframework.io/arch.amd64\": \"supported\",\n            \"operatorframework.io/arch.ppc64le\": \"supported\",\n            \"operatorframework.io/arch.s390x\": \"supported\",\n            \"operatorframework.io/os.linux\": \"supported\"\n          },\n          \"links\": [\n            {\n              \"name\": \"Source Code\",\n              \"url\": \"https://github.com/quay/quay-operator\"\n            }\n          ],\n          \"maintainers\": [\n            {\n              \"email\": \"support@redhat.com\",\n              \"name\": \"Red Hat\"\n            }\n          ],\n          \"maturity\": \"stable\",\n          \"provider\": {\n            \"name\": \"Red Hat\"\n          }\n        }\n      }\n    ]\n  }\n}\n",
+        "stderr": "2025-09-14 20:58:04 - INFO - Using provided OpenShift URL and token for authentication\n2025-09-14 20:58:04 - INFO - Successfully configured Kubernetes client for https://api.opslab-joe.rh-igc.com:6443\n2025-09-14 20:58:04 - INFO - Setting up port-forward to catalogd service...\n2025-09-14 20:58:04 - INFO - Port-forward established to service/catalogd-service (443->8443) on local port 49477\n2025-09-14 20:58:04 - INFO - Fetching catalog data for: openshift-redhat-operators\n2025-09-14 20:58:04 - INFO - Successfully parsed 3488 JSON objects from NDJSON stream\n",
+        "json_data": {
+          "catalog": "openshift-redhat-operators",
+          "package": "quay-operator",
+          "channel": "stable-3.10",
+          "version": "3.10.0",
+          "type": "metadata",
+          "data": {
+            "name": "quay-operator.v3.10.0",
+            "package": "quay-operator",
+            "image": "registry.redhat.io/quay/quay-operator-bundle@sha256:0e0b3af9b4b673ea2b1f0276caf82fb51c8b6fa9c15874c79028d18a3344bd4c",
+            "properties": [
+              {
+                "type": "olm.gvk",
+                "value": {
+                  "group": "quay.redhat.com",
+                  "kind": "QuayRegistry",
+                  "version": "v1"
+                }
+              },
+              {
+                "type": "olm.package",
+                "value": {
+                  "packageName": "quay-operator",
+                  "version": "3.10.0"
+                }
+              },
+              {
+                "type": "olm.csv.metadata",
+                "value": {
+                  "annotations": {
+                    "alm-examples": "[\n  {\n    \"apiVersion\": \"quay.redhat.com/v1\",\n    \"kind\": \"QuayRegistry\",\n    \"metadata\": {\n      \"name\": \"example-registry\"\n    },\n    \"spec\": {\n      \"components\": [\n        {\"kind\": \"clair\", \"managed\": true},\n        {\"kind\": \"postgres\", \"managed\": true},\n        {\"kind\": \"objectstorage\", \"managed\": true},\n        {\"kind\": \"redis\", \"managed\": true},\n        {\"kind\": \"horizontalpodautoscaler\", \"managed\": true},\n        {\"kind\": \"route\", \"managed\": true},\n        {\"kind\": \"mirror\", \"managed\": true},\n        {\"kind\": \"monitoring\", \"managed\": true},\n        {\"kind\": \"tls\", \"managed\": true},\n        {\"kind\": \"quay\", \"managed\": true},\n        {\"kind\": \"clairpostgres\", \"managed\": true}\n      ]\n    }\n  }\n]",
+                    "capabilities": "Full Lifecycle",
+                    "categories": "Integration & Delivery",
+                    "containerImage": "registry.redhat.io/quay/quay-operator-rhel8@sha256:57fb7c4e48c26da530ae6c7efff9d4b02d2627d3d8b7bbaa329612636eceae28",
+                    "createdAt": "2021-04-23 10:04 UTC",
+                    "description": "Opinionated deployment of Red Hat on Kubernetes.",
+                    "olm.skipRange": ">=3.7.x <3.10.0",
+                    "operators.openshift.io/infrastructure-features": "[\"disconnected\", \"proxy-aware\", \"fips\"]",
+                    "operators.openshift.io/valid-subscription": "[\"OpenShift Platform Plus\", \"Red Hat Quay\"]",
+                    "quay-version": "v3.10.0",
+                    "repository": "https://github.com/quay/quay-operator",
+                    "tectonic-visibility": "ocs"
+                  },
+                  "apiServiceDefinitions": {},
+                  "crdDescriptions": {
+                    "owned": [
+                      {
+                        "description": "Represents a full Quay registry installation.",
+                        "displayName": "Quay Registry",
+                        "kind": "QuayRegistry",
+                        "name": "quayregistries.quay.redhat.com",
+                        "resources": [
+                          {
+                            "kind": "Deployment",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "ReplicaSet",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Pod",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Secret",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Job",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "ConfigMap",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "ServiceAccount",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "PersistentVolumeClaim",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Ingress",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Route",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Role",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "Rolebinding",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "HorizontalPodAutoscaler",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "ServiceMonitor",
+                            "name": "",
+                            "version": ""
+                          },
+                          {
+                            "kind": "PrometheusRule",
+                            "name": "",
+                            "version": ""
+                          }
+                        ],
+                        "specDescriptors": [
+                          {
+                            "description": "Name of the Quay config secret containing base configuration and custom SSL certificates.",
+                            "displayName": "Config Bundle Secret",
+                            "path": "configBundleSecret",
+                            "x-descriptors": [
+                              "urn:alm:descriptor:io.kubernetes:Secret"
+                            ]
+                          },
+                          {
+                            "description": "Declares how the Operator should handle supplemental Quay services.",
+                            "displayName": "Components",
+                            "path": "components",
+                            "x-descriptors": [
+                              "urn:alm:descriptor:com.tectonic.ui:advanced"
+                            ]
+                          },
+                          {
+                            "description": "The unique name of this type of component.",
+                            "displayName": "Kind",
+                            "path": "components[0].kind"
+                          },
+                          {
+                            "description": "Indicates whether lifecycle of this component is managed by the Operator or externally.",
+                            "displayName": "Managed",
+                            "path": "components[0].managed"
+                          }
+                        ],
+                        "statusDescriptors": [
+                          {
+                            "description": "The currently installed version of all Quay components.",
+                            "displayName": "Current Version",
+                            "path": "currentVersion"
+                          },
+                          {
+                            "description": "Observed conditions of Quay components.",
+                            "displayName": "Conditions",
+                            "path": "conditions",
+                            "x-descriptors": [
+                              "urn:alm:descriptor:io.kubernetes.conditions"
+                            ]
+                          },
+                          {
+                            "description": "Externally accessible URL for container pull/push and web frontend.",
+                            "displayName": "Registry Endpoint",
+                            "path": "registryEndpoint",
+                            "x-descriptors": [
+                              "urn:alm:descriptor:org.w3:link"
+                            ]
+                          }
+                        ],
+                        "version": "v1"
+                      }
+                    ]
+                  },
+                  "description": "The Red Hat Quay Operator deploys and manages a production-ready\n[Red Hat Quay](https://www.openshift.com/products/quay) private container registry.\nThis operator provides an opinionated installation and configuration of Red Hat Quay.\nAll components required, including Clair, database, and storage, are provided in an\noperator-managed fashion. Each component may optionally be self-managed.\n\n## Operator Features\n\n* Automated installation of Red Hat Quay\n* Provisions instance of Redis\n* Provisions PostgreSQL to support both Quay and Clair\n* Installation of Clair for container scanning and integration with Quay\n* Provisions and configures RHOCS for supported registry object storage\n* Enables and configures Quay's registry mirroring feature\n\n## Prerequisites\n\nBy default, the Red Hat Quay operator expects RHOCS to be installed on the cluster to\nprovide the _ObjectBucketClaim_ API for object storage. For instructions installing and\nconfiguring the RHOCS Operator, see the \"Enabling OpenShift Container Storage\" in the\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html-single/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index#enabling_openshift_container_storage).\n\n## Simplified Deployment\n\nThe following example provisions a fully operator-managed deployment of Red Hat Quay,\nincluding all services necessary for production:\n\n```\napiVersion: quay.redhat.com/v1\nkind: QuayRegistry\nmetadata:\n  name: my-registry\n```\n\n## Documentation\n\nSee the\n[official documentation](https://access.redhat.com/documentation/en-us/red_hat_quay/3/html/deploy_red_hat_quay_on_openshift_with_the_quay_operator/index)\nfor more complex deployment scenarios and information.",
+                  "displayName": "Red Hat Quay",
+                  "installModes": [
+                    {
+                      "supported": true,
+                      "type": "OwnNamespace"
+                    },
+                    {
+                      "supported": true,
+                      "type": "SingleNamespace"
+                    },
+                    {
+                      "supported": true,
+                      "type": "MultiNamespace"
+                    },
+                    {
+                      "supported": true,
+                      "type": "AllNamespaces"
+                    }
+                  ],
+                  "keywords": [
+                    "open source",
+                    "containers",
+                    "registry"
+                  ],
+                  "labels": {
+                    "operatorframework.io/arch.amd64": "supported",
+                    "operatorframework.io/arch.ppc64le": "supported",
+                    "operatorframework.io/arch.s390x": "supported",
+                    "operatorframework.io/os.linux": "supported"
+                  },
+                  "links": [
+                    {
+                      "name": "Source Code",
+                      "url": "https://github.com/quay/quay-operator"
+                    }
+                  ],
+                  "maintainers": [
+                    {
+                      "email": "support@redhat.com",
+                      "name": "Red Hat"
+                    }
+                  ],
+                  "maturity": "stable",
+                  "provider": {
+                    "name": "Red Hat"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "command": "python3 rbac-manager.py --catalogd --openshift-url https://api.opslab-joe.rh-igc.com:6443 --openshift-token sha256~H95r1SLgMpi55f2SBG1p0oMw6uTAfniCqWDmyV80z1g --skip-tls --catalog-name openshift-redhat-operators --package quay-operator --channel stable-3.10 --version 3.10.0"
+      }
+    }
+  ]
+}

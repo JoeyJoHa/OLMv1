@@ -290,7 +290,7 @@ class CatalogdTestSuite:
         
         success = (
             result["exit_code"] == 0 and  # Tool handles errors gracefully
-            "404" in result["stderr"]  # Should get 404 error
+            ("not found" in result["stderr"].lower() or "404" in result["stderr"])
         )
         
         self.test_results.append({
@@ -300,6 +300,53 @@ class CatalogdTestSuite:
         })
         
         print(f"   {'✅' if success else '❌'} Invalid catalog: error handled correctly")
+        return success
+    
+    def test_misspelled_catalog(self) -> bool:
+        """Test error handling with misspelled catalog name"""
+        print("🧪 Testing misspelled catalog error handling...")
+        
+        result = self.run_command([
+            "--catalog-name", "openshiftredhatoperators",  # Missing hyphens
+            "--package", self.test_package
+        ])
+        
+        success = (
+            result["exit_code"] == 0 and
+            "misspelled" in result["stderr"].lower() and
+            "did you mean" in result["stderr"].lower()
+        )
+        
+        self.test_results.append({
+            "test": "misspelled_catalog",
+            "success": success,
+            "details": result
+        })
+        
+        print(f"   {'✅' if success else '❌'} Misspelled catalog: suggestions provided")
+        return success
+    
+    def test_invalid_characters_catalog(self) -> bool:
+        """Test error handling with invalid characters in catalog name"""
+        print("🧪 Testing invalid characters in catalog name...")
+        
+        result = self.run_command([
+            "--catalog-name", "openshift redhat operators",  # Spaces
+            "--package", self.test_package
+        ])
+        
+        success = (
+            result["exit_code"] == 0 and
+            "invalid characters" in result["stderr"].lower()
+        )
+        
+        self.test_results.append({
+            "test": "invalid_characters_catalog",
+            "success": success,
+            "details": result
+        })
+        
+        print(f"   {'✅' if success else '❌'} Invalid characters: error handled correctly")
         return success
     
     def test_ssl_error_handling(self) -> bool:
@@ -397,6 +444,8 @@ class CatalogdTestSuite:
             self.test_get_metadata,
             self.test_interactive_catalog_selection,
             self.test_invalid_catalog,
+            self.test_misspelled_catalog,
+            self.test_invalid_characters_catalog,
             self.test_ssl_error_handling,
             self.test_output_truncation_handling
         ]

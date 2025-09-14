@@ -163,9 +163,62 @@ class CatalogdService:
             print(f"Error listing ClusterCatalogs: {e}", file=sys.stderr)
             return 1
     
+    def validate_catalog_name(self, catalog_name: str) -> bool:
+        """
+        Validate catalog name format and suggest corrections
+        
+        Args:
+            catalog_name: Name of the catalog to validate
+            
+        Returns:
+            bool: True if catalog name appears valid
+            
+        Raises:
+            CatalogdError: If catalog name is obviously invalid
+        """
+        if not catalog_name:
+            raise CatalogdError("Catalog name cannot be empty")
+        
+        # Check for common catalog name patterns
+        valid_patterns = [
+            "openshift-redhat-operators",
+            "openshift-community-operators", 
+            "openshift-certified-operators",
+            "openshift-redhat-marketplace"
+        ]
+        
+        # Check for common typos
+        if catalog_name.lower() in [name.lower() for name in valid_patterns]:
+            return True
+        
+        # Check for common typos and suggest corrections
+        suggestions = []
+        for valid_name in valid_patterns:
+            if catalog_name.lower().replace("-", "").replace("_", "") == valid_name.lower().replace("-", "").replace("_", ""):
+                suggestions.append(valid_name)
+        
+        if suggestions:
+            raise CatalogdError(
+                f"Catalog name '{catalog_name}' appears to be misspelled.\n"
+                f"Did you mean: {', '.join(suggestions)}?\n\n"
+                f"To see all available catalogs, run:\n"
+                f"  python3 rbac-manager.py --list-catalogs"
+            )
+        
+        # Check for obviously invalid characters
+        if any(char in catalog_name for char in [' ', '\t', '\n', '/', '\\', '?', '*']):
+            raise CatalogdError(
+                f"Catalog name '{catalog_name}' contains invalid characters.\n"
+                f"Catalog names should only contain lowercase letters, numbers, and hyphens.\n\n"
+                f"To see all available catalogs, run:\n"
+                f"  python3 rbac-manager.py --list-catalogs"
+            )
+        
+        return True
+    
     def query_catalog_data(self, catalog_name: str, auth_headers: Dict[str, str] = None) -> List[Dict[str, Any]]:
         """
-        Query catalog data from catalogd service
+        Query catalog data from catalogd service with enhanced error handling
         
         Args:
             catalog_name: Name of the catalog to query
@@ -175,10 +228,13 @@ class CatalogdService:
             List of parsed catalog items
             
         Raises:
-            CatalogdError: If query fails
+            CatalogdError: If query fails with detailed error information
         """
         if not self.client:
             raise CatalogdError("Catalogd client not available. Ensure Kubernetes client is initialized.")
+        
+        # Validate catalog name before making request
+        self.validate_catalog_name(catalog_name)
         
         try:
             # Create port-forward to catalogd service
@@ -199,8 +255,39 @@ class CatalogdService:
             finally:
                 port_forward_manager.stop()
                 
+        except CatalogdError:
+            # Re-raise CatalogdError as-is (already has enhanced error messages)
+            raise
         except Exception as e:
-            raise CatalogdError(f"Failed to query catalog data: {e}")
+            logger.error(f"Failed to query catalog data: {e}")
+            # Provide enhanced error message for unexpected errors
+            error_str = str(e)
+            if "port-forward" in error_str.lower():
+                raise CatalogdError(
+                    f"Port-forward connection failed: {e}\n\n"
+                    f"This could mean:\n"
+                    f"  • Unable to establish connection to catalogd service\n"
+                    f"  • Kubernetes API server is not accessible\n"
+                    f"  • Network connectivity issues\n\n"
+                    f"Try:\n"
+                    f"  • Verifying cluster connectivity: kubectl cluster-info\n"
+                    f"  • Checking catalogd status: kubectl get pods -n openshift-catalogd\n"
+                    f"  • Using --debug flag for detailed logs"
+                )
+            elif "parsing" in error_str.lower() or "json" in error_str.lower():
+                raise CatalogdError(
+                    f"Failed to parse catalogd response: {e}\n\n"
+                    f"This could mean:\n"
+                    f"  • Catalogd service returned malformed data\n"
+                    f"  • Response was truncated or corrupted\n"
+                    f"  • Service is experiencing issues\n\n"
+                    f"Try:\n"
+                    f"  • Retrying the request\n"
+                    f"  • Checking catalogd service health\n"
+                    f"  • Using --debug flag to see raw response"
+                )
+            else:
+                raise CatalogdError(f"Failed to query catalog data: {e}")
     
     def get_catalog_packages(self, catalog_name: str, auth_headers: Dict[str, str] = None) -> List[str]:
         """

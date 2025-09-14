@@ -450,9 +450,87 @@ class CatalogdClient:
             
             return text_body
             
+        except NetworkError as e:
+            # Handle network-specific errors with enhanced messages
+            error_str = str(e)
+            if "404" in error_str or "Not Found" in error_str:
+                available_catalogs = self._get_available_catalogs_hint()
+                raise CatalogdError(
+                    f"Catalog '{catalog_name}' not found on the cluster.\n"
+                    f"This could mean:\n"
+                    f"  • The catalog name is misspelled\n"
+                    f"  • The catalog is not installed on this cluster\n"
+                    f"  • The catalog is not in 'Serving' state\n\n"
+                    f"Available catalogs: {available_catalogs}\n\n"
+                    f"To list all available catalogs, run:\n"
+                    f"  python3 rbac-manager.py --list-catalogs"
+                )
+            elif "timeout" in error_str.lower() or "connection" in error_str.lower():
+                raise CatalogdError(
+                    f"Connection timeout or network error occurred.\n"
+                    f"This could mean:\n"
+                    f"  • The catalogd service is not responding\n"
+                    f"  • Network connectivity issues to the cluster\n"
+                    f"  • The port-forward connection was interrupted\n\n"
+                    f"Try:\n"
+                    f"  • Checking cluster connectivity: kubectl get pods -n openshift-catalogd\n"
+                    f"  • Retrying the command\n"
+                    f"  • Using --debug flag for more detailed logs\n\n"
+                    f"Original error: {e}"
+                )
+            elif "unauthorized" in error_str.lower() or "403" in error_str:
+                raise CatalogdError(
+                    f"Authentication or authorization error.\n"
+                    f"This could mean:\n"
+                    f"  • Your token has expired or is invalid\n"
+                    f"  • Insufficient permissions to access catalogd service\n"
+                    f"  • RBAC restrictions on the openshift-catalogd namespace\n\n"
+                    f"Try:\n"
+                    f"  • Refreshing your authentication token\n"
+                    f"  • Checking cluster access: oc whoami\n"
+                    f"  • Verifying permissions: oc auth can-i get pods -n openshift-catalogd\n\n"
+                    f"Original error: {e}"
+                )
+            else:
+                raise CatalogdError(f"Network error: {e}")
         except Exception as e:
             logger.error(f"Request failed: {e}")
-            raise CatalogdError(f"Request failed: {e}")
+            # Check for common error patterns
+            error_str = str(e)
+            if "connection refused" in error_str.lower():
+                raise CatalogdError(
+                    f"Connection refused to catalogd service.\n"
+                    f"This usually means:\n"
+                    f"  • The catalogd service is not running\n"
+                    f"  • Port-forward failed to establish\n"
+                    f"  • Firewall or network policy blocking connection\n\n"
+                    f"Try:\n"
+                    f"  • Checking catalogd status: kubectl get pods -n openshift-catalogd\n"
+                    f"  • Verifying service: kubectl get svc -n openshift-catalogd\n"
+                    f"  • Retrying with --debug for detailed logs"
+                )
+            elif "ssl" in error_str.lower() and "certificate" in error_str.lower():
+                raise CatalogdError(
+                    f"SSL certificate error occurred.\n"
+                    f"If using self-signed certificates, add --skip-tls flag.\n"
+                    f"Original error: {e}"
+                )
+            else:
+                raise CatalogdError(f"Request failed: {e}")
+    
+    def _get_available_catalogs_hint(self) -> str:
+        """Get a hint about available catalogs for error messages"""
+        try:
+            if self.core_api:
+                # Try to get a quick list of common catalog names
+                services = self.core_api.list_namespaced_service(namespace="openshift-catalogd")
+                if services.items:
+                    return "Use --list-catalogs to see all available catalogs"
+                else:
+                    return "No catalogd services found (catalogd may not be installed)"
+        except Exception:
+            pass
+        return "Use --list-catalogs to see available catalogs"
     
     def get_performance_stats(self) -> Dict[str, Any]:
         """

@@ -230,11 +230,22 @@ class CatalogdSession:
                     # Parse headers for optimization
                     content_length, is_chunked, is_compressed = self._parse_response_headers(headers_part)
                     
-                    # Validate status code
+                    # Validate status code and provide detailed error messages
                     status_line = headers_part.split('\r\n')[0]
                     status_code = int(status_line.split(' ')[1])
                     if status_code != 200:
-                        raise NetworkError(f"HTTP request failed with status {status_code}: {status_line}")
+                        if status_code == 404:
+                            raise NetworkError(f"HTTP 404 Not Found: {status_line}")
+                        elif status_code == 401:
+                            raise NetworkError(f"HTTP 401 Unauthorized: {status_line}")
+                        elif status_code == 403:
+                            raise NetworkError(f"HTTP 403 Forbidden: {status_line}")
+                        elif status_code == 500:
+                            raise NetworkError(f"HTTP 500 Internal Server Error: {status_line}")
+                        elif status_code == 503:
+                            raise NetworkError(f"HTTP 503 Service Unavailable: {status_line}")
+                        else:
+                            raise NetworkError(f"HTTP request failed with status {status_code}: {status_line}")
                 
                 # Check if we have complete response
                 if headers_complete:
@@ -261,9 +272,58 @@ class CatalogdSession:
             
         except ssl.SSLWantReadError:
             # Handle SSL read timeouts gracefully
-            raise NetworkError("SSL read timeout - connection may be unstable")
+            raise NetworkError(
+                "SSL read timeout - connection may be unstable.\n"
+                "This could indicate:\n"
+                "  • Network connectivity issues\n"
+                "  • Catalogd service overload\n"
+                "  • Firewall or proxy interference\n\n"
+                "Try retrying the request or checking network connectivity."
+            )
+        except ssl.SSLError as e:
+            raise NetworkError(
+                f"SSL connection error: {e}\n"
+                "This could mean:\n"
+                "  • Certificate validation issues\n"
+                "  • TLS version mismatch\n"
+                "  • Connection interrupted during SSL handshake\n\n"
+                "Try adding --skip-tls flag if using self-signed certificates."
+            )
+        except socket.timeout as e:
+            raise NetworkError(
+                f"Socket timeout occurred: {e}\n"
+                "This usually means:\n"
+                "  • The catalogd service is not responding\n"
+                "  • Network latency is too high\n"
+                "  • The request is taking longer than expected\n\n"
+                "Try retrying the request or checking service health."
+            )
+        except ConnectionResetError as e:
+            raise NetworkError(
+                f"Connection was reset by the server: {e}\n"
+                "This could indicate:\n"
+                "  • Catalogd service restarted during request\n"
+                "  • Network infrastructure reset the connection\n"
+                "  • Load balancer or proxy issues\n\n"
+                "Try retrying the request."
+            )
         except Exception as e:
-            raise NetworkError(f"Failed to read response: {e}")
+            # Check for common error patterns in the exception message
+            error_str = str(e)
+            if "broken pipe" in error_str.lower():
+                raise NetworkError(
+                    f"Connection broken during data transfer: {e}\n"
+                    "This usually means the connection was interrupted.\n"
+                    "Try retrying the request."
+                )
+            elif "connection aborted" in error_str.lower():
+                raise NetworkError(
+                    f"Connection aborted: {e}\n"
+                    "The connection was terminated unexpectedly.\n"
+                    "Try retrying the request."
+                )
+            else:
+                raise NetworkError(f"Failed to read response: {e}")
     
     def _parse_response_headers(self, headers_raw: str) -> Tuple[Optional[int], bool, Optional[str]]:
         """
