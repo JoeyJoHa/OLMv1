@@ -7,18 +7,36 @@ A comprehensive tool for managing operator bundle metadata and RBAC resources.
 __version__ = "1.0.0"
 __author__ = "OLMv1 Project"
 
-from .catalog_manager import CatalogManager
-from .bundle_processor import BundleProcessor
-from .yaml_generator import YAMLGenerator
-from .helm_generator import HelmGenerator
+# Core libraries
+from .core import OpenShiftAuth, ConfigManager
+from .core.exceptions import RBACManagerError, AuthenticationError, ConfigurationError
+
+# Catalogd libraries
+from .catalogd import CatalogdService, CatalogdClient, NDJSONParser
+
+# OPM libraries
+from .opm import BundleProcessor, YAMLGenerator, HelmGenerator
+
+# Main application and help
 from .help_manager import HelpManager
 from .main_app import RBACManager, main
 
 __all__ = [
-    'CatalogManager',
+    # Core
+    'OpenShiftAuth',
+    'ConfigManager',
+    'RBACManagerError',
+    'AuthenticationError', 
+    'ConfigurationError',
+    # Catalogd
+    'CatalogdService',
+    'CatalogdClient',
+    'NDJSONParser',
+    # OPM
     'BundleProcessor', 
     'YAMLGenerator',
     'HelmGenerator',
+    # Main
     'HelpManager',
     'RBACManager',
     'main'
