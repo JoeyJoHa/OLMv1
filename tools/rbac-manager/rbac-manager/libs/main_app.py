@@ -169,7 +169,7 @@ class RBACManager:
                     "data": packages,
                     "total": len(packages)
                 }
-                print(json.dumps(result, indent=2))
+                self._print_json_output(result)
                 return
             
             if not channel:
@@ -182,7 +182,7 @@ class RBACManager:
                     "data": channels,
                     "total": len(channels)
                 }
-                print(json.dumps(result, indent=2))
+                self._print_json_output(result)
                 return
             
             if not version:
@@ -196,7 +196,7 @@ class RBACManager:
                     "data": versions,
                     "total": len(versions)
                 }
-                print(json.dumps(result, indent=2))
+                self._print_json_output(result)
                 return
             
             # Get version metadata
@@ -209,7 +209,7 @@ class RBACManager:
                 "type": "metadata",
                 "data": metadata
             }
-            print(json.dumps(result, indent=2))
+            self._print_json_output(result)
             
         except KeyboardInterrupt:
             print("\nOperation cancelled.")
@@ -359,6 +359,32 @@ class RBACManager:
                 f.write(helm_values)
             
             print(f"Helm values saved to: {file_path}")
+    
+    def _print_json_output(self, data: Dict[str, Any]) -> None:
+        """
+        Print JSON output with proper handling for large data
+        
+        Args:
+            data: Dictionary to output as JSON
+        """
+        try:
+            # Use separators to make output more compact for large data
+            json_str = json.dumps(data, indent=2, separators=(',', ': '), ensure_ascii=False)
+            
+            # For very large output, we might want to use sys.stdout.write
+            # to avoid potential buffering issues with print()
+            if len(json_str) > 1000000:  # 1MB threshold
+                import sys
+                sys.stdout.write(json_str)
+                sys.stdout.write('\n')
+                sys.stdout.flush()
+            else:
+                print(json_str)
+                
+        except Exception as e:
+            logger.error(f"Failed to output JSON: {e}")
+            # Fallback to basic print
+            print(json.dumps(data, indent=2))
 
 
 # Command-line interface functions (keeping existing structure)

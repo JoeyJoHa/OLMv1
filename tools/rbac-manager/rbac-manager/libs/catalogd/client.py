@@ -17,6 +17,8 @@ from kubernetes.stream import portforward
 
 from ..core.exceptions import CatalogdError, NetworkError
 from ..core.utils import format_bytes
+from .cache import CatalogdCache
+from .session import CatalogdSession
 
 logger = logging.getLogger(__name__)
 
@@ -272,16 +274,24 @@ class PortForwardManager:
 class CatalogdClient:
     """Low-level client for communicating with catalogd service"""
     
-    def __init__(self, core_api: client.CoreV1Api, skip_tls: bool = False):
+    def __init__(self, core_api: client.CoreV1Api, skip_tls: bool = False, 
+                 enable_cache: bool = True, cache_ttl: int = 300):
         """
         Initialize catalogd client
         
         Args:
             core_api: Kubernetes CoreV1Api client
             skip_tls: Whether to skip TLS verification
+            enable_cache: Whether to enable response caching
+            cache_ttl: Cache time-to-live in seconds
         """
         self.core_api = core_api
         self.skip_tls = skip_tls
+        
+        # Performance enhancements
+        self.cache = CatalogdCache(ttl=cache_ttl) if enable_cache else None
+        self._session = None
+        self._current_catalog = None
     
     def discover_catalogd_service(self) -> Tuple[str, int, int, bool]:
         """
@@ -362,14 +372,15 @@ class CatalogdClient:
             
             logger.info("Setting up port-forward to catalogd service...")
             
-            # Find an available port
+            # Discover target service/port
+            service_name, service_port, target_port, is_https = self.discover_catalogd_service()
+            
+            # Find an available local port
+            import socket
             sock = socket.socket()
             sock.bind(('', 0))
             local_port = sock.getsockname()[1]
             sock.close()
-            
-            # Discover target service/port
-            service_name, service_port, target_port, is_https = self.discover_catalogd_service()
             
             # Create port-forward connection
             pf_manager = PortForwardManager(
@@ -383,6 +394,10 @@ class CatalogdClient:
             # Establish the port-forward
             pf_manager.start()
             
+            # Initialize session manager for performance
+            self._session = CatalogdSession(service_name, "openshift-catalogd", target_port)
+            self._session.set_port_forward(pf_manager._pf, pf_manager._socket)
+            
             logger.info(f"Port-forward established to service/{service_name} ({service_port}->{target_port}) on local port {local_port}")
             return pf_manager, local_port, is_https
             
@@ -392,14 +407,15 @@ class CatalogdClient:
             raise CatalogdError(error_message)
     
     def make_catalogd_request(self, url: str, port_forward_manager: PortForwardManager, 
-                             auth_headers: Dict[str, str] = None) -> str:
+                             auth_headers: Dict[str, str] = None, catalog_name: str = None) -> str:
         """
-        Make API request to catalogd service via port-forward
+        Make API request to catalogd service with caching and session management
         
         Args:
             url: API endpoint path
             port_forward_manager: Port-forward manager instance
             auth_headers: Authentication headers
+            catalog_name: Catalog name for cache key generation
             
         Returns:
             str: Raw response body
@@ -410,12 +426,56 @@ class CatalogdClient:
         if not port_forward_manager:
             raise CatalogdError("Port-forward is required for catalogd queries. Ensure port-forward is established and retry.")
         
+        # Check cache first
+        if self.cache and catalog_name:
+            cached_response = self.cache.get(catalog_name, url)
+            if cached_response:
+                logger.debug(f"Cache hit for {catalog_name}{url}")
+                return cached_response
+        
         headers = auth_headers or {}
         
         try:
-            logger.debug(f"Making request through native port-forward: {url}")
-            text_body = port_forward_manager.make_http_request(url, headers)
+            # Use session manager if available for better performance
+            if self._session:
+                logger.debug(f"Making request through session manager: {url}")
+                text_body = self._session.make_request(url, headers)
+            else:
+                logger.debug(f"Making request through port-forward: {url}")
+                text_body = port_forward_manager.make_http_request(url, headers)
+            
+            # Cache the response
+            if self.cache and catalog_name and text_body:
+                self.cache.put(catalog_name, url, text_body)
+            
             return text_body
+            
         except Exception as e:
             logger.error(f"Request failed: {e}")
             raise CatalogdError(f"Request failed: {e}")
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """
+        Get performance statistics for the client
+        
+        Returns:
+            Dict with performance statistics
+        """
+        stats = {
+            'cache_enabled': self.cache is not None,
+            'session_active': self._session is not None
+        }
+        
+        if self.cache:
+            stats['cache_stats'] = self.cache.get_cache_stats()
+        
+        if self._session:
+            stats['session_stats'] = self._session.get_session_stats()
+        
+        return stats
+    
+    def close(self) -> None:
+        """Close client and clean up resources"""
+        if self._session:
+            self._session.close()
+            self._session = None

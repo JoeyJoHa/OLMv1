@@ -190,7 +190,7 @@ class CatalogdService:
                 logger.info(f"Fetching catalog data for: {catalog_name}")
                 logger.debug(f"Making request to: {url}")
                 
-                response_body = self.client.make_catalogd_request(url, port_forward_manager, auth_headers)
+                response_body = self.client.make_catalogd_request(url, port_forward_manager, auth_headers, catalog_name)
                 
                 # Parse NDJSON response
                 items = self.parser.parse_stream(response_body)
