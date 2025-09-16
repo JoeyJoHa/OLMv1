@@ -38,54 +38,13 @@ class HelmValuesGenerator(BaseGenerator):
         values['permissions'] = permissions
         
         # Generate header comment
-        header = self._generate_header_comment(operator_name, package_name)
+        header = self._generate_security_header_comment(operator_name, package_name, 'helm')
         
         # Convert to YAML with flow style for arrays
         yaml_content = self._dump_yaml_with_flow_arrays(values)
         
         return f"{header}\n{yaml_content}"
     
-    def _generate_header_comment(self, operator_name: str, package_name: str) -> str:
-        """Generate header comment for values file with security notice"""
-        formatted_name = operator_name.replace('-', '-').title()
-        return f"""# SECURITY NOTICE: Post-Installation RBAC Hardening Required
-# =========================================================
-# This values.yaml contains installer permissions with INTENTIONALLY BROAD SCOPE
-# for successful initial deployment. The installer ClusterRole uses wildcard
-# permissions (no resourceNames specified) which defaults to '*' behavior.
-#
-# CRITICAL: After successful OLMv1 installation, you MUST harden these permissions:
-#
-# Step 1: Inspect Created Resources
-# ---------------------------------
-# Run these commands to see what OLMv1 actually created:
-#   kubectl get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
-#   kubectl get clusterextensions
-#
-# Step 2: Update Installer Permissions  
-# ------------------------------------
-# In this values.yaml, look for rules with 'resourceNames: []' (empty arrays).
-# These are the rules that need hardening after the operator is installed:
-#
-# For ClusterRole/ClusterRoleBinding management rules:
-#   resourceNames: [] # After install, add: ["<packageName>.<hash1>", "<packageName>.<hash2>"]
-#   Example: ['{package_name}.a1b2c3d4', '{package_name}.e5f6g7h8']
-#   Command: (oc or kubectl) get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
-#
-# For ClusterExtension finalizer rules:
-#   resourceNames: [] # After install, add: ["<your-chosen-clusterextension-name>"]
-#   Example: ['my-argocd-operator'] or ['company-gitops']
-#   Command: (oc or kubectl) get clusterextensions
-#
-# Step 3: Redeploy with Hardened Permissions
-# ------------------------------------------
-#   helm upgrade <release-name> <chart-path> -f <this-values.yaml>
-#
-# =========================================================
-#
-# {formatted_name} Operator specific values for the generic operator-olm-v1 Helm chart
-# This file demonstrates how to configure the generic chart for the {package_name} operator
-# Generated automatically from bundle metadata"""
     
     def _generate_permissions_structure(self, bundle_metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Generate permissions structure for Helm values"""

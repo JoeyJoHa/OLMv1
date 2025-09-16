@@ -80,7 +80,12 @@ class YAMLManifestGenerator(BaseGenerator):
     
     def _generate_cluster_roles(self, bundle_metadata: Dict[str, Any], 
                               operator_name: str) -> str:
-        """Generate ClusterRole YAML manifests"""
+        """Generate ClusterRole YAML manifests with security header"""
+        package_name = bundle_metadata.get('package_name', operator_name)
+        
+        # Generate security header comment for YAML manifests
+        header = self._generate_security_header_comment(operator_name, package_name, 'yaml')
+        
         manifests = []
         
         # Operator ClusterRole
@@ -107,7 +112,9 @@ class YAMLManifestGenerator(BaseGenerator):
         for manifest in manifests:
             yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
         
-        return '\n---\n'.join(yaml_parts)
+        yaml_content = '\n---\n'.join(yaml_parts)
+        
+        return f"{header}\n{yaml_content}"
     
     def _generate_cluster_role_bindings(self, operator_name: str, namespace: str) -> str:
         """Generate ClusterRoleBinding YAML manifests"""

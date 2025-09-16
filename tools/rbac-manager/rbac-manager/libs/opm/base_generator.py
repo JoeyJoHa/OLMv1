@@ -408,6 +408,112 @@ class BaseGenerator(ABC):
                 processed_lines.append(line)
         
         return '\n'.join(processed_lines)
+
+    def _generate_security_header_comment(self, operator_name: str, package_name: str, 
+                                        output_type: str = 'helm') -> str:
+        """
+        Generate security hardening header comment for both Helm and YAML outputs
+        
+        Args:
+            operator_name: Name of the operator
+            package_name: Package name
+            output_type: 'helm' for Helm values, 'yaml' for YAML manifests
+            
+        Returns:
+            Formatted header comment with security guidance
+        """
+        formatted_name = operator_name.replace('-', '-').title()
+        
+        if output_type == 'helm':
+            return self._generate_helm_header_comment(formatted_name, package_name)
+        elif output_type == 'yaml':
+            return self._generate_yaml_header_comment(formatted_name, package_name)
+        else:
+            raise ValueError(f"Unsupported output_type: {output_type}")
+    
+    def _generate_helm_header_comment(self, formatted_name: str, package_name: str) -> str:
+        """Generate header comment for Helm values file"""
+        return f"""# SECURITY NOTICE: Post-Installation RBAC Hardening Required
+# =========================================================
+# This values.yaml contains installer permissions with INTENTIONALLY BROAD SCOPE
+# for successful initial deployment. The installer ClusterRole uses wildcard
+# permissions (no resourceNames specified) which defaults to '*' behavior.
+#
+# CRITICAL: After successful OLMv1 installation, you MUST harden these permissions:
+#
+# Step 1: Inspect Created Resources
+# ---------------------------------
+# Run these commands to see what OLMv1 actually created:
+#   kubectl get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#   kubectl get clusterextensions
+#
+# Step 2: Update Installer Permissions  
+# ------------------------------------
+# In this values.yaml, look for rules with 'resourceNames: []' (empty arrays).
+# These are the rules that need hardening after the operator is installed:
+#
+# For ClusterRole/ClusterRoleBinding management rules:
+#   resourceNames: [] # After install, add: ["<packageName>.<hash1>", "<packageName>.<hash2>"]
+#   Example: ['{package_name}.a1b2c3d4', '{package_name}.e5f6g7h8']
+#   Command: (oc or kubectl) get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#
+# For ClusterExtension finalizer rules:
+#   resourceNames: [] # After install, add: ["<your-chosen-clusterextension-name>"]
+#   Example: ['my-argocd-operator'] or ['company-gitops']
+#   Command: (oc or kubectl) get clusterextensions
+#
+# Step 3: Redeploy with Hardened Permissions
+# ------------------------------------------
+#   helm upgrade <release-name> <chart-path> -f <this-values.yaml>
+#
+# =========================================================
+#
+# {formatted_name} Operator specific values for the generic operator-olm-v1 Helm chart
+# This file demonstrates how to configure the generic chart for the {package_name} operator
+# Generated automatically from bundle metadata"""
+
+    def _generate_yaml_header_comment(self, formatted_name: str, package_name: str) -> str:
+        """Generate header comment for YAML manifests"""
+        return f"""# SECURITY NOTICE: Post-Installation RBAC Hardening Required
+# =========================================================
+# These YAML manifests contain installer permissions with INTENTIONALLY BROAD SCOPE
+# for successful initial deployment. The installer ClusterRole uses wildcard
+# permissions (no resourceNames specified) which defaults to '*' behavior.
+#
+# CRITICAL: After successful OLMv1 installation, you MUST harden these permissions:
+#
+# Step 1: Inspect Created Resources
+# ---------------------------------
+# Run these commands to see what OLMv1 actually created:
+#   kubectl get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#   kubectl get clusterextensions
+#
+# Step 2: Edit and Harden ClusterRole Permissions
+# ------------------------------------------------
+# Look for ClusterRole rules with empty resourceNames arrays in the manifests below.
+# These are the rules that need hardening after the operator is installed:
+#
+# For ClusterRole/ClusterRoleBinding management rules:
+#   Edit this file and replace empty resourceNames: [] with actual resource names:
+#   resourceNames: ["{package_name}.a1b2c3d4", "{package_name}.e5f6g7h8"]
+#   Command to find actual names: oc get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#
+# For ClusterExtension finalizer rules:
+#   Edit this file and replace empty resourceNames: [] with your ClusterExtension name:
+#   resourceNames: ["my-argocd-operator"]
+#   Command to find actual names: oc get clusterextensions
+#
+# Step 3: Apply Hardened Permissions
+# -----------------------------------
+#   oc apply -f <this-updated-yaml-file>
+#   # or
+#   kubectl apply -f <this-updated-yaml-file>
+#
+# =========================================================
+#
+# {formatted_name} Operator RBAC manifests for OLMv1 installation
+# Package: {package_name}
+# Generated automatically from bundle metadata"""
     
     @abstractmethod
     def generate(self, bundle_metadata: Dict[str, Any], **kwargs) -> str:
