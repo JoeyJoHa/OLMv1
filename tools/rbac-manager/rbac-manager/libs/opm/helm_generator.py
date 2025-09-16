@@ -14,7 +14,7 @@ class HelmValuesGenerator(BaseGenerator):
     """Generates Helm values.yaml content from bundle metadata"""
     
     def generate(self, bundle_metadata: Dict[str, Any], 
-                operator_name: Optional[str] = None, least_privileges: bool = False) -> str:
+                operator_name: Optional[str] = None) -> str:
         """
         Generate Helm values.yaml content from bundle metadata
         
@@ -34,11 +34,11 @@ class HelmValuesGenerator(BaseGenerator):
         values = HelmValueTemplates.base_values_template(operator_name, version, package_name)
         
         # Generate permissions structure
-        permissions = self._generate_permissions_structure(bundle_metadata, least_privileges)
+        permissions = self._generate_permissions_structure(bundle_metadata)
         values['permissions'] = permissions
         
         # Generate header comment
-        header = self._generate_security_header_comment(operator_name, package_name, 'helm', least_privileges)
+        header = self._generate_security_header_comment(operator_name, package_name, 'helm')
         
         # Convert to YAML with flow style for arrays
         yaml_content = self._dump_yaml_with_flow_arrays(values)
@@ -46,7 +46,7 @@ class HelmValuesGenerator(BaseGenerator):
         return f"{header}\n{yaml_content}"
     
     
-    def _generate_permissions_structure(self, bundle_metadata: Dict[str, Any], least_privileges: bool = False) -> Dict[str, Any]:
+    def _generate_permissions_structure(self, bundle_metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Generate permissions structure for Helm values"""
         permissions = {
             'clusterRoles': [],
@@ -64,8 +64,6 @@ class HelmValuesGenerator(BaseGenerator):
             
             # Generate operator ClusterRole (management permissions)
             operator_rules = self._generate_operator_rules(bundle_metadata)
-            if least_privileges:
-                operator_rules = self._apply_least_privileges(operator_rules)
             formatted_operator_rules = self._format_rules_for_helm(operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
@@ -78,8 +76,6 @@ class HelmValuesGenerator(BaseGenerator):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
             if cluster_grantor_rules:
-                if least_privileges:
-                    cluster_grantor_rules = self._apply_least_privileges(cluster_grantor_rules)
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
                     '', 'grantor', self._format_rules_for_helm(cluster_grantor_rules), True
                 )
@@ -88,8 +84,6 @@ class HelmValuesGenerator(BaseGenerator):
             # Generate grantor Role ONLY (permissions from CSV) - no operator Role
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
             if namespace_rules:
-                if least_privileges:
-                    namespace_rules = self._apply_least_privileges(namespace_rules)
                 grantor_role = PermissionStructure.create_role_structure(
                     '', 'grantor', self._format_rules_for_helm(namespace_rules), True
                 )
@@ -102,8 +96,6 @@ class HelmValuesGenerator(BaseGenerator):
             
             # Generate operator ClusterRole
             operator_rules = self._generate_operator_rules(bundle_metadata)
-            if least_privileges:
-                operator_rules = self._apply_least_privileges(operator_rules)
             formatted_operator_rules = self._format_rules_for_helm(operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
@@ -116,8 +108,6 @@ class HelmValuesGenerator(BaseGenerator):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
             if cluster_grantor_rules:
-                if least_privileges:
-                    cluster_grantor_rules = self._apply_least_privileges(cluster_grantor_rules)
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
                     '', 'grantor', self._format_rules_for_helm(cluster_grantor_rules), True
                 )
@@ -132,8 +122,6 @@ class HelmValuesGenerator(BaseGenerator):
             
             # Generate operator ClusterRole (management permissions)
             operator_rules = self._generate_operator_rules(bundle_metadata)
-            if least_privileges:
-                operator_rules = self._apply_least_privileges(operator_rules)
             formatted_operator_rules = self._format_rules_for_helm(operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
@@ -143,8 +131,6 @@ class HelmValuesGenerator(BaseGenerator):
             # Generate grantor ClusterRole (treat permissions as cluster-scoped)
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
             if namespace_rules:
-                if least_privileges:
-                    namespace_rules = self._apply_least_privileges(namespace_rules)
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
                     '', 'grantor', self._format_rules_for_helm(namespace_rules), True
                 )
@@ -155,8 +141,6 @@ class HelmValuesGenerator(BaseGenerator):
             # Operator has no permissions defined (unusual case)
             # Generate minimal operator ClusterRole
             operator_rules = self._generate_operator_rules(bundle_metadata)
-            if least_privileges:
-                operator_rules = self._apply_least_privileges(operator_rules)
             formatted_operator_rules = self._format_rules_for_helm(operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True

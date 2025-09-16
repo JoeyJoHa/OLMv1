@@ -232,8 +232,7 @@ class RBACManager:
             print(f"Error: {e}", file=sys.stderr)
     
     def extract_bundle(self, image: str, namespace: str = "default", registry_token: str = None,
-                      helm: bool = False, output_dir: str = None, least_privileges: bool = False,
-                      stdout: bool = False) -> None:
+                      helm: bool = False, output_dir: str = None, stdout: bool = False) -> None:
         """
         Extract RBAC from operator bundle
         
@@ -243,7 +242,6 @@ class RBACManager:
             registry_token: Registry authentication token (optional)
             helm: Generate Helm values
             output_dir: Output directory (optional)
-            least_privileges: Apply least privilege principles
             stdout: Output to stdout instead of files
         """
         try:
@@ -259,9 +257,9 @@ class RBACManager:
             
             # Generate outputs based on flags
             if helm:
-                self._generate_helm_output(metadata, output_dir, stdout, least_privileges)
+                self._generate_helm_output(metadata, output_dir, stdout)
             else:
-                self._generate_yaml_output(metadata, namespace, output_dir, stdout, least_privileges)
+                self._generate_yaml_output(metadata, namespace, output_dir, stdout)
                 
         except Exception as e:
             logger.error(f"Error extracting bundle: {e}")
@@ -313,13 +311,13 @@ class RBACManager:
             logger.error(f"Failed to select catalog interactively: {e}")
             return None
     
-    def _generate_yaml_output(self, metadata: Dict[str, Any], namespace: str, output_dir: str, stdout: bool, least_privileges: bool = False) -> None:
+    def _generate_yaml_output(self, metadata: Dict[str, Any], namespace: str, output_dir: str, stdout: bool) -> None:
         """Generate YAML manifest output"""
         package_name = metadata.get('package_name', 'my-operator')
         
         try:
             # Generate manifests using the bundle processor
-            manifests = self.bundle_processor.generate_yaml_manifests(metadata, namespace, package_name, least_privileges)
+            manifests = self.bundle_processor.generate_yaml_manifests(metadata, namespace, package_name)
             
             # Use unified output method
             self._save_output_files(manifests, package_name, output_dir, stdout, "YAML manifests")
@@ -385,12 +383,12 @@ class RBACManager:
             
             print(f"{content_type} generated successfully")
 
-    def _generate_helm_output(self, metadata: Dict[str, Any], output_dir: str, stdout: bool, least_privileges: bool = False) -> None:
+    def _generate_helm_output(self, metadata: Dict[str, Any], output_dir: str, stdout: bool) -> None:
         """Generate Helm values output"""
         package_name = metadata.get('package_name', 'my-operator')
         
         # Generate Helm values
-        helm_values = self.bundle_processor.generate_helm_values(metadata, package_name, least_privileges)
+        helm_values = self.bundle_processor.generate_helm_values(metadata, package_name)
         
         # Use unified output method (single file, so use package name as key)
         content_dict = {package_name: helm_values}
@@ -484,7 +482,6 @@ Use --help with specific commands for detailed help.
     parser.add_argument('--registry-token', help='Registry authentication token')
     parser.add_argument('--helm', action='store_true', help='Generate Helm values')
     parser.add_argument('--output', help='Output directory')
-    parser.add_argument('--least-privileges', action='store_true', help='Apply least privilege principles')
     
     # Configuration
     parser.add_argument('--config', help='Configuration file path')
@@ -615,7 +612,6 @@ def main():
                 registry_token = args.registry_token
                 helm = args.helm
                 output = args.output
-                least_privileges = args.least_privileges
                 
                 if config and 'opm' in config:
                     opm_config = config['opm']
@@ -624,7 +620,6 @@ def main():
                     registry_token = registry_token or opm_config.get('registry_token')
                     helm = helm or opm_config.get('helm', False)
                     output = output or opm_config.get('output')
-                    least_privileges = least_privileges or opm_config.get('least_privileges', False)
                 
                 if not image:
                     print("Error: --image is required for OPM operations")
@@ -636,7 +631,6 @@ def main():
                     registry_token=registry_token,
                     helm=helm,
                     output_dir=output,
-                    least_privileges=least_privileges,
                     stdout=not output
                 )
             

@@ -418,7 +418,7 @@ class BaseGenerator(ABC):
         return '\n'.join(processed_lines)
 
     def _generate_security_header_comment(self, operator_name: str, package_name: str, 
-                                        output_type: str = 'helm', least_privileges: bool = False) -> str:
+                                        output_type: str = 'helm') -> str:
         """
         Generate security hardening header comment for both Helm and YAML outputs
         
@@ -433,36 +433,16 @@ class BaseGenerator(ABC):
         formatted_name = operator_name.replace('-', '-').title()
         
         if output_type == 'helm':
-            return self._generate_helm_header_comment(formatted_name, package_name, least_privileges)
+            return self._generate_helm_header_comment(formatted_name, package_name)
         elif output_type == 'yaml':
-            return self._generate_yaml_header_comment(formatted_name, package_name, least_privileges)
+            return self._generate_yaml_header_comment(formatted_name, package_name)
         else:
             raise ValueError(f"Unsupported output_type: {output_type}")
     
-    def _generate_helm_header_comment(self, formatted_name: str, package_name: str, least_privileges: bool = False) -> str:
+    def _generate_helm_header_comment(self, formatted_name: str, package_name: str) -> str:
         """Generate header comment for Helm values file"""
-        least_privileges_warning = ""
-        if least_privileges:
-            least_privileges_warning = """
-# ⚠️  LEAST PRIVILEGES MODE ACTIVE
-# ===============================
-# This configuration was generated with --least-privileges flag, which replaces
-# wildcard verbs (verbs: ['*']) with specific extracted verbs from the operator bundle.
-# 
-# CAUTION: This provides better security but may cause operator deployment failures
-# if the bundle metadata is incomplete or the operator requires additional permissions
-# not documented in the bundle. If the operator fails to deploy or function correctly:
-#
-# 1. Try without --least-privileges first to establish a working baseline
-# 2. Compare the differences to identify missing permissions
-# 3. Manually add any missing verbs that the operator requires
-# 4. Report missing permissions to the operator maintainers
-#
-# ===============================
-"""
-        
         return f"""# SECURITY NOTICE: Post-Installation RBAC Hardening Required
-# ========================================================={least_privileges_warning}
+# =========================================================
 # This values.yaml contains installer permissions with INTENTIONALLY BROAD SCOPE
 # for successful initial deployment. The installer ClusterRole uses wildcard
 # permissions (no resourceNames specified) which defaults to '*' behavior.
@@ -500,30 +480,10 @@ class BaseGenerator(ABC):
 # This file demonstrates how to configure the generic chart for the {package_name} operator
 # Generated automatically from bundle metadata"""
 
-    def _generate_yaml_header_comment(self, formatted_name: str, package_name: str, least_privileges: bool = False) -> str:
+    def _generate_yaml_header_comment(self, formatted_name: str, package_name: str) -> str:
         """Generate header comment for YAML manifests"""
-        least_privileges_warning = ""
-        if least_privileges:
-            least_privileges_warning = """
-# ⚠️  LEAST PRIVILEGES MODE ACTIVE
-# ===============================
-# These manifests were generated with --least-privileges flag, which replaces
-# wildcard verbs (verbs: ['*']) with specific extracted verbs from the operator bundle.
-# 
-# CAUTION: This provides better security but may cause operator deployment failures
-# if the bundle metadata is incomplete or the operator requires additional permissions
-# not documented in the bundle. If the operator fails to deploy or function correctly:
-#
-# 1. Try without --least-privileges first to establish a working baseline
-# 2. Compare the differences to identify missing permissions
-# 3. Manually edit the ClusterRole rules to add any missing verbs
-# 4. Report missing permissions to the operator maintainers
-#
-# ===============================
-"""
-        
         return f"""# SECURITY NOTICE: Post-Installation RBAC Hardening Required
-# ========================================================={least_privileges_warning}
+# =========================================================
 # These YAML manifests contain installer permissions with INTENTIONALLY BROAD SCOPE
 # for successful initial deployment. The installer ClusterRole uses wildcard
 # permissions (no resourceNames specified) which defaults to '*' behavior.
@@ -563,117 +523,7 @@ class BaseGenerator(ABC):
 # Package: {package_name}
 # Generated automatically from bundle metadata"""
     
-    def _apply_least_privileges(self, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Apply least privilege principles by replacing wildcard verbs with actual extracted verbs
-        
-        Args:
-            rules: List of RBAC rules
-            
-        Returns:
-            List of rules with least privilege verbs applied
-        """
-        processed_rules = []
-        
-        for rule in rules:
-            processed_rule = rule.copy()
-            verbs = rule.get('verbs', [])
-            
-            # Replace wildcard verbs with specific verbs
-            if verbs == [KubernetesConstants.WILDCARD_VERB]:
-                # Extract specific verbs based on rule context
-                api_groups = rule.get('apiGroups', [])
-                resources = rule.get('resources', [])
-                
-                # Determine appropriate verbs based on resource types
-                specific_verbs = self._determine_specific_verbs(api_groups, resources)
-                processed_rule['verbs'] = specific_verbs
-            
-            processed_rules.append(processed_rule)
-        
-        return processed_rules
     
-    def _determine_specific_verbs(self, api_groups: List[str], resources: List[str]) -> List[str]:
-        """
-        Determine specific verbs based on API groups and resources
-        
-        Args:
-            api_groups: List of API groups
-            resources: List of resources
-            
-        Returns:
-            List of specific verbs
-        """
-        # Default comprehensive verbs for most resources
-        default_verbs = [
-            KubernetesConstants.GET_VERB,
-            KubernetesConstants.LIST_VERB, 
-            KubernetesConstants.WATCH_VERB,
-            KubernetesConstants.CREATE_VERB,
-            KubernetesConstants.UPDATE_VERB,
-            KubernetesConstants.PATCH_VERB,
-            KubernetesConstants.DELETE_VERB
-        ]
-        
-        # Resource-specific verb mappings
-        resource_verb_map = {
-            # Read-only resources
-            'events': [
-                KubernetesConstants.GET_VERB, 
-                KubernetesConstants.LIST_VERB, 
-                KubernetesConstants.WATCH_VERB,
-                KubernetesConstants.CREATE_VERB, 
-                KubernetesConstants.PATCH_VERB
-            ],  # Events are typically created/patched, not updated/deleted
-            'pods/log': [KubernetesConstants.GET_VERB],  # Pod logs are read-only
-            'pods/status': [
-                KubernetesConstants.GET_VERB, 
-                KubernetesConstants.PATCH_VERB
-            ],  # Status is typically get/patch only
-            'tokenreviews': [KubernetesConstants.CREATE_VERB],  # TokenReviews are create-only
-            'subjectaccessreviews': [KubernetesConstants.CREATE_VERB],  # SubjectAccessReviews are create-only
-            
-            # Special resources that need limited verbs
-            'clusterversions': [
-                KubernetesConstants.GET_VERB, 
-                KubernetesConstants.LIST_VERB, 
-                KubernetesConstants.WATCH_VERB
-            ],  # Cluster versions are typically read-only
-            'nodes': [
-                KubernetesConstants.GET_VERB, 
-                KubernetesConstants.LIST_VERB, 
-                KubernetesConstants.WATCH_VERB
-            ],  # Nodes are typically read-only for operators
-        }
-        
-        # Check for specific resource patterns
-        for resource in resources:
-            # Handle subresources (e.g., "deployments/finalizers", "pods/log")
-            base_resource = resource.split('/')[0] if '/' in resource else resource
-            
-            # Check if we have a specific mapping
-            if resource in resource_verb_map:
-                return resource_verb_map[resource]
-            elif base_resource in resource_verb_map:
-                return resource_verb_map[base_resource]
-        
-        # API group specific logic
-        for api_group in api_groups:
-            if api_group == 'authentication.k8s.io':
-                return [KubernetesConstants.CREATE_VERB]  # Authentication APIs are typically create-only
-            elif api_group == 'authorization.k8s.io':
-                return [KubernetesConstants.CREATE_VERB]  # Authorization APIs are typically create-only
-        
-        # Check for finalizer resources (typically only need update)
-        if any('finalizers' in resource for resource in resources):
-            return [KubernetesConstants.UPDATE_VERB]
-        
-        # Check for status resources (typically get/patch)
-        if any('status' in resource for resource in resources):
-            return [KubernetesConstants.GET_VERB, KubernetesConstants.PATCH_VERB]
-        
-        # Default to comprehensive verbs for most operational resources
-        return default_verbs
 
     @abstractmethod
     def generate(self, bundle_metadata: Dict[str, Any], **kwargs) -> str:
