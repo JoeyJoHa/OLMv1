@@ -76,7 +76,7 @@ class YAMLManifestGenerator(BaseGenerator):
             sa_name, namespace, operator_name
         )
         
-        return yaml.dump(sa_manifest, default_flow_style=False, sort_keys=False)
+        return self._dump_yaml_with_flow_arrays(sa_manifest)
     
     def _generate_cluster_roles(self, bundle_metadata: Dict[str, Any], 
                               operator_name: str) -> str:
@@ -102,10 +102,10 @@ class YAMLManifestGenerator(BaseGenerator):
             )
             manifests.append(grantor_cr)
         
-        # Convert to YAML with document separator
+        # Convert to YAML with document separator using shared formatting
         yaml_parts = []
         for manifest in manifests:
-            yaml_parts.append(yaml.dump(manifest, default_flow_style=False, sort_keys=False))
+            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
         
         return '\n---\n'.join(yaml_parts)
     
@@ -132,10 +132,10 @@ class YAMLManifestGenerator(BaseGenerator):
         )
         manifests.append(grantor_crb)
         
-        # Convert to YAML with document separator
+        # Convert to YAML with document separator using shared formatting
         yaml_parts = []
         for manifest in manifests:
-            yaml_parts.append(yaml.dump(manifest, default_flow_style=False, sort_keys=False))
+            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
         
         return '\n---\n'.join(yaml_parts)
     
@@ -154,10 +154,10 @@ class YAMLManifestGenerator(BaseGenerator):
             )
             manifests.append(role_manifest)
         
-        # Convert to YAML with document separator
+        # Convert to YAML with document separator using shared formatting
         yaml_parts = []
         for manifest in manifests:
-            yaml_parts.append(yaml.dump(manifest, default_flow_style=False, sort_keys=False))
+            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
         
         return '\n---\n'.join(yaml_parts)
     
@@ -175,9 +175,9 @@ class YAMLManifestGenerator(BaseGenerator):
         )
         manifests.append(role_binding)
         
-        # Convert to YAML with document separator
+        # Convert to YAML with document separator using shared formatting
         yaml_parts = []
         for manifest in manifests:
-            yaml_parts.append(yaml.dump(manifest, default_flow_style=False, sort_keys=False))
+            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
         
         return '\n---\n'.join(yaml_parts)

@@ -6,6 +6,7 @@ YAML manifests and Helm values from OPM bundle metadata.
 """
 
 import logging
+import yaml
 from typing import Dict, List, Any, Optional, NamedTuple
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -267,6 +268,100 @@ class BaseGenerator(ABC):
             rules.extend(perm_rules)
         
         return rules
+    
+    def _dump_yaml_with_flow_arrays(self, data: Dict[str, Any]) -> str:
+        """
+        Dump YAML with mixed block/flow style for better readability
+        
+        Args:
+            data: Data to format as YAML
+            
+        Returns:
+            YAML string with flow style arrays for RBAC rules
+        """
+        # Create a custom YAML dumper that uses flow style for specific arrays
+        class FlowArrayDumper(yaml.SafeDumper):
+            pass
+        
+        def represent_list(dumper, data):
+            # Check if we're in a context where we want flow style
+            # Only use flow style for arrays that contain only strings (not mixed types)
+            if data and all(isinstance(item, str) for item in data):
+                # Check if this looks like an RBAC array by examining patterns
+                sample_str = ' '.join(data).lower()
+                
+                # Enhanced patterns for consistent RBAC array detection
+                is_rbac_array = (
+                    # Standard RBAC verbs (most common)
+                    any(verb in sample_str for verb in [
+                        'get', 'list', 'watch', 'create', 'update', 'patch', 'delete'
+                    ]) or
+                    # Standard Kubernetes API groups
+                    any(group in sample_str for group in [
+                        'rbac.authorization.k8s.io', 'apiextensions.k8s.io', 'apps', 
+                        'batch', 'autoscaling', 'networking.k8s.io', 'policy',
+                        'storage.k8s.io', 'coordination.k8s.io', 'authentication.k8s.io',
+                        'authorization.k8s.io'
+                    ]) or
+                    # OLM and OpenShift specific groups
+                    any(group in sample_str for group in [
+                        'olm.operatorframework.io', 'route.openshift.io',
+                        'security.openshift.io', 'config.openshift.io',
+                        'apps.openshift.io', 'oauth.openshift.io',
+                        'template.openshift.io', 'monitoring.coreos.com'
+                    ]) or
+                    # Custom API groups (contain dots) - broader detection
+                    any('.' in item and len(item.split('.')) >= 2 for item in data) or
+                    # Standard Kubernetes resources
+                    any(resource in sample_str for resource in [
+                        'clusterroles', 'clusterrolebindings', 'roles', 'rolebindings',
+                        'customresourcedefinitions', 'deployments', 'pods', 'services',
+                        'secrets', 'configmaps', 'serviceaccounts', 'namespaces',
+                        'persistentvolumeclaims', 'events', 'finalizers', 'ingresses',
+                        'daemonsets', 'replicasets', 'statefulsets', 'cronjobs', 'jobs',
+                        'horizontalpodautoscalers', 'leases', 'endpoints', 'routes',
+                        'oauthclients', 'templateconfigs', 'templateinstances',
+                        'templates', 'prometheuses', 'servicemonitors', 'deploymentconfigs',
+                        'applications', 'appprojects', 'clusterversions'
+                    ]) or
+                    # Resource names that look like Kubernetes resources (contain dots or hyphens)
+                    any(('.' in item or '-' in item) and len(item) > 3 for item in data) or
+                    # Special catch-all for single wildcard
+                    data == ['*']
+                )
+                
+                # Use flow style for RBAC arrays, regardless of length
+                if is_rbac_array:
+                    return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+            
+            # Default to block style for other arrays
+            return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+        
+        FlowArrayDumper.add_representer(list, represent_list)
+        
+        # Dump with custom representer
+        yaml_output = yaml.dump(data, Dumper=FlowArrayDumper, default_flow_style=False, sort_keys=False)
+        
+        # Post-process to add comments for role types (for Helm values)
+        lines = yaml_output.split('\n')
+        processed_lines = []
+        
+        for i, line in enumerate(lines):
+            # Look for role type indicators to add helpful comments
+            if '- name:' in line and i+1 < len(lines) and 'type:' in lines[i+1]:
+                role_type = lines[i+1].split('type: ')[1] if 'type: ' in lines[i+1] else ''
+                if role_type == 'operator':
+                    processed_lines.append(line)
+                    processed_lines.append('    # Operator management permissions (CRDs, RBAC, finalizers)')
+                elif role_type == 'grantor':
+                    processed_lines.append(line)
+                    processed_lines.append('    # Application-specific permissions from bundle metadata')
+                else:
+                    processed_lines.append(line)
+            else:
+                processed_lines.append(line)
+        
+        return '\n'.join(processed_lines)
     
     @abstractmethod
     def generate(self, bundle_metadata: Dict[str, Any], **kwargs) -> str:
