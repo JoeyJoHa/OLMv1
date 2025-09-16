@@ -12,7 +12,9 @@ from typing import Dict, List, Any, Optional
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 
-from ..core.exceptions import CatalogdError, AuthenticationError
+from ..core.exceptions import CatalogdError
+from ..core.utils import handle_ssl_error
+from ..core.constants import KubernetesConstants
 from ..core.utils import is_output_piped
 from .client import CatalogdClient
 from .parser import NDJSONParser
@@ -59,7 +61,7 @@ class CatalogdService:
         try:
             logger.info("Fetching ClusterCatalogs from the cluster...")
             cluster_catalogs = self.custom_api.list_cluster_custom_object(
-                group="olm.operatorframework.io",
+                group=KubernetesConstants.OLM_API_GROUP,
                 version="v1",
                 plural="clustercatalogs"
             )
@@ -69,32 +71,16 @@ class CatalogdService:
             
         except ApiException as e:
             error_msg = str(e).lower()
-            if any(keyword in error_msg for keyword in ["certificate verify failed", "ssl", "certificate", "tls", "handshake"]):
-                raise CatalogdError(
-                    "SSL certificate verification failed. This cluster appears to use self-signed certificates. "
-                    "Please use the --skip-tls flag to bypass certificate verification."
-                )
             if "unauthorized" in error_msg or "401" in error_msg:
-                raise AuthenticationError(
+                raise CatalogdError(
                     "Unauthorized (401). Verify that your token is valid and has permissions. "
                     "If passing via shell, ensure correct syntax (zsh/bash: $TOKEN, PowerShell: $env:TOKEN)."
                 )
-            logger.error(f"Failed to list ClusterCatalogs: {e}")
-            raise CatalogdError(f"Failed to list ClusterCatalogs: {e}")
+            # Use centralized SSL error handler for other errors
+            handle_ssl_error(e, CatalogdError)
         except Exception as e:
-            error_msg = str(e).lower()
-            if any(keyword in error_msg for keyword in ["certificate verify failed", "ssl", "certificate", "tls", "handshake", "verify failed"]):
-                raise CatalogdError(
-                    "SSL certificate verification failed. This cluster appears to use self-signed certificates. "
-                    "Please use the --skip-tls flag to bypass certificate verification."
-                )
-            if "unauthorized" in error_msg or "401" in error_msg:
-                raise AuthenticationError(
-                    "Unauthorized (401). Verify that your token is valid and has permissions. "
-                    "If passing via shell, ensure correct syntax (zsh/bash: $TOKEN, PowerShell: $env:TOKEN)."
-                )
-            logger.error(f"Failed to list ClusterCatalogs: {e}")
-            raise CatalogdError(f"Failed to list ClusterCatalogs: {e}")
+            # Use centralized SSL error handler
+            handle_ssl_error(e, CatalogdError)
     
     def display_catalogs_enhanced(self) -> int:
         """

@@ -14,6 +14,8 @@ from typing import Dict, Any, Optional
 # Core libraries
 from .core import OpenShiftAuth, ConfigManager, setup_logging, disable_ssl_warnings
 from .core.exceptions import RBACManagerError, AuthenticationError, ConfigurationError
+from .core.protocols import AuthProvider, ConfigProvider, BundleProvider, CatalogdProvider, HelpProvider
+from .core.constants import ErrorMessages, KubernetesConstants
 
 # Catalogd libraries  
 from .catalogd import CatalogdService
@@ -30,11 +32,23 @@ logger = logging.getLogger(__name__)
 class RBACManager:
     """Main application orchestrator for RBAC Manager tool"""
     
-    def __init__(self, skip_tls: bool = False, debug: bool = False):
+    def __init__(
+        self,
+        auth_provider: Optional[AuthProvider] = None,
+        config_provider: Optional[ConfigProvider] = None, 
+        bundle_provider: Optional[BundleProvider] = None,
+        help_provider: Optional[HelpProvider] = None,
+        skip_tls: bool = False,
+        debug: bool = False
+    ):
         """
-        Initialize RBAC Manager with microservice architecture
+        Initialize RBAC Manager with dependency injection
         
         Args:
+            auth_provider: Authentication provider (defaults to OpenShiftAuth)
+            config_provider: Configuration provider (defaults to ConfigManager)
+            bundle_provider: Bundle processor (defaults to BundleProcessor)
+            help_provider: Help manager (defaults to HelpManager)
             skip_tls: Whether to skip TLS verification
             debug: Enable debug logging
         """
@@ -47,16 +61,14 @@ class RBACManager:
         if skip_tls:
             disable_ssl_warnings()
         
-        # Initialize core services
-        self.auth = OpenShiftAuth(skip_tls=skip_tls)
-        self.config_manager = ConfigManager()
-        self.help_manager = HelpManager()
+        # Inject dependencies with defaults
+        self.auth = auth_provider or OpenShiftAuth(skip_tls=skip_tls)
+        self.config_manager = config_provider or ConfigManager()
+        self.help_manager = help_provider or HelpManager()
+        self.bundle_processor = bundle_provider or BundleProcessor(skip_tls=skip_tls, debug=debug)
         
         # Initialize catalogd service (will be configured with auth when needed)
-        self.catalogd_service = None
-        
-        # Initialize OPM services
-        self.bundle_processor = BundleProcessor(skip_tls=skip_tls, debug=debug)
+        self.catalogd_service: Optional[CatalogdProvider] = None
     
     def configure_authentication(self, openshift_url: str = None, openshift_token: str = None) -> bool:
         """
@@ -124,12 +136,16 @@ class RBACManager:
         """
         try:
             if not self.catalogd_service:
-                raise ConfigurationError("Catalogd service not initialized. Configure authentication first.")
+                raise ConfigurationError(ErrorMessages.CATALOGD_SERVICE_NOT_INITIALIZED)
             
             return self.catalogd_service.display_catalogs_enhanced()
             
+        except (ConfigurationError, AuthenticationError) as e:
+            logger.error(f"Configuration error while listing catalogs: {e}")
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
         except Exception as e:
-            logger.error(f"Failed to list catalogs: {e}")
+            logger.error(f"Unexpected error while listing catalogs: {e}")
             print(f"Error: {e}", file=sys.stderr)
             return 1
     
@@ -146,7 +162,7 @@ class RBACManager:
         """
         try:
             if not self.catalogd_service:
-                raise ConfigurationError("Catalogd service not initialized. Configure authentication first.")
+                raise ConfigurationError(ErrorMessages.CATALOGD_SERVICE_NOT_INITIALIZED)
             
             # Get authentication headers
             auth_headers = self.auth.get_auth_headers()
@@ -305,50 +321,80 @@ class RBACManager:
             # Generate manifests using the bundle processor
             manifests = self.bundle_processor.generate_yaml_manifests(metadata, namespace, package_name)
             
-            if stdout or not output_dir:
-                # Print to stdout
-                for manifest_name, manifest_content in manifests.items():
-                    print(f"\n{'='*50}")
-                    print(f"{manifest_name.upper()}")
-                    print("="*50)
-                    print(manifest_content)
-            else:
-                # Save to files
-                import os
-                os.makedirs(output_dir, exist_ok=True)
-                for filename, content in manifests.items():
-                    manifest_file = os.path.join(output_dir, f"{filename}.yaml")
-                    with open(manifest_file, 'w') as f:
-                        f.write(content)
-                    logger.info(f"Manifest saved to: {manifest_file}")
-                print(f"YAML manifests generated successfully")
+            # Use unified output method
+            self._save_output_files(manifests, package_name, output_dir, stdout, "YAML manifests")
                 
         except Exception as e:
             logger.error(f"Failed to generate YAML manifests: {e}")
             raise
     
+    def _save_output_files(self, content_dict: Dict[str, str], package_name: str, 
+                          output_dir: str, stdout: bool, content_type: str) -> None:
+        """
+        Unified method for saving output files (YAML manifests or Helm values)
+        
+        Args:
+            content_dict: Dictionary of filename -> content for multiple files, 
+                         or single key-value pair for single file
+            package_name: Name of the package for timestamped filename
+            output_dir: Output directory path
+            stdout: Whether to print to stdout instead of saving files
+            content_type: Description for logging (e.g., "YAML manifests", "Helm values")
+        """
+        if stdout or not output_dir:
+            # Print to stdout
+            if len(content_dict) == 1:
+                # Single content (Helm values)
+                content = next(iter(content_dict.values()))
+                print(f"\n{'='*50}")
+                print(f"{content_type.upper()}")
+                print("="*50)
+                print(content)
+            else:
+                # Multiple content (YAML manifests)
+                for name, content in content_dict.items():
+                    print(f"\n{'='*50}")
+                    print(f"{name.upper()}")
+                    print("="*50)
+                    print(content)
+        else:
+            # Save to files with operator name and timestamp
+            import os
+            import time
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Generate timestamp string
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            
+            if len(content_dict) == 1:
+                # Single file (Helm values)
+                content = next(iter(content_dict.values()))
+                filename = f"{package_name}-{timestamp}.yaml"
+                filepath = os.path.join(output_dir, filename)
+                with open(filepath, 'w') as f:
+                    f.write(content)
+                logger.info(f"{content_type} saved to: {filepath}")
+            else:
+                # Multiple files (YAML manifests)
+                for filename, content in content_dict.items():
+                    manifest_filename = f"{filename}-{timestamp}.yaml"
+                    manifest_file = os.path.join(output_dir, manifest_filename)
+                    with open(manifest_file, 'w') as f:
+                        f.write(content)
+                    logger.info(f"Manifest saved to: {manifest_file}")
+            
+            print(f"{content_type} generated successfully")
+
     def _generate_helm_output(self, metadata: Dict[str, Any], output_dir: str, stdout: bool) -> None:
         """Generate Helm values output"""
         package_name = metadata.get('package_name', 'my-operator')
         
-        if stdout or not output_dir:
-            # Generate and print to stdout
-            helm_values = self.bundle_processor.generate_helm_values(metadata, package_name)
-            print("\n" + "="*50)
-            print("HELM VALUES")
-            print("="*50)
-            print(helm_values)
-        else:
-            # Generate and save to file
-            helm_values = self.bundle_processor.generate_helm_values(metadata, package_name)
-            # Save to file
-            import os
-            os.makedirs(output_dir, exist_ok=True)
-            values_file = os.path.join(output_dir, 'values.yaml')
-            with open(values_file, 'w') as f:
-                f.write(helm_values)
-            logger.info(f"Helm values saved to: {values_file}")
-            print(f"Helm values generated successfully")
+        # Generate Helm values
+        helm_values = self.bundle_processor.generate_helm_values(metadata, package_name)
+        
+        # Use unified output method (single file, so use package name as key)
+        content_dict = {package_name: helm_values}
+        self._save_output_files(content_dict, package_name, output_dir, stdout, "Helm values")
     
     def _print_json_output(self, data: Dict[str, Any]) -> None:
         """
@@ -375,6 +421,21 @@ class RBACManager:
             logger.error(f"Failed to output JSON: {e}")
             # Fallback to basic print
             print(json.dumps(data, indent=2))
+
+
+# Factory function for easy creation
+def create_rbac_manager(skip_tls: bool = False, debug: bool = False) -> RBACManager:
+    """
+    Factory function to create RBACManager with default dependencies
+    
+    Args:
+        skip_tls: Whether to skip TLS verification
+        debug: Enable debug logging
+        
+    Returns:
+        RBACManager: Configured RBACManager instance
+    """
+    return RBACManager(skip_tls=skip_tls, debug=debug)
 
 
 # Command-line interface functions (keeping existing structure)
@@ -418,7 +479,7 @@ Use --help with specific commands for detailed help.
     
     # OPM flags
     parser.add_argument('--image', help='Container image URL')
-    parser.add_argument('--namespace', default='default', help='Target namespace')
+    parser.add_argument('--namespace', default=KubernetesConstants.DEFAULT_NAMESPACE, help='Target namespace')
     parser.add_argument('--openshift-namespace', help='Alias for --namespace')
     parser.add_argument('--registry-token', help='Registry authentication token')
     parser.add_argument('--helm', action='store_true', help='Generate Helm values')
@@ -450,7 +511,7 @@ def main():
         # Load configuration if provided
         config = None
         if args.config:
-            rbac_manager_temp = RBACManager()
+            rbac_manager_temp = create_rbac_manager()
             config = rbac_manager_temp.load_config(args.config)
         
         # Determine which command was requested
@@ -495,7 +556,7 @@ def main():
             skip_tls = skip_tls or config_defaults.get('skip_tls', False)
             debug = debug or config_defaults.get('debug', False)
         
-        rbac_manager = RBACManager(skip_tls=skip_tls, debug=debug)
+        rbac_manager = create_rbac_manager(skip_tls=skip_tls, debug=debug)
         
         try:
             # Execute commands based on flags
@@ -559,7 +620,7 @@ def main():
                 if config and 'opm' in config:
                     opm_config = config['opm']
                     image = image or opm_config.get('image')
-                    namespace = namespace or opm_config.get('namespace', 'default')
+                    namespace = namespace or opm_config.get('namespace', KubernetesConstants.DEFAULT_NAMESPACE)
                     registry_token = registry_token or opm_config.get('registry_token')
                     helm = helm or opm_config.get('helm', False)
                     output = output or opm_config.get('output')

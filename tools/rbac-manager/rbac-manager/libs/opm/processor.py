@@ -8,6 +8,7 @@ import logging
 from typing import Dict, Any, Optional
 
 from ..core.exceptions import BundleProcessingError
+from ..core.constants import OPMConstants
 from .client import OPMClient
 from .helm_generator import HelmValuesGenerator
 from .yaml_generator import YAMLManifestGenerator
@@ -84,8 +85,8 @@ class BundleProcessor:
         processed = raw_metadata.copy()
         
         # Ensure required fields exist
-        processed.setdefault('permissions', [])
-        processed.setdefault('cluster_permissions', [])
+        processed.setdefault(OPMConstants.BUNDLE_PERMISSIONS_KEY, [])
+        processed.setdefault(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, [])
         processed.setdefault('service_account', 'default')
         processed.setdefault('install_modes', {})
         processed.setdefault('has_webhooks', False)
@@ -115,7 +116,7 @@ class BundleProcessor:
         }
         
         # Extract namespace-scoped rules
-        for permission in metadata.get('permissions', []):
+        for permission in metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []):
             service_account = permission.get('serviceAccountName', 'default')
             rules = permission.get('rules', [])
             
@@ -124,7 +125,7 @@ class BundleProcessor:
                 rbac_rules['service_accounts'].append(service_account)
         
         # Extract cluster-scoped rules
-        for cluster_permission in metadata.get('cluster_permissions', []):
+        for cluster_permission in metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
             service_account = cluster_permission.get('serviceAccountName', 'default')
             rules = cluster_permission.get('rules', [])
             
@@ -147,8 +148,8 @@ class BundleProcessor:
         rbac_rules = metadata.get('rbac_rules', {})
         
         summary = {
-            'total_permissions': len(metadata.get('permissions', [])),
-            'total_cluster_permissions': len(metadata.get('cluster_permissions', [])),
+            'total_permissions': len(metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, [])),
+            'total_cluster_permissions': len(metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, [])),
             'total_namespace_rules': len(rbac_rules.get('namespace_rules', [])),
             'total_cluster_rules': len(rbac_rules.get('cluster_rules', [])),
             'service_accounts': rbac_rules.get('service_accounts', []),

@@ -7,6 +7,7 @@ Generates Helm values.yaml content from OPM bundle metadata.
 import yaml
 from typing import Dict, List, Any, Optional
 from .base_generator import BaseGenerator, PermissionStructure, HelmValueTemplates
+from ..core.constants import OPMConstants
 
 
 class HelmValuesGenerator(BaseGenerator):
@@ -63,15 +64,18 @@ class HelmValuesGenerator(BaseGenerator):
 #
 # Step 2: Update Installer Permissions  
 # ------------------------------------
-# In this values.yaml, find the installer ClusterRole rules and add resourceNames:
+# In this values.yaml, look for rules with 'resourceNames: []' (empty arrays).
+# These are the rules that need hardening after the operator is installed:
 #
 # For ClusterRole/ClusterRoleBinding management rules:
-#   resourceNames: ['<packageName>.<hash1>', '<packageName>.<hash2>']
+#   resourceNames: [] # After install, add: ["<packageName>.<hash1>", "<packageName>.<hash2>"]
 #   Example: ['{package_name}.a1b2c3d4', '{package_name}.e5f6g7h8']
+#   Command: (oc or kubectl) get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
 #
 # For ClusterExtension finalizer rules:
-#   resourceNames: ['<your-chosen-clusterextension-name>']
-#   Example: ['my-{package_name}'] or ['company-gitops']
+#   resourceNames: [] # After install, add: ["<your-chosen-clusterextension-name>"]
+#   Example: ['my-argocd-operator'] or ['company-gitops']
+#   Command: (oc or kubectl) get clusterextensions
 #
 # Step 3: Redeploy with Hardened Permissions
 # ------------------------------------------
@@ -91,8 +95,8 @@ class HelmValuesGenerator(BaseGenerator):
         }
         
         # Check what types of permissions the operator has
-        has_cluster_permissions = bool(bundle_metadata.get('cluster_permissions', []))
-        has_namespace_permissions = bool(bundle_metadata.get('permissions', []))
+        has_cluster_permissions = bool(bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []))
+        has_namespace_permissions = bool(bundle_metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []))
         
         if has_cluster_permissions and has_namespace_permissions:
             # Both clusterPermissions and permissions exist (e.g., ArgoCD)
@@ -109,7 +113,7 @@ class HelmValuesGenerator(BaseGenerator):
             
             # Generate grantor ClusterRole (clusterPermissions from CSV)
             cluster_grantor_rules = []
-            for perm in bundle_metadata.get('cluster_permissions', []):
+            for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
             if cluster_grantor_rules:
@@ -141,7 +145,7 @@ class HelmValuesGenerator(BaseGenerator):
             
             # Generate grantor ClusterRole (clusterPermissions from CSV)
             cluster_grantor_rules = []
-            for perm in bundle_metadata.get('cluster_permissions', []):
+            for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
             if cluster_grantor_rules:
@@ -217,13 +221,37 @@ class HelmValuesGenerator(BaseGenerator):
             if 'verbs' in rule:
                 formatted_rule['verbs'] = rule['verbs']
             
-            # Resource names (if present)
+            # Resource names (if present or needs hardening)
             if 'resourceNames' in rule:
                 formatted_rule['resourceNames'] = rule['resourceNames']
+            elif self._needs_resource_names_hardening(rule):
+                # Add empty resourceNames array for rules that need hardening
+                formatted_rule['resourceNames'] = []
             
             formatted_rules.append(formatted_rule)
         
         return formatted_rules
+    
+    def _needs_resource_names_hardening(self, rule: Dict[str, Any]) -> bool:
+        """Check if a rule needs resourceNames hardening"""
+        api_groups = rule.get('apiGroups', [])
+        resources = rule.get('resources', [])
+        verbs = rule.get('verbs', [])
+        
+        # RBAC management rules that need hardening
+        if 'rbac.authorization.k8s.io' in api_groups:
+            rbac_resources = ['clusterroles', 'clusterrolebindings']
+            rbac_verbs = ['get', 'update', 'patch', 'delete']
+            if (any(res in resources for res in rbac_resources) and 
+                any(verb in verbs for verb in rbac_verbs)):
+                return True
+        
+        # ClusterExtension finalizer rules that need hardening
+        if 'olm.operatorframework.io' in api_groups:
+            if any('clusterextensions/finalizers' in res for res in resources):
+                return True
+        
+        return False
     
     def _dump_yaml_with_flow_arrays(self, data: Dict[str, Any]) -> str:
         """

@@ -7,6 +7,7 @@ Generates Kubernetes YAML manifests from OPM bundle metadata.
 import yaml
 from typing import Dict, List, Any, Optional
 from .base_generator import BaseGenerator, ManifestTemplates
+from ..core.constants import OPMConstants
 
 
 class YAMLManifestGenerator(BaseGenerator):
@@ -47,8 +48,8 @@ class YAMLManifestGenerator(BaseGenerator):
         )
         
         # Generate Roles and RoleBindings based on permissions logic
-        has_cluster_permissions = bool(bundle_metadata.get('cluster_permissions', []))
-        has_namespace_permissions = bool(bundle_metadata.get('permissions', []))
+        has_cluster_permissions = bool(bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []))
+        has_namespace_permissions = bool(bundle_metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []))
         
         # Only generate Roles if both clusterPermissions and permissions exist
         if has_cluster_permissions and has_namespace_permissions:

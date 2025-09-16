@@ -8,8 +8,9 @@ import logging
 import re
 import sys
 import urllib3
-from typing import Optional
-from .exceptions import ConfigurationError
+from typing import Optional, Type
+from .exceptions import ConfigurationError, RBACManagerError, AuthenticationError, CatalogdError, NetworkError
+from .constants import ErrorMessages
 
 
 def setup_logging(debug: bool = False) -> None:
@@ -204,3 +205,71 @@ def truncate_string(text: str, max_length: int = 100, suffix: str = "...") -> st
         return text
     
     return text[:max_length - len(suffix)] + suffix
+
+
+def handle_ssl_error(error: Exception, exception_class: Type[RBACManagerError] = AuthenticationError) -> None:
+    """
+    Centralized SSL error handling with user-friendly messages
+    
+    Args:
+        error: The caught exception
+        exception_class: The specific exception class to raise
+        
+    Raises:
+        RBACManagerError: Appropriate error type with user-friendly message
+    """
+    error_str = str(error)
+    
+    if "certificate verify failed" in error_str or "CERTIFICATE_VERIFY_FAILED" in error_str:
+        raise exception_class(ErrorMessages.SSL_CERT_VERIFICATION_FAILED)
+    elif "SSLError" in error_str or "SSL:" in error_str:
+        raise exception_class(ErrorMessages.SSL_CONNECTION_ERROR.format(error=error))
+    else:
+        # Re-raise original error if not SSL-related
+        raise exception_class(f"Connection error: {error}")
+
+
+def handle_network_error(error: Exception, context: str = "", exception_class: Type[RBACManagerError] = NetworkError) -> None:
+    """
+    Centralized network error handling with context-specific messages
+    
+    Args:
+        error: The caught exception
+        context: Context information for better error messages
+        exception_class: The specific exception class to raise
+        
+    Raises:
+        RBACManagerError: Appropriate error type with user-friendly message
+    """
+    error_str = str(error).lower()
+    
+    if "timeout" in error_str or "connection" in error_str:
+        raise exception_class(f"{context}\n{ErrorMessages.CONNECTION_TIMEOUT}")
+    elif "connection refused" in error_str:
+        raise exception_class(f"{context}\n{ErrorMessages.CONNECTION_REFUSED}")
+    elif "ssl" in error_str and "certificate" in error_str:
+        handle_ssl_error(error, exception_class)
+    else:
+        raise exception_class(f"{context}: {error}")
+
+
+def create_user_friendly_error(error_type: str, details: str, suggestions: list = None) -> str:
+    """
+    Create a user-friendly error message with suggestions
+    
+    Args:
+        error_type: Type of error (e.g., "Authentication Error")
+        details: Detailed error description
+        suggestions: List of suggested solutions
+        
+    Returns:
+        str: Formatted error message
+    """
+    message = f"{error_type}: {details}"
+    
+    if suggestions:
+        message += "\n\nSuggested solutions:"
+        for i, suggestion in enumerate(suggestions, 1):
+            message += f"\n  {i}. {suggestion}"
+    
+    return message

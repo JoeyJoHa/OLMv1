@@ -12,7 +12,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
 from .exceptions import AuthenticationError, ConfigurationError
-from .utils import validate_openshift_url
+from .utils import validate_openshift_url, handle_ssl_error
 
 logger = logging.getLogger(__name__)
 
@@ -99,21 +99,8 @@ class OpenShiftAuth:
             return True
             
         except Exception as e:
-            # Check for SSL certificate errors and provide user-friendly message
-            error_str = str(e)
-            if "certificate verify failed" in error_str or "CERTIFICATE_VERIFY_FAILED" in error_str:
-                raise AuthenticationError(
-                    "SSL certificate verification failed. The OpenShift cluster is using self-signed certificates.\n"
-                    "To resolve this issue, add the --skip-tls flag to your command.\n"
-                    f"Example: python3 rbac-manager.py --catalogd --skip-tls [other options]"
-                )
-            elif "SSLError" in error_str or "SSL:" in error_str:
-                raise AuthenticationError(
-                    f"SSL connection error occurred. If using self-signed certificates, add --skip-tls flag.\n"
-                    f"Original error: {e}"
-                )
-            else:
-                raise AuthenticationError(f"Failed to configure Kubernetes client with token: {e}")
+            # Use centralized SSL error handler
+            handle_ssl_error(e, AuthenticationError)
     
     def _discover_from_context(self) -> bool:
         """
@@ -195,21 +182,8 @@ class OpenShiftAuth:
             return True
             
         except Exception as e:
-            # Check for SSL certificate errors and provide user-friendly message
-            error_str = str(e)
-            if "certificate verify failed" in error_str or "CERTIFICATE_VERIFY_FAILED" in error_str:
-                raise AuthenticationError(
-                    "SSL certificate verification failed. The OpenShift cluster is using self-signed certificates.\n"
-                    "To resolve this issue, add the --skip-tls flag to your command.\n"
-                    f"Example: python3 rbac-manager.py --catalogd --skip-tls [other options]"
-                )
-            elif "SSLError" in error_str or "SSL:" in error_str:
-                raise AuthenticationError(
-                    f"SSL connection error occurred. If using self-signed certificates, add --skip-tls flag.\n"
-                    f"Original error: {e}"
-                )
-            else:
-                raise AuthenticationError(f"Failed to discover authentication from context: {e}")
+            # Use centralized SSL error handler
+            handle_ssl_error(e, AuthenticationError)
     
     def get_auth_headers(self) -> Dict[str, str]:
         """

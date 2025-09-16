@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 from .exceptions import ConfigurationError
+from .constants import KubernetesConstants, FileConstants
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +210,7 @@ class ConfigManager:
                 "# OPM settings": None,
                 "opm": {
                     "image": "",
-                    "namespace": "default",
+                    "namespace": KubernetesConstants.DEFAULT_NAMESPACE,
                     "registry_token": "",
                     "helm": False,
                     "output": "./output",
@@ -221,9 +222,9 @@ class ConfigManager:
             if output_dir:
                 output_path = Path(output_dir)
                 output_path.mkdir(parents=True, exist_ok=True)
-                config_file = output_path / "rbac-manager-config.yaml"
+                config_file = output_path / FileConstants.DEFAULT_CONFIG_FILE
             else:
-                config_file = Path("rbac-manager-config.yaml")
+                config_file = Path(FileConstants.DEFAULT_CONFIG_FILE)
             
             # Generate YAML content manually to preserve comments
             yaml_content = self._dict_to_yaml_with_comments(template)

@@ -16,7 +16,8 @@ from kubernetes.client.rest import ApiException
 from kubernetes.stream import portforward
 
 from ..core.exceptions import CatalogdError, NetworkError
-from ..core.utils import format_bytes
+from ..core.utils import format_bytes, handle_ssl_error
+from ..core.constants import KubernetesConstants, NetworkConstants, ErrorMessages
 from .cache import CatalogdCache
 from .session import CatalogdSession
 
@@ -305,7 +306,7 @@ class CatalogdClient:
         """
         try:
             # List services in openshift-catalogd namespace
-            services = self.core_api.list_namespaced_service(namespace="openshift-catalogd")
+            services = self.core_api.list_namespaced_service(namespace=KubernetesConstants.OPENSHIFT_CATALOGD_NAMESPACE)
             
             for service in services.items:
                 if "catalogd" in service.metadata.name.lower():
@@ -329,32 +330,19 @@ class CatalogdClient:
                         first_port = service.spec.ports[0]
                         service_port = first_port.port
                         target_port = first_port.target_port
-                        is_https = service_port == 443
+                        is_https = service_port == NetworkConstants.HTTPS_PORT
                     
                     logger.debug(f"Discovered catalogd service: {service_name} ({service_port}->{target_port})")
                     return service_name, service_port, target_port, is_https
             
-            raise CatalogdError("No catalogd service found in openshift-catalogd namespace")
+            raise CatalogdError(ErrorMessages.CATALOGD_SERVICE_NOT_FOUND)
             
         except ApiException as e:
             logger.debug(f"Service discovery failed: {e}")
             raise CatalogdError(f"Failed to discover catalogd service: {e}")
         except Exception as e:
-            # Check for SSL certificate errors and provide user-friendly message
-            error_str = str(e)
-            if "certificate verify failed" in error_str or "CERTIFICATE_VERIFY_FAILED" in error_str:
-                raise CatalogdError(
-                    "SSL certificate verification failed. The OpenShift cluster is using self-signed certificates.\n"
-                    "To resolve this issue, add the --skip-tls flag to your command.\n"
-                    f"Example: python3 rbac-manager.py --catalogd --skip-tls [other options]"
-                )
-            elif "SSLError" in error_str or "SSL:" in error_str:
-                raise CatalogdError(
-                    f"SSL connection error occurred. If using self-signed certificates, add --skip-tls flag.\n"
-                    f"Original error: {e}"
-                )
-            else:
-                raise CatalogdError(f"Failed to discover catalogd service: {e}")
+            # Use centralized SSL error handler
+            handle_ssl_error(e, CatalogdError)
     
     def create_port_forward(self) -> Tuple[PortForwardManager, int, bool]:
         """
@@ -386,7 +374,7 @@ class CatalogdClient:
             pf_manager = PortForwardManager(
                 self.core_api,
                 service_name,
-                "openshift-catalogd",
+                KubernetesConstants.OPENSHIFT_CATALOGD_NAMESPACE,
                 target_port,
                 local_port
             )
@@ -395,7 +383,7 @@ class CatalogdClient:
             pf_manager.start()
             
             # Initialize session manager for performance
-            self._session = CatalogdSession(service_name, "openshift-catalogd", target_port)
+            self._session = CatalogdSession(service_name, KubernetesConstants.OPENSHIFT_CATALOGD_NAMESPACE, target_port)
             self._session.set_port_forward(pf_manager._pf, pf_manager._socket)
             
             logger.info(f"Port-forward established to service/{service_name} ({service_port}->{target_port}) on local port {local_port}")
@@ -523,7 +511,7 @@ class CatalogdClient:
         try:
             if self.core_api:
                 # Try to get a quick list of common catalog names
-                services = self.core_api.list_namespaced_service(namespace="openshift-catalogd")
+                services = self.core_api.list_namespaced_service(namespace=KubernetesConstants.OPENSHIFT_CATALOGD_NAMESPACE)
                 if services.items:
                     return "Use --list-catalogs to see all available catalogs"
                 else:

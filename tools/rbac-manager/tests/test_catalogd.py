@@ -51,6 +51,26 @@ class CatalogdTestSuite:
         self.test_channel = "stable-3.10"
         self.test_version = "3.10.0"
     
+    def _mask_token_in_command(self, command: str) -> str:
+        """Mask the authentication token and OpenShift URL in command strings for security"""
+        masked_command = command
+        
+        # Mask the authentication token
+        if self.openshift_token and self.openshift_token in masked_command:
+            # Extract the token prefix (e.g., "sha256~") and mask the rest
+            if '~' in self.openshift_token:
+                prefix = self.openshift_token.split('~')[0] + '~'
+                masked_token = prefix + "***MASKED***"
+            else:
+                masked_token = "***MASKED***"
+            masked_command = masked_command.replace(self.openshift_token, masked_token)
+        
+        # Mask the OpenShift URL
+        if self.openshift_url and self.openshift_url in masked_command:
+            masked_command = masked_command.replace(self.openshift_url, "https://api.example.com:6443")
+        
+        return masked_command
+    
     def run_command(self, additional_args: List[str], input_data: str = None, 
                    timeout: int = 120) -> Dict[str, Any]:
         """
@@ -132,7 +152,7 @@ class CatalogdTestSuite:
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "json_data": json_data,
-                "command": ' '.join(cmd)
+                "command": self._mask_token_in_command(' '.join(cmd))
             }
             
         except subprocess.TimeoutExpired:
@@ -141,7 +161,7 @@ class CatalogdTestSuite:
                 "stdout": "",
                 "stderr": f"Command timed out after {timeout} seconds",
                 "json_data": None,
-                "command": ' '.join(cmd)
+                "command": self._mask_token_in_command(' '.join(cmd))
             }
         except Exception as e:
             return {
@@ -149,7 +169,7 @@ class CatalogdTestSuite:
                 "stdout": "",
                 "stderr": str(e),
                 "json_data": None,
-                "command": ' '.join(cmd)
+                "command": self._mask_token_in_command(' '.join(cmd))
             }
     
     def test_basic_catalogd_help(self) -> bool:
@@ -418,7 +438,7 @@ class CatalogdTestSuite:
                 "exit_code": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "command": ' '.join(cmd)
+                "command": self._mask_token_in_command(' '.join(cmd))
             }
         })
         
@@ -549,7 +569,7 @@ class CatalogdTestSuite:
 def main():
     """Main test runner"""
     # Get configuration from environment or command line
-    openshift_url = os.getenv("OPENSHIFT_URL", "https://api.opslab-joe.rh-igc.com:6443")
+    openshift_url = os.getenv("OPENSHIFT_URL", "https://api.example.com:6443")
     openshift_token = os.getenv("OPENSHIFT_TOKEN") or os.getenv("TOKEN")
     
     if not openshift_token:

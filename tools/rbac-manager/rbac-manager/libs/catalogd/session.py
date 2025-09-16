@@ -11,6 +11,7 @@ import time
 from typing import Dict, Any, Optional, Tuple
 
 from ..core.exceptions import NetworkError
+from ..core.constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,7 @@ class CatalogdSession:
                 f"Host: {self.service_name}.{self.namespace}.svc.cluster.local",
                 "Connection: keep-alive",  # Enable connection reuse
                 "Accept-Encoding: identity",  # Disable compression for now
-                "User-Agent: rbac-manager/1.0"
+                f"User-Agent: {NetworkConstants.USER_AGENT}"
             ]
             
             for key, value in headers.items():

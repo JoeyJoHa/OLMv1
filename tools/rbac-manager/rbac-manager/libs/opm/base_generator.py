@@ -6,17 +6,90 @@ YAML manifests and Helm values from OPM bundle metadata.
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, NamedTuple
 from abc import ABC, abstractmethod
+from enum import Enum
+
+from ..core.constants import (
+    KubernetesConstants, 
+    OPMConstants, 
+    RoleConstants,
+    FileConstants
+)
 
 logger = logging.getLogger(__name__)
 
+
+class PermissionStrategy(Enum):
+    """Enumeration of permission generation strategies"""
+    BOTH_CLUSTER_AND_NAMESPACE = "both_cluster_and_namespace"
+    CLUSTER_ONLY = "cluster_only"  # Standard cluster operator
+    NAMESPACE_ONLY_AS_CLUSTER = "namespace_only_as_cluster"
+    NO_PERMISSIONS = "no_permissions"  # Minimal operator
+
+
+class PermissionAnalysis(NamedTuple):
+    """Analysis result of bundle permissions"""
+    strategy: PermissionStrategy
+    has_cluster_permissions: bool
+    has_namespace_permissions: bool
+    cluster_rules: List[Dict[str, Any]]
+    namespace_rules: List[Dict[str, Any]]
 
 class BaseGenerator(ABC):
     """Base class for all generators with common functionality"""
     
     def __init__(self):
         self.logger = logger
+    
+    def analyze_permissions(self, bundle_metadata: Dict[str, Any]) -> PermissionAnalysis:
+        """
+        Analyze bundle permissions and determine generation strategy
+        
+        Args:
+            bundle_metadata: Bundle metadata from OPM
+            
+        Returns:
+            PermissionAnalysis with strategy and extracted rules
+        """
+        has_cluster_permissions = bool(bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []))
+        has_namespace_permissions = bool(bundle_metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []))
+        
+        # Extract rules
+        cluster_rules = self._extract_cluster_rules(bundle_metadata)
+        namespace_rules = self._extract_namespace_rules(bundle_metadata)
+        
+        # Determine strategy
+        if has_cluster_permissions and has_namespace_permissions:
+            strategy = PermissionStrategy.BOTH_CLUSTER_AND_NAMESPACE
+        elif has_cluster_permissions:
+            strategy = PermissionStrategy.CLUSTER_ONLY
+        elif has_namespace_permissions:
+            strategy = PermissionStrategy.NAMESPACE_ONLY_AS_CLUSTER
+        else:
+            strategy = PermissionStrategy.NO_PERMISSIONS
+            
+        return PermissionAnalysis(
+            strategy=strategy,
+            has_cluster_permissions=has_cluster_permissions,
+            has_namespace_permissions=has_namespace_permissions,
+            cluster_rules=cluster_rules,
+            namespace_rules=namespace_rules
+        )
+    
+    def _extract_cluster_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract cluster-scoped rules from bundle metadata"""
+        rules = []
+        for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
+            rules.extend(perm.get('rules', []))
+        return rules
+    
+    def _extract_namespace_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract namespace-scoped rules from bundle metadata"""  
+        rules = []
+        for perm in bundle_metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []):
+            rules.extend(perm.get('rules', []))
+        return rules
     
     def _extract_crd_names(self, bundle_metadata: Dict[str, Any]) -> List[str]:
         """
@@ -68,26 +141,35 @@ class BaseGenerator(ABC):
         
         # ClusterExtension finalizer management (scoped to this operator)
         rules.append({
-            'apiGroups': ['olm.operatorframework.io'],
-            'resources': ['clusterextensions/finalizers'],
-            'verbs': ['update'],
-            'resourceNames': [operator_name]
+            'apiGroups': [KubernetesConstants.OLM_API_GROUP],
+            'resources': [f'{KubernetesConstants.CLUSTER_EXTENSIONS_RESOURCE}/finalizers'],
+            'verbs': [KubernetesConstants.UPDATE_VERB]
+            # Note: resourceNames should be added post-installation with chosen ClusterExtension name
         })
         
         # CRD management permissions
         # Unscoped permissions for CRD lifecycle
         rules.append({
-            'apiGroups': ['apiextensions.k8s.io'],
-            'resources': ['customresourcedefinitions'],
-            'verbs': ['create', 'list', 'watch']
+            'apiGroups': [KubernetesConstants.APIEXTENSIONS_API_GROUP],
+            'resources': [KubernetesConstants.CUSTOM_RESOURCE_DEFINITIONS_RESOURCE],
+            'verbs': [
+                KubernetesConstants.CREATE_VERB, 
+                KubernetesConstants.LIST_VERB, 
+                KubernetesConstants.WATCH_VERB
+            ]
         })
         
         # Scoped permissions for specific CRDs
         if crd_names:
             rules.append({
-                'apiGroups': ['apiextensions.k8s.io'],
-                'resources': ['customresourcedefinitions'],
-                'verbs': ['get', 'update', 'patch', 'delete'],
+                'apiGroups': [KubernetesConstants.APIEXTENSIONS_API_GROUP],
+                'resources': [KubernetesConstants.CUSTOM_RESOURCE_DEFINITIONS_RESOURCE],
+                'verbs': [
+                    KubernetesConstants.GET_VERB, 
+                    KubernetesConstants.UPDATE_VERB, 
+                    KubernetesConstants.PATCH_VERB, 
+                    KubernetesConstants.DELETE_VERB
+                ],
                 'resourceNames': crd_names
             })
         
@@ -95,25 +177,43 @@ class BaseGenerator(ABC):
         # Unscoped permissions for RBAC lifecycle
         rules.extend([
             {
-                'apiGroups': ['rbac.authorization.k8s.io'],
-                'resources': ['clusterroles'],
-                'verbs': ['create', 'list', 'watch']
+                'apiGroups': [KubernetesConstants.RBAC_API_GROUP],
+                'resources': [KubernetesConstants.CLUSTER_ROLES_RESOURCE],
+                'verbs': [
+                    KubernetesConstants.CREATE_VERB, 
+                    KubernetesConstants.LIST_VERB, 
+                    KubernetesConstants.WATCH_VERB
+                ]
             },
             {
-                'apiGroups': ['rbac.authorization.k8s.io'],
-                'resources': ['clusterroles'],
-                'verbs': ['get', 'update', 'patch', 'delete']
+                'apiGroups': [KubernetesConstants.RBAC_API_GROUP],
+                'resources': [KubernetesConstants.CLUSTER_ROLES_RESOURCE],
+                'verbs': [
+                    KubernetesConstants.GET_VERB, 
+                    KubernetesConstants.UPDATE_VERB, 
+                    KubernetesConstants.PATCH_VERB, 
+                    KubernetesConstants.DELETE_VERB
+                ]
                 # Note: resourceNames should be added post-installation
             },
             {
-                'apiGroups': ['rbac.authorization.k8s.io'],
-                'resources': ['clusterrolebindings'],
-                'verbs': ['create', 'list', 'watch']
+                'apiGroups': [KubernetesConstants.RBAC_API_GROUP],
+                'resources': [KubernetesConstants.CLUSTER_ROLE_BINDINGS_RESOURCE],
+                'verbs': [
+                    KubernetesConstants.CREATE_VERB, 
+                    KubernetesConstants.LIST_VERB, 
+                    KubernetesConstants.WATCH_VERB
+                ]
             },
             {
-                'apiGroups': ['rbac.authorization.k8s.io'],
-                'resources': ['clusterrolebindings'],
-                'verbs': ['get', 'update', 'patch', 'delete']
+                'apiGroups': [KubernetesConstants.RBAC_API_GROUP],
+                'resources': [KubernetesConstants.CLUSTER_ROLE_BINDINGS_RESOURCE],
+                'verbs': [
+                    KubernetesConstants.GET_VERB, 
+                    KubernetesConstants.UPDATE_VERB, 
+                    KubernetesConstants.PATCH_VERB, 
+                    KubernetesConstants.DELETE_VERB
+                ]
                 # Note: resourceNames should be added post-installation
             }
         ])
@@ -131,8 +231,8 @@ class BaseGenerator(ABC):
             List of RBAC rules extracted from the CSV
         """
         # Get permissions directly from bundle metadata (raw extracted permissions)
-        permissions = bundle_metadata.get('permissions', [])
-        cluster_permissions = bundle_metadata.get('cluster_permissions', [])
+        permissions = bundle_metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, [])
+        cluster_permissions = bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, [])
         
         rules = []
         
@@ -159,7 +259,7 @@ class BaseGenerator(ABC):
             List of RBAC rules for namespace-scoped permissions only
         """
         # Extract namespace-scoped permissions from bundle metadata
-        permissions = bundle_metadata.get('permissions', [])
+        permissions = bundle_metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, [])
         
         rules = []
         for perm in permissions:
@@ -242,8 +342,8 @@ class ManifestTemplates:
             'kind': 'ServiceAccount',
             'metadata': {
                 'labels': {
-                    'app.kubernetes.io/managed-by': 'rbac-manager',
-                    'app.kubernetes.io/name': operator_name,
+                    KubernetesConstants.MANAGED_BY_LABEL: KubernetesConstants.RBAC_MANAGER_COMPONENT,
+                    KubernetesConstants.NAME_LABEL: operator_name,
                     'olmv1': name
                 },
                 'name': name,
@@ -255,12 +355,12 @@ class ManifestTemplates:
     def cluster_role_template(name: str, operator_name: str, rules: List[Dict[str, Any]]) -> Dict[str, Any]:
         """ClusterRole manifest template"""
         return {
-            'apiVersion': 'rbac.authorization.k8s.io/v1',
+            'apiVersion': f'{KubernetesConstants.RBAC_API_GROUP}/v1',
             'kind': 'ClusterRole',
             'metadata': {
                 'labels': {
-                    'app.kubernetes.io/managed-by': 'rbac-manager',
-                    'app.kubernetes.io/name': operator_name
+                    KubernetesConstants.MANAGED_BY_LABEL: KubernetesConstants.RBAC_MANAGER_COMPONENT,
+                    KubernetesConstants.NAME_LABEL: operator_name
                 },
                 'name': name
             },
@@ -272,17 +372,17 @@ class ManifestTemplates:
                                     service_account_name: str, namespace: str) -> Dict[str, Any]:
         """ClusterRoleBinding manifest template"""
         return {
-            'apiVersion': 'rbac.authorization.k8s.io/v1',
+            'apiVersion': f'{KubernetesConstants.RBAC_API_GROUP}/v1',
             'kind': 'ClusterRoleBinding',
             'metadata': {
                 'labels': {
-                    'app.kubernetes.io/managed-by': 'rbac-manager',
-                    'app.kubernetes.io/name': operator_name
+                    KubernetesConstants.MANAGED_BY_LABEL: KubernetesConstants.RBAC_MANAGER_COMPONENT,
+                    KubernetesConstants.NAME_LABEL: operator_name
                 },
                 'name': name
             },
             'roleRef': {
-                'apiGroup': 'rbac.authorization.k8s.io',
+                'apiGroup': KubernetesConstants.RBAC_API_GROUP,
                 'kind': 'ClusterRole',
                 'name': role_name
             },
@@ -297,12 +397,12 @@ class ManifestTemplates:
     def role_template(name: str, namespace: str, operator_name: str, rules: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Role manifest template"""
         return {
-            'apiVersion': 'rbac.authorization.k8s.io/v1',
+            'apiVersion': f'{KubernetesConstants.RBAC_API_GROUP}/v1',
             'kind': 'Role',
             'metadata': {
                 'labels': {
-                    'app.kubernetes.io/managed-by': 'rbac-manager',
-                    'app.kubernetes.io/name': operator_name
+                    KubernetesConstants.MANAGED_BY_LABEL: KubernetesConstants.RBAC_MANAGER_COMPONENT,
+                    KubernetesConstants.NAME_LABEL: operator_name
                 },
                 'name': name,
                 'namespace': namespace
@@ -315,18 +415,18 @@ class ManifestTemplates:
                             service_account_name: str) -> Dict[str, Any]:
         """RoleBinding manifest template"""
         return {
-            'apiVersion': 'rbac.authorization.k8s.io/v1',
+            'apiVersion': f'{KubernetesConstants.RBAC_API_GROUP}/v1',
             'kind': 'RoleBinding',
             'metadata': {
                 'labels': {
-                    'app.kubernetes.io/managed-by': 'rbac-manager',
-                    'app.kubernetes.io/name': operator_name
+                    KubernetesConstants.MANAGED_BY_LABEL: KubernetesConstants.RBAC_MANAGER_COMPONENT,
+                    KubernetesConstants.NAME_LABEL: operator_name
                 },
                 'name': name,
                 'namespace': namespace
             },
             'roleRef': {
-                'apiGroup': 'rbac.authorization.k8s.io',
+                'apiGroup': KubernetesConstants.RBAC_API_GROUP,
                 'kind': 'Role',
                 'name': role_name
             },
@@ -351,7 +451,7 @@ class HelmValueTemplates:
                 'name': operator_name,
                 'create': True,
                 'appVersion': version,
-                'channel': 'stable',
+                'channel': KubernetesConstants.DEFAULT_CHANNEL,
                 'packageName': package_name
             },
             'serviceAccount': {

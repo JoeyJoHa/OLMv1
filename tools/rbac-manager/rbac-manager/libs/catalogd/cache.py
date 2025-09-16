@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
+from ..core.constants import FileConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,7 +35,7 @@ class CatalogdCache:
             self.cache_dir = Path(cache_dir)
         else:
             # Use system temp directory with rbac-manager subdirectory
-            self.cache_dir = Path(tempfile.gettempdir()) / "rbac-manager-cache"
+            self.cache_dir = Path(tempfile.gettempdir()) / FileConstants.CACHE_DIR_NAME
         
         # Ensure cache directory exists
         self.cache_dir.mkdir(parents=True, exist_ok=True)
