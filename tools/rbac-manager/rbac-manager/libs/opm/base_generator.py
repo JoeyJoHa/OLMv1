@@ -284,55 +284,101 @@ class BaseGenerator(ABC):
             pass
         
         def represent_list(dumper, data):
-            # Check if we're in a context where we want flow style
-            # Only use flow style for arrays that contain only strings (not mixed types)
-            if data and all(isinstance(item, str) for item in data):
-                # Check if this looks like an RBAC array by examining patterns
-                sample_str = ' '.join(data).lower()
+            # Only apply flow style to string arrays (not mixed types)
+            if not data or not all(isinstance(item, str) for item in data):
+                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+            
+            # Intelligent pattern detection for RBAC arrays
+            def is_rbac_array_intelligent(items):
+                """
+                Intelligently detect RBAC arrays using pattern analysis
+                instead of hardcoded lists
+                """
+                sample_text = ' '.join(items).lower()
                 
-                # Enhanced patterns for consistent RBAC array detection
-                is_rbac_array = (
-                    # Standard RBAC verbs (most common)
-                    any(verb in sample_str for verb in [
-                        'get', 'list', 'watch', 'create', 'update', 'patch', 'delete'
-                    ]) or
-                    # Standard Kubernetes API groups
-                    any(group in sample_str for group in [
-                        'rbac.authorization.k8s.io', 'apiextensions.k8s.io', 'apps', 
-                        'batch', 'autoscaling', 'networking.k8s.io', 'policy',
-                        'storage.k8s.io', 'coordination.k8s.io', 'authentication.k8s.io',
-                        'authorization.k8s.io'
-                    ]) or
-                    # OLM and OpenShift specific groups
-                    any(group in sample_str for group in [
-                        'olm.operatorframework.io', 'route.openshift.io',
-                        'security.openshift.io', 'config.openshift.io',
-                        'apps.openshift.io', 'oauth.openshift.io',
-                        'template.openshift.io', 'monitoring.coreos.com'
-                    ]) or
-                    # Custom API groups (contain dots) - broader detection
-                    any('.' in item and len(item.split('.')) >= 2 for item in data) or
-                    # Standard Kubernetes resources
-                    any(resource in sample_str for resource in [
-                        'clusterroles', 'clusterrolebindings', 'roles', 'rolebindings',
-                        'customresourcedefinitions', 'deployments', 'pods', 'services',
-                        'secrets', 'configmaps', 'serviceaccounts', 'namespaces',
-                        'persistentvolumeclaims', 'events', 'finalizers', 'ingresses',
-                        'daemonsets', 'replicasets', 'statefulsets', 'cronjobs', 'jobs',
-                        'horizontalpodautoscalers', 'leases', 'endpoints', 'routes',
-                        'oauthclients', 'templateconfigs', 'templateinstances',
-                        'templates', 'prometheuses', 'servicemonitors', 'deploymentconfigs',
-                        'applications', 'appprojects', 'clusterversions'
-                    ]) or
-                    # Resource names that look like Kubernetes resources (contain dots or hyphens)
-                    any(('.' in item or '-' in item) and len(item) > 3 for item in data) or
-                    # Special catch-all for single wildcard
-                    data == ['*']
+                # 1. Standard Kubernetes RBAC verbs pattern
+                k8s_verbs = {'get', 'list', 'watch', 'create', 'update', 'patch', 'delete'}
+                if any(verb in sample_text for verb in k8s_verbs):
+                    return True
+                
+                # 2. API group pattern detection
+                # a) Dotted API groups (e.g., rbac.authorization.k8s.io, argoproj.io)
+                if any('.' in item and len(item.split('.')) >= 2 for item in items):
+                    return True
+                
+                # b) Pattern-based API group detection (no hardcoded lists)
+                # API groups are typically lowercase, single words or compound words
+                # that don't look like typical resource names
+                for item in items:
+                    item_lower = item.lower()
+                    # Skip empty string (core API) - handle separately
+                    if not item_lower:
+                        continue
+                    
+                    # API groups typically:
+                    # - Are single words without slashes or complex suffixes
+                    # - Don't end with typical resource plural patterns
+                    # - Are relatively short (< 20 chars typically)
+                    # - Don't contain numbers or special chars (except dots/hyphens)
+                    is_likely_api_group = (
+                        len(item_lower) < 20 and  # Reasonable length
+                        '/' not in item_lower and  # Not a subresource
+                        not item_lower.endswith(('s', 'ies', 'es', 'finalizers', 'status')) and  # Not typical resource plural
+                        not any(char.isdigit() for char in item_lower) and  # No version numbers
+                        all(char.isalpha() or char in '.-' for char in item_lower)  # Only letters, dots, hyphens
+                    )
+                    
+                    if is_likely_api_group:
+                        return True
+                
+                # 3. Kubernetes resource pattern detection
+                # Resources often end with 's' (plural) or have specific patterns
+                resource_indicators = {
+                    # Common suffixes
+                    lambda x: x.endswith(('s', 'ies', 'es')),  # Plural resources
+                    # Common patterns
+                    lambda x: '/' in x,  # Subresources like 'pods/log', 'deployments/finalizers'
+                    lambda x: x.endswith('finalizers'),  # Finalizers
+                    lambda x: x.endswith('status'),  # Status subresources
+                    lambda x: len(x) > 4 and '-' in x,  # Hyphenated resources
+                }
+                
+                resource_like_count = sum(
+                    1 for item in items 
+                    if any(indicator(item.lower()) for indicator in resource_indicators)
                 )
                 
-                # Use flow style for RBAC arrays, regardless of length
-                if is_rbac_array:
-                    return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+                # If majority of items look like resources, treat as RBAC array
+                if len(items) > 0 and resource_like_count / len(items) >= 0.5:
+                    return True
+                
+                # 4. Single wildcard permission
+                if items == ['*']:
+                    return True
+                
+                # 5. Pattern-based core resource detection
+                # No hardcoded lists - detect by patterns that indicate K8s resources
+                for item in items:
+                    item_lower = item.lower()
+                    # Resources typically end with 's' or have specific patterns
+                    is_likely_resource = (
+                        item_lower.endswith(('s', 'ies')) and len(item_lower) > 3 or  # Typical plurals
+                        '/' in item_lower or  # Subresources
+                        item_lower.endswith(('finalizers', 'status')) or  # Common subresources
+                        (len(item_lower) > 4 and '-' in item_lower)  # Hyphenated resources
+                    )
+                    if is_likely_resource:
+                        return True
+                
+                # 6. Empty string API group (core API)
+                if '' in items:  # Core API group
+                    return True
+                
+                return False
+            
+            # Apply flow style if detected as RBAC array
+            if is_rbac_array_intelligent(data):
+                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
             
             # Default to block style for other arrays
             return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
