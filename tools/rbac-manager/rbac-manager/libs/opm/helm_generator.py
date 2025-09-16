@@ -78,6 +78,8 @@ class HelmValuesGenerator(BaseGenerator):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
             if cluster_grantor_rules:
+                if least_privileges:
+                    cluster_grantor_rules = self._apply_least_privileges(cluster_grantor_rules)
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
                     '', 'grantor', self._format_rules_for_helm(cluster_grantor_rules), True
                 )
@@ -86,6 +88,8 @@ class HelmValuesGenerator(BaseGenerator):
             # Generate grantor Role ONLY (permissions from CSV) - no operator Role
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
             if namespace_rules:
+                if least_privileges:
+                    namespace_rules = self._apply_least_privileges(namespace_rules)
                 grantor_role = PermissionStructure.create_role_structure(
                     '', 'grantor', self._format_rules_for_helm(namespace_rules), True
                 )
@@ -98,6 +102,8 @@ class HelmValuesGenerator(BaseGenerator):
             
             # Generate operator ClusterRole
             operator_rules = self._generate_operator_rules(bundle_metadata)
+            if least_privileges:
+                operator_rules = self._apply_least_privileges(operator_rules)
             formatted_operator_rules = self._format_rules_for_helm(operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
@@ -110,6 +116,8 @@ class HelmValuesGenerator(BaseGenerator):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
             if cluster_grantor_rules:
+                if least_privileges:
+                    cluster_grantor_rules = self._apply_least_privileges(cluster_grantor_rules)
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
                     '', 'grantor', self._format_rules_for_helm(cluster_grantor_rules), True
                 )
@@ -124,6 +132,8 @@ class HelmValuesGenerator(BaseGenerator):
             
             # Generate operator ClusterRole (management permissions)
             operator_rules = self._generate_operator_rules(bundle_metadata)
+            if least_privileges:
+                operator_rules = self._apply_least_privileges(operator_rules)
             formatted_operator_rules = self._format_rules_for_helm(operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
@@ -133,6 +143,8 @@ class HelmValuesGenerator(BaseGenerator):
             # Generate grantor ClusterRole (treat permissions as cluster-scoped)
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
             if namespace_rules:
+                if least_privileges:
+                    namespace_rules = self._apply_least_privileges(namespace_rules)
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
                     '', 'grantor', self._format_rules_for_helm(namespace_rules), True
                 )
@@ -143,6 +155,8 @@ class HelmValuesGenerator(BaseGenerator):
             # Operator has no permissions defined (unusual case)
             # Generate minimal operator ClusterRole
             operator_rules = self._generate_operator_rules(bundle_metadata)
+            if least_privileges:
+                operator_rules = self._apply_least_privileges(operator_rules)
             formatted_operator_rules = self._format_rules_for_helm(operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
