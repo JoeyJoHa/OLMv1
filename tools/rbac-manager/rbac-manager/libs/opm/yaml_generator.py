@@ -14,7 +14,7 @@ class YAMLManifestGenerator(BaseGenerator):
     """Generates Kubernetes YAML manifests from bundle metadata"""
     
     def generate(self, bundle_metadata: Dict[str, Any], namespace: str = "default", 
-                operator_name: Optional[str] = None) -> Dict[str, str]:
+                operator_name: Optional[str] = None, least_privileges: bool = False) -> Dict[str, str]:
         """
         Generate Kubernetes YAML manifests
         
@@ -39,7 +39,7 @@ class YAMLManifestGenerator(BaseGenerator):
         
         # Generate ClusterRoles
         manifests['02-clusterrole'] = self._generate_cluster_roles(
-            bundle_metadata, operator_name
+            bundle_metadata, operator_name, least_privileges
         )
         
         # Generate ClusterRoleBindings
@@ -79,17 +79,19 @@ class YAMLManifestGenerator(BaseGenerator):
         return self._dump_yaml_with_flow_arrays(sa_manifest)
     
     def _generate_cluster_roles(self, bundle_metadata: Dict[str, Any], 
-                              operator_name: str) -> str:
+                              operator_name: str, least_privileges: bool = False) -> str:
         """Generate ClusterRole YAML manifests with security header"""
         package_name = bundle_metadata.get('package_name', operator_name)
         
         # Generate security header comment for YAML manifests
-        header = self._generate_security_header_comment(operator_name, package_name, 'yaml')
+        header = self._generate_security_header_comment(operator_name, package_name, 'yaml', least_privileges)
         
         manifests = []
         
         # Operator ClusterRole
         operator_rules = self._generate_operator_rules(bundle_metadata)
+        if least_privileges:
+            operator_rules = self._apply_least_privileges(operator_rules)
         operator_cr_name = f"{operator_name}-installer-clusterrole"
         
         operator_cr = ManifestTemplates.cluster_role_template(
@@ -100,6 +102,8 @@ class YAMLManifestGenerator(BaseGenerator):
         # Grantor ClusterRole
         grantor_rules = self._generate_grantor_rules(bundle_metadata)
         if grantor_rules:
+            if least_privileges:
+                grantor_rules = self._apply_least_privileges(grantor_rules)
             grantor_cr_name = f"{operator_name}-installer-rbac-clusterrole"
             
             grantor_cr = ManifestTemplates.cluster_role_template(

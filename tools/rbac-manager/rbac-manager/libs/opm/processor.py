@@ -159,21 +159,23 @@ class BundleProcessor:
         
         return summary
     
-    def generate_helm_values(self, bundle_metadata: Dict[str, Any], operator_name: Optional[str] = None) -> str:
+    def generate_helm_values(self, bundle_metadata: Dict[str, Any], operator_name: Optional[str] = None, 
+                           least_privileges: bool = False) -> str:
         """
         Generate Helm values from processed bundle metadata
         
         Args:
             bundle_metadata: Processed bundle metadata
             operator_name: Optional custom operator name
+            least_privileges: Apply least privilege principles
             
         Returns:
             Helm values YAML string
         """
-        return self.helm_generator.generate(bundle_metadata, operator_name)
+        return self.helm_generator.generate(bundle_metadata, operator_name, least_privileges=least_privileges)
     
     def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = "default", 
-                              operator_name: Optional[str] = None) -> Dict[str, str]:
+                              operator_name: Optional[str] = None, least_privileges: bool = False) -> Dict[str, str]:
         """
         Generate Kubernetes YAML manifests from processed bundle metadata
         
@@ -181,8 +183,9 @@ class BundleProcessor:
             bundle_metadata: Processed bundle metadata
             namespace: Target namespace
             operator_name: Optional custom operator name
+            least_privileges: Apply least privilege principles
             
         Returns:
             Dict mapping manifest names to YAML content
         """
-        return self.yaml_generator.generate(bundle_metadata, namespace, operator_name)
+        return self.yaml_generator.generate(bundle_metadata, namespace, operator_name, least_privileges=least_privileges)

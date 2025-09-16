@@ -259,9 +259,9 @@ class RBACManager:
             
             # Generate outputs based on flags
             if helm:
-                self._generate_helm_output(metadata, output_dir, stdout)
+                self._generate_helm_output(metadata, output_dir, stdout, least_privileges)
             else:
-                self._generate_yaml_output(metadata, namespace, output_dir, stdout)
+                self._generate_yaml_output(metadata, namespace, output_dir, stdout, least_privileges)
                 
         except Exception as e:
             logger.error(f"Error extracting bundle: {e}")
@@ -313,13 +313,13 @@ class RBACManager:
             logger.error(f"Failed to select catalog interactively: {e}")
             return None
     
-    def _generate_yaml_output(self, metadata: Dict[str, Any], namespace: str, output_dir: str, stdout: bool) -> None:
+    def _generate_yaml_output(self, metadata: Dict[str, Any], namespace: str, output_dir: str, stdout: bool, least_privileges: bool = False) -> None:
         """Generate YAML manifest output"""
         package_name = metadata.get('package_name', 'my-operator')
         
         try:
             # Generate manifests using the bundle processor
-            manifests = self.bundle_processor.generate_yaml_manifests(metadata, namespace, package_name)
+            manifests = self.bundle_processor.generate_yaml_manifests(metadata, namespace, package_name, least_privileges)
             
             # Use unified output method
             self._save_output_files(manifests, package_name, output_dir, stdout, "YAML manifests")
@@ -385,12 +385,12 @@ class RBACManager:
             
             print(f"{content_type} generated successfully")
 
-    def _generate_helm_output(self, metadata: Dict[str, Any], output_dir: str, stdout: bool) -> None:
+    def _generate_helm_output(self, metadata: Dict[str, Any], output_dir: str, stdout: bool, least_privileges: bool = False) -> None:
         """Generate Helm values output"""
         package_name = metadata.get('package_name', 'my-operator')
         
         # Generate Helm values
-        helm_values = self.bundle_processor.generate_helm_values(metadata, package_name)
+        helm_values = self.bundle_processor.generate_helm_values(metadata, package_name, least_privileges)
         
         # Use unified output method (single file, so use package name as key)
         content_dict = {package_name: helm_values}
