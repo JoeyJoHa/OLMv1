@@ -42,7 +42,7 @@ The OLMv1 deployment process follows a logical sequence:
 3. **Metadata Query**: Controller queries `catalogd` for the requested operator bundle
 4. **Catalog Response**: `catalogd` provides metadata from File-Based Catalogs
 5. **Bundle Deployment**: Controller pulls and deploys the operator bundle components
-6. **Active Operation**: Operator begins operation with least-privilege access
+6. **Active Operation**: Operator begins operation with optimized RBAC permissions
 
 ## Sequence Diagram
 
@@ -102,23 +102,23 @@ OLMv1/
 │   ├── DEPLOYMENT.md                 # Deployment instructions
 │   └── PROJECT_STRUCTURE.md          # Repository organization guide
 ├── examples/                          # Example configurations and use cases
-│   ├── bundle/                       # Example bundle files
-│   │   ├── ClusterServiceVersion.json # Example CSV
-│   │   ├── CustomResourceDefinition.json # Example CRD
-│   │   └── Service.json              # Example service
+│   ├── bundle.json                   # Example ArgoCD operator bundle metadata
+│   ├── bundlepromethous.json         # Example Prometheus operator bundle
+│   ├── bundlequay.json               # Example Quay operator bundle  
 │   ├── helm/                         # Example Helm values files
 │   │   ├── additional-resources-example.yaml # Additional resources example
 │   │   ├── rbac-only-example.yaml    # RBAC-only deployment example
 │   │   └── values-quay-operator.yaml # Quay operator Helm values
 │   ├── rbac-manager/                 # RBAC Manager tool output examples
-│   │   ├── cluster-role-bindings-*.yaml # Generated ClusterRoleBindings
-│   │   ├── cluster-roles-*.yaml      # Generated ClusterRoles
-│   │   ├── service-accounts-*.yaml   # Generated ServiceAccounts
-│   │   └── values-*.yaml             # Generated Helm values
+│   │   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole with DRY deduplication
+│   │   ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
+│   │   ├── argocd-operator-role-*.yaml # Generated Role (deduplicated)
+│   │   ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
+│   │   └── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
 │   └── yamls/                        # Example Kubernetes YAML files
 │       ├── 00-namespace.yaml         # Namespace definition
 │       ├── 01-serviceaccount.yaml    # Service account for operator
-│       ├── 02-clusterrole.yaml       # Cluster role with least privilege
+│       ├── 02-clusterrole.yaml       # Cluster role with optimized permissions
 │       ├── 03-clusterrolebinding.yaml # Cluster role binding
 │       └── 04-clusterextension.yaml  # OLMv1 ClusterExtension
 ├── helm/                             # Helm chart for OLMv1 deployment
@@ -160,11 +160,11 @@ OLMv1/
 │       │       │   ├── exceptions.py # Custom exceptions
 │       │       │   └── utils.py      # Utility functions
 │       │       ├── opm/              # OPM integration
-│       │       │   ├── base_generator.py # Base generator class
+│       │       │   ├── base_generator.py # Base generator with DRY deduplication logic
 │       │       │   ├── client.py     # OPM binary client
-│       │       │   ├── helm_generator.py # Helm values generator
+│       │       │   ├── helm_generator.py # Helm values generator (deduplicated)
 │       │       │   ├── processor.py  # Bundle processor
-│       │       │   └── yaml_generator.py # YAML manifest generator
+│       │       │   └── yaml_generator.py # YAML manifest generator (deduplicated)
 │       │       ├── help_manager.py   # Help system manager
 │       │       └── main_app.py       # Main application logic
 │       ├── tests/                    # Test suite
@@ -243,10 +243,22 @@ python3 rbac-manager.py --opm --image <bundle-image> --helm
    - **Only `clusterPermissions`**: ClusterRoles only
 2. **Kubernetes-Native Output**: Generates proper Kubernetes RBAC YAML with consistent naming
 3. **Helm Integration**: Mixed block/flow YAML style with comprehensive security notices
-4. **Security Best Practices**: Implements OLMv1 security patterns with post-installation hardening guidance
+4. **DRY Deduplication**: Advanced permission deduplication eliminates redundant RBAC rules between ClusterRoles and Roles
 5. **Microservice Architecture**: Clean BundleProcessor orchestrator with separated concerns
 6. **Live Catalog Access**: Query catalogd directly for real-time operator bundle information
 7. **Automation Ready**: Supports scripting and CI/CD integration for GitOps workflows
+
+### DRY Deduplication Features
+
+The RBAC Manager now includes intelligent **DRY (Don't Repeat Yourself)** deduplication that automatically:
+
+- **🔍 Detects Redundancy**: Identifies when Role permissions are already covered by ClusterRole permissions
+- **🎯 Preserves Specificity**: Keeps resource-specific rules with `resourceNames` even when broader permissions exist  
+- **⚡ Handles Wildcards**: Recognizes when wildcard permissions (`verbs: ['*']`) supersede specific permissions
+- **🧹 Reduces Complexity**: Eliminates duplicate RBAC rules for cleaner, more maintainable configurations
+- **🔒 Enhances Security**: Reduces permission conflicts and improves overall security posture
+
+**Example**: If a ClusterRole grants `['*']` verbs on `[configmaps, services]`, the tool automatically removes redundant Role rules for those same resources, keeping only resource-specific rules with `resourceNames`.
 
 ### Integration with OLMv1 Workflow
 

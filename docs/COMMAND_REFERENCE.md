@@ -2,7 +2,7 @@
 
 This section provides practical commands for interacting with OLMv1 catalogs and analyzing operator bundles. Most commands use the `opm` tool, but equivalent `catalogd` interactions are also shown.
 
-> **💡 Tip**: For easier RBAC extraction and operator analysis, consider using the [RBAC Manager Tool](../tools/rbac-manager/) which automates many of these manual processes with a user-friendly interface and configuration file support.
+> **💡 Tip**: For easier RBAC extraction and operator analysis, consider using the [RBAC Manager Tool](../tools/rbac-manager/) which automates many of these manual processes with a user-friendly interface, configuration file support, and **DRY deduplication** that eliminates redundant RBAC rules between ClusterRoles and Roles.
 
 ## Table of Contents
 
@@ -330,7 +330,7 @@ opm render registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e
 
 ## Integration with RBAC Manager
 
-For automated processing of these commands and more user-friendly interfaces, consider using the [RBAC Manager Tool](../tools/rbac-manager/):
+For automated processing of these commands and more user-friendly interfaces, consider using the [RBAC Manager Tool](../tools/rbac-manager/) with **intelligent DRY deduplication**:
 
 ### Basic Operations
 
@@ -347,9 +347,21 @@ python3 rbac-manager.py --list-catalogs
 # Automated RBAC extraction
 python3 rbac-manager.py --opm --image <bundle-image>
 
-# Generate Helm values with security notices
+# Generate Helm values with security notices and DRY deduplication
 python3 rbac-manager.py --opm --image <bundle-image> --helm
 ```
+
+### DRY Deduplication Benefits
+
+The RBAC Manager automatically applies **DRY (Don't Repeat Yourself)** deduplication to eliminate redundant permissions:
+
+- **🔍 Removes Duplicates**: Automatically removes Role permissions that are already covered by ClusterRole permissions
+- **🎯 Preserves Specificity**: Keeps resource-specific rules with `resourceNames` even when broader permissions exist
+- **⚡ Handles Wildcards**: Recognizes when wildcard verbs (`['*']`) supersede specific verb lists
+- **🧹 Cleaner Output**: Results in fewer, more maintainable RBAC rules
+- **🔒 Better Security**: Reduces permission conflicts and potential security issues
+
+**Example**: If a ClusterRole grants `verbs: ['*']` on `resources: [configmaps, services]`, redundant Role rules for those same resources are automatically removed, keeping only resource-specific rules with `resourceNames`.
 
 ### Configuration File Generation
 
