@@ -533,14 +533,13 @@ class CatalogdTestSuite:
         """Test generating config with package parameters"""
         print("🧪 Testing config generation with parameters...")
         
-        cmd = self.base_cmd + [
+        result = self.run_command([
             "--generate-config",
             "--catalog-name", self.test_catalog,
             "--package", self.test_package,
             "--channel", self.test_channel,
             "--version", self.test_version
-        ]
-        result = self.run_command(cmd[2:])
+        ])
         
         # Check if config with real bundle data is generated
         success = (
@@ -574,13 +573,12 @@ class CatalogdTestSuite:
         print("🧪 Testing config file generation...")
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            cmd = self.base_cmd + [
+            result = self.run_command([
                 "--generate-config",
                 "--package", self.test_package,
                 "--channel", self.test_channel,
                 "--output", temp_dir
-            ]
-            result = self.run_command(cmd[2:])
+            ])
             
             # Check if config file was created
             config_files = list(Path(temp_dir).glob("rbac-manager-config.yaml"))
@@ -613,7 +611,7 @@ class CatalogdTestSuite:
                     "exit_code": result["exit_code"],
                     "file_created": len(config_files) == 1,
                     "config_valid": config_content_valid,
-                    "command": self._mask_token_in_command(' '.join(self.base_cmd + ["--generate-config", "--package", self.test_package, "--channel", self.test_channel, "--output", temp_dir]))
+                    "command": self._mask_token_in_command(' '.join(self.base_cmd + ["--generate-config", "--package", self.test_package, "--channel", self.test_channel, "--output", "/tmp/placeholder-output-dir"]))
                 }
             })
             
@@ -625,26 +623,47 @@ class CatalogdTestSuite:
         """Test list-catalogs subcommand"""
         print("🧪 Testing list-catalogs command...")
         
-        result = self.run_command(["list-catalogs"])
-        
-        # Check if catalogs are listed
-        success = (
-            result["exit_code"] == 0 and
-            "ClusterCatalog" in result["stdout"] and
-            "Serving" in result["stdout"] and
-            ("openshift-redhat-operators" in result["stdout"] or
-             "openshift-community-operators" in result["stdout"])
-        )
-        
-        self.test_results.append({
-            "test": "list_catalogs_command",
-            "success": success,
-            "details": {
-                "exit_code": result["exit_code"],
-                "has_catalog_output": success,
-                "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
-            }
-        })
+        # Use subprocess directly for list-catalogs since it's a different subcommand
+        try:
+            result = subprocess.run(
+                self.list_catalogs_cmd,
+                text=True,
+                capture_output=True,
+                timeout=120,
+                cwd=Path(__file__).parent.parent
+            )
+            
+            # Check if catalogs are listed (expecting JSON format)
+            success = (
+                result.returncode == 0 and
+                ('"serving": true' in result.stdout or '"status": "Serving"' in result.stdout) and
+                ("openshift-redhat-operators" in result.stdout or
+                 "openshift-community-operators" in result.stdout)
+            )
+            
+            self.test_results.append({
+                "test": "list_catalogs_command",
+                "success": success,
+                "details": {
+                    "exit_code": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "has_catalog_output": success,
+                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+                }
+            })
+            
+        except Exception as e:
+            self.test_results.append({
+                "test": "list_catalogs_command", 
+                "success": False,
+                "details": {
+                    "exit_code": -1,
+                    "error": str(e),
+                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+                }
+            })
+            success = False
         
         print(f"   {'✅' if success else '❌'} List catalogs: command executed successfully")
         return success
