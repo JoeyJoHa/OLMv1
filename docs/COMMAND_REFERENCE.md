@@ -423,6 +423,7 @@ examples/rbac-manager/
 ```
 
 **Usage:**
+
 - **`generated-files/`**: Use these files for initial deployment with installer permissions
 - **`post-installation/`**: Reference these examples after deployment to harden permissions with specific `resourceNames`
 

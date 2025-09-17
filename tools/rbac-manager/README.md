@@ -46,6 +46,55 @@ pip install -r requirements.txt
 
 > **💡 Note**: Kubernetes access is only required for catalogd integration (listing catalogs, querying packages). The core `--opm` functionality works offline with just the bundle image URL.
 
+## Tool Structure
+
+```tree
+tools/rbac-manager/
+├── rbac-manager/                     # Main tool package
+│   ├── help/                         # Help text files
+│   │   ├── catalogd_examples_help.txt # Catalogd command examples
+│   │   ├── catalogd_help.txt         # Catalogd command help
+│   │   ├── config_help.txt           # Configuration help
+│   │   ├── examples_help.txt         # Comprehensive examples
+│   │   ├── generate_config_examples_help.txt # Config generation examples
+│   │   ├── list_catalogs_examples_help.txt # List catalogs examples
+│   │   ├── list_catalogs_help.txt    # List catalogs help
+│   │   ├── main_help.txt             # Main command help
+│   │   ├── opm_examples_help.txt     # OPM command examples
+│   │   └── opm_help.txt              # OPM command help
+│   └── libs/                         # Core libraries
+│       ├── catalogd/                 # Catalogd integration
+│       │   ├── __init__.py
+│       │   ├── cache.py              # Caching functionality
+│       │   ├── client.py             # Low-level catalogd client
+│       │   ├── parser.py             # Response parsing
+│       │   ├── service.py            # High-level service
+│       │   └── session.py            # Session management
+│       ├── core/                     # Core utilities
+│       │   ├── __init__.py
+│       │   ├── auth.py               # Authentication handling
+│       │   ├── config.py             # Configuration management
+│       │   ├── constants.py          # Application constants
+│       │   ├── exceptions.py         # Custom exceptions
+│       │   ├── protocols.py          # Type protocols
+│       │   └── utils.py              # Utility functions
+│       ├── opm/                      # OPM integration
+│       │   ├── __init__.py
+│       │   ├── base_generator.py     # Base generator with DRY deduplication logic
+│       │   ├── client.py             # OPM binary client
+│       │   ├── helm_generator.py     # Helm values generator (deduplicated)
+│       │   ├── processor.py          # Bundle processor
+│       │   └── yaml_generator.py     # YAML manifest generator (deduplicated)
+│       ├── __init__.py
+│       ├── help_manager.py           # Help system manager
+│       └── main_app.py               # Main application logic
+├── tests/                            # Test suite
+│   └── test_catalogd.py              # Catalogd integration tests
+├── rbac-manager.py                   # CLI entry point
+├── requirements.txt                  # Python dependencies
+└── README.md                         # This documentation
+```
+
 ## Installation
 
 1. Clone the repository and navigate to the tool directory:
