@@ -76,7 +76,7 @@ class HelmValuesGenerator(BaseGenerator):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
             # Add bundled cluster-scoped resource permissions
-            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
             cluster_grantor_rules.extend(bundled_cluster_rules)
             
             # Apply DRY deduplication to cluster rules
@@ -134,7 +134,7 @@ class HelmValuesGenerator(BaseGenerator):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
             # Add bundled cluster-scoped resource permissions
-            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
             cluster_grantor_rules.extend(bundled_cluster_rules)
             
             # Apply DRY deduplication to cluster rules
@@ -165,7 +165,7 @@ class HelmValuesGenerator(BaseGenerator):
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
             
             # Add bundled cluster-scoped resource permissions
-            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
             combined_rules = namespace_rules + bundled_cluster_rules
             
             if combined_rules:

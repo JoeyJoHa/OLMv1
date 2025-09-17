@@ -840,6 +840,69 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         
         return rules
     
+    def _generate_bundled_cluster_resource_rules_for_grantor(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Generate rules for bundled cluster-scoped resources EXCLUDING ClusterRoles (for grantor ClusterRole)
+        ClusterRole management should only be in the installer ClusterRole, not grantor
+        
+        Args:
+            bundle_metadata: Bundle metadata from OPM
+            
+        Returns:
+            List of RBAC rules for managing non-ClusterRole cluster-scoped resources from bundle
+        """
+        rules = []
+        cluster_resources = bundle_metadata.get('cluster_scoped_resources', [])
+        
+        if cluster_resources:
+            # Only process non-ClusterRole cluster resources for grantor
+            other_cluster_resources = []
+            
+            for resource in cluster_resources:
+                kind = resource.get('kind', '')
+                if kind != 'ClusterRole':  # Exclude ClusterRoles from grantor
+                    other_cluster_resources.append(resource)
+            
+            # Handle non-ClusterRole cluster-scoped resources with the existing grouping logic
+            if other_cluster_resources:
+                # Group cluster-scoped resources by API group and resource type
+                cluster_resource_groups = {}
+                
+                for resource in other_cluster_resources:
+                    kind = resource.get('kind', '')
+                    name = resource.get('name', '')
+                    api_version = resource.get('apiVersion', '')
+                    
+                    # Extract API group and resource type from kind and apiVersion
+                    api_group, resource_type = self._get_api_group_and_resource(kind, api_version)
+                    
+                    if api_group is not None and resource_type:
+                        group_key = (api_group, resource_type)
+                        if group_key not in cluster_resource_groups:
+                            cluster_resource_groups[group_key] = []
+                        
+                        if name:
+                            cluster_resource_groups[group_key].append(name)
+                
+                # Create rules for each cluster resource group
+                for (api_group, resource_type), resource_names in cluster_resource_groups.items():
+                    # For cluster-scoped resources, add scoped permissions
+                    if resource_names:
+                        cluster_manage_rule = {
+                            'apiGroups': [api_group],
+                            'resources': [resource_type],
+                            'verbs': [
+                                KubernetesConstants.GET_VERB,
+                                KubernetesConstants.UPDATE_VERB,
+                                KubernetesConstants.PATCH_VERB,
+                                KubernetesConstants.DELETE_VERB
+                            ],
+                            'resourceNames': resource_names
+                        }
+                        rules.append(cluster_manage_rule)
+        
+        return rules
+    
     def _generate_grantor_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Generate grantor ClusterRole rules from ONLY cluster permissions (spec.install.clusterPermissions)

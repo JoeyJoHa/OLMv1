@@ -97,11 +97,11 @@ class YAMLManifestGenerator(BaseGenerator):
         )
         manifests.append(operator_cr)
         
-        # Grantor ClusterRole (CSV permissions + bundled cluster resources)
+        # Grantor ClusterRole (CSV permissions + bundled cluster resources EXCLUDING ClusterRoles)
         grantor_rules = self._generate_grantor_rules(bundle_metadata)
         
-        # Add bundled cluster-scoped resource permissions
-        bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+        # Add bundled cluster-scoped resource permissions (excluding ClusterRoles)
+        bundled_cluster_rules = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
         combined_grantor_rules = grantor_rules + bundled_cluster_rules
         
         # Apply DRY deduplication to combined grantor rules
