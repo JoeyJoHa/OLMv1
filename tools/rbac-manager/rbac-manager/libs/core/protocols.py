@@ -6,6 +6,7 @@ Defines protocols (interfaces) for dependency injection and type hints.
 
 from typing import Protocol, Dict, Any, Optional, Tuple
 from kubernetes import client
+from .constants import KubernetesConstants
 
 
 class AuthProvider(Protocol):
@@ -67,7 +68,7 @@ class BundleProvider(Protocol):
         """Extract bundle metadata from container image"""
         ...
     
-    def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = "default", 
+    def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = KubernetesConstants.DEFAULT_NAMESPACE, 
                               operator_name: Optional[str] = None) -> Dict[str, str]:
         """Generate Kubernetes YAML manifests"""
         ...

@@ -7,13 +7,13 @@ Generates Kubernetes YAML manifests from OPM bundle metadata.
 import yaml
 from typing import Dict, List, Any, Optional
 from .base_generator import BaseGenerator, ManifestTemplates
-from ..core.constants import OPMConstants
+from ..core.constants import OPMConstants, KubernetesConstants
 
 
 class YAMLManifestGenerator(BaseGenerator):
     """Generates Kubernetes YAML manifests from bundle metadata"""
     
-    def generate(self, bundle_metadata: Dict[str, Any], namespace: str = "default", 
+    def generate(self, bundle_metadata: Dict[str, Any], namespace: str = KubernetesConstants.DEFAULT_NAMESPACE, 
                 operator_name: Optional[str] = None) -> Dict[str, str]:
         """
         Generate Kubernetes YAML manifests

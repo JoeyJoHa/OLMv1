@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional
 
 # Core libraries
 from .core import OpenShiftAuth, ConfigManager, setup_logging, disable_ssl_warnings
-from .core.exceptions import RBACManagerError, AuthenticationError, ConfigurationError
+from .core.exceptions import AuthenticationError, ConfigurationError
 from .core.protocols import AuthProvider, ConfigProvider, BundleProvider, CatalogdProvider, HelpProvider
 from .core.constants import ErrorMessages, KubernetesConstants
 
@@ -231,7 +231,7 @@ class RBACManager:
             logger.error(f"Error querying catalogd: {e}")
             print(f"Error: {e}", file=sys.stderr)
     
-    def extract_bundle(self, image: str, namespace: str = "default", registry_token: str = None,
+    def extract_bundle(self, image: str, namespace: str = KubernetesConstants.DEFAULT_NAMESPACE, registry_token: str = None,
                       helm: bool = False, output_dir: str = None, stdout: bool = False, 
                       channel: str = None) -> None:
         """
@@ -516,15 +516,25 @@ def handle_examples(command_name: str) -> bool:
     return True
 
 
-def configure_authentication(rbac_manager, args):
-    """Configure authentication for commands that need it."""
+def configure_authentication_from_args(rbac_manager, args):
+    """
+    Configure authentication using centralized auth logic from OpenShiftAuth.
+    
+    Args:
+        rbac_manager: RBACManager instance
+        args: Parsed command-line arguments
+    """
     if hasattr(args, 'openshift_url') and hasattr(args, 'openshift_token') and args.openshift_url and args.openshift_token:
         if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
             print("Failed to configure OpenShift authentication")
             sys.exit(1)
     else:
         # Try to configure with default context
-        rbac_manager.configure_authentication()
+        if not rbac_manager.configure_authentication():
+            print("Failed to configure authentication from context")
+            sys.exit(1)
+
+
 
 
 def generate_config_file(args, extracted_data=None, output_path=None, stdout=False):
@@ -663,7 +673,8 @@ def handle_list_catalogs_command(args, rbac_manager, config):
     # Merge configuration file values with command-line arguments
     merge_config_with_args(args, config, 'list-catalogs')
     
-    configure_authentication(rbac_manager, args)
+    configure_authentication_from_args(rbac_manager, args)
+    
     exit_code = rbac_manager.list_catalogs()
     sys.exit(exit_code)
 
@@ -689,20 +700,51 @@ def handle_catalogd_command(args, rbac_manager, config):
         # Merge configuration file values with command-line arguments
         merge_config_with_args(args, config, 'catalogd')
         
-        configure_authentication(rbac_manager, args)
-        
-        # For now, generate config template with provided values
-        # TODO: In future, we could enhance catalogd service to return data for config generation
+        # Try to get real data from catalogd if authentication is provided
         extracted_data = {
-            'bundle_image': 'bundle-image-from-catalogd',  # This would come from catalogd query
+            'bundle_image': 'bundle-image-from-catalogd',  # Default placeholder
             'channel': args.channel or 'channel-name',
             'package': args.package or 'package-name',
             'version': args.version or 'version'
         }
+        
+        # Attempt to query catalogd if authentication is available
+        if hasattr(args, 'openshift_url') and args.openshift_url and hasattr(args, 'openshift_token') and args.openshift_token:
+            try:
+                # Configure authentication using centralized auth logic (optional for generate-config)
+                if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
+                    raise Exception("Failed to configure OpenShift authentication")
+                
+                # Try to get real bundle metadata from catalogd
+                if args.catalog_name and args.package and args.channel and args.version:
+                    bundle_data = rbac_manager.catalogd_service.get_version_metadata(
+                        args.catalog_name, args.package, args.channel, args.version,
+                        rbac_manager.auth.get_auth_headers()
+                    )
+                    if bundle_data and 'bundle_image' in bundle_data and bundle_data['bundle_image']:
+                        extracted_data['bundle_image'] = bundle_data['bundle_image']
+                        if not output_to_stdout:
+                            print("Successfully extracted bundle image from catalogd")
+                    else:
+                        if not output_to_stdout:
+                            print("Note: Could not extract bundle image from catalogd, using placeholder")
+                else:
+                    if not output_to_stdout:
+                        print("Note: --catalog-name required with authentication for real bundle data")
+            except Exception as e:
+                if not output_to_stdout:
+                    print(f"Note: Could not query catalogd ({e}), using placeholder values")
+        else:
+            if not output_to_stdout:
+                print("Note: Use --openshift-url and --openshift-token with --catalog-name for real bundle data")
+        
         config_file = generate_config_file(args, extracted_data, stdout=output_to_stdout)
         if not output_to_stdout:
-            print(f"Configuration template generated with provided values: {config_file}")
-            print("Note: Bundle image URL should be updated with actual value from catalogd query.")
+            if extracted_data['bundle_image'] == 'bundle-image-from-catalogd':
+                print(f"Configuration template generated with provided values: {config_file}")
+                print("Note: Bundle image URL should be updated with actual value from catalogd query.")
+            else:
+                print(f"Configuration generated with extracted bundle data: {config_file}")
         return
     
     # Check if any operational flags are provided
@@ -713,7 +755,7 @@ def handle_catalogd_command(args, rbac_manager, config):
     # Merge configuration file values with command-line arguments
     merge_config_with_args(args, config, 'catalogd')
     
-    configure_authentication(rbac_manager, args)
+    configure_authentication_from_args(rbac_manager, args)
     
     rbac_manager.query_catalogd(
         catalog_name=args.catalog_name,

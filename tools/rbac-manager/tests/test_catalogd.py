@@ -45,6 +45,15 @@ class CatalogdTestSuite:
         if self.skip_tls:
             self.base_cmd.append("--skip-tls")
         
+        # Base command for list-catalogs
+        self.list_catalogs_cmd = [
+            "python3", "rbac-manager.py", "list-catalogs",
+            "--openshift-url", self.openshift_url,
+            "--openshift-token", self.openshift_token
+        ]
+        if self.skip_tls:
+            self.list_catalogs_cmd.append("--skip-tls")
+        
         self.test_results = []
         self.test_catalog = "openshift-redhat-operators"
         self.test_package = "quay-operator"
@@ -486,6 +495,155 @@ class CatalogdTestSuite:
         print(f"   {'✅' if success else '❌'} Output truncation: JSON parsed correctly")
         return success
     
+    def test_generate_config_template(self) -> bool:
+        """Test generating config template without parameters"""
+        print("🧪 Testing config template generation...")
+        
+        result = self.run_command(["catalogd", "--generate-config"])
+        
+        # Check if YAML config is generated to stdout
+        success = (
+            result["exit_code"] == 0 and
+            "operator:" in result["stdout"] and
+            "image:" in result["stdout"] and
+            "channel:" in result["stdout"] and
+            "output:" in result["stdout"] and
+            "global:" in result["stdout"]
+        )
+        
+        self.test_results.append({
+            "test": "generate_config_template",
+            "success": success,
+            "details": {
+                "exit_code": result["exit_code"],
+                "stdout_contains_yaml": success,
+                "command": self._mask_token_in_command(' '.join(self.base_cmd + ["--generate-config"]))
+            }
+        })
+        
+        print(f"   {'✅' if success else '❌'} Config template: generated to stdout")
+        return success
+    
+    def test_generate_config_with_params(self) -> bool:
+        """Test generating config with package parameters"""
+        print("🧪 Testing config generation with parameters...")
+        
+        cmd = self.base_cmd + [
+            "--generate-config",
+            "--catalog-name", self.test_catalog,
+            "--package", self.test_package,
+            "--channel", self.test_channel,
+            "--version", self.test_version
+        ]
+        result = self.run_command(cmd[2:])
+        
+        # Check if config with real bundle data is generated
+        success = (
+            result["exit_code"] == 0 and
+            "operator:" in result["stdout"] and
+            f'packageName: "{self.test_package}"' in result["stdout"] and
+            f'channel: "{self.test_channel}"' in result["stdout"] and
+            f'version: "{self.test_version}"' in result["stdout"]
+        )
+        
+        # Check if real bundle image was extracted (not placeholder)
+        has_real_bundle = "bundle-image-from-catalogd" not in result["stdout"]
+        
+        self.test_results.append({
+            "test": "generate_config_with_params",
+            "success": success,
+            "details": {
+                "exit_code": result["exit_code"],
+                "has_package_info": success,
+                "has_real_bundle_image": has_real_bundle,
+                "command": self._mask_token_in_command(' '.join(self.base_cmd + ["--generate-config", "--catalog-name", self.test_catalog, "--package", self.test_package, "--channel", self.test_channel, "--version", self.test_version]))
+            }
+        })
+        
+        print(f"   {'✅' if success else '❌'} Config with params: package info included")
+        print(f"   {'✅' if has_real_bundle else '❌'} Real bundle image: extracted from catalogd")
+        return success
+    
+    def test_generate_config_file_output(self) -> bool:
+        """Test generating config file to output directory"""
+        print("🧪 Testing config file generation...")
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cmd = self.base_cmd + [
+                "--generate-config",
+                "--package", self.test_package,
+                "--channel", self.test_channel,
+                "--output", temp_dir
+            ]
+            result = self.run_command(cmd[2:])
+            
+            # Check if config file was created
+            config_files = list(Path(temp_dir).glob("rbac-manager-config.yaml"))
+            success = (
+                result["exit_code"] == 0 and
+                len(config_files) == 1 and
+                "Configuration" in result["stdout"]
+            )
+            
+            # Validate config file content
+            config_content_valid = False
+            if config_files:
+                try:
+                    import yaml
+                    with open(config_files[0], 'r') as f:
+                        config_data = yaml.safe_load(f)
+                    config_content_valid = (
+                        "operator" in config_data and
+                        "output" in config_data and
+                        "global" in config_data and
+                        config_data["operator"]["packageName"] == self.test_package
+                    )
+                except Exception:
+                    pass
+            
+            self.test_results.append({
+                "test": "generate_config_file_output",
+                "success": success and config_content_valid,
+                "details": {
+                    "exit_code": result["exit_code"],
+                    "file_created": len(config_files) == 1,
+                    "config_valid": config_content_valid,
+                    "command": self._mask_token_in_command(' '.join(self.base_cmd + ["--generate-config", "--package", self.test_package, "--channel", self.test_channel, "--output", temp_dir]))
+                }
+            })
+            
+            print(f"   {'✅' if success else '❌'} Config file: created in output directory")
+            print(f"   {'✅' if config_content_valid else '❌'} Config content: valid YAML structure")
+            return success and config_content_valid
+    
+    def test_list_catalogs_command(self) -> bool:
+        """Test list-catalogs subcommand"""
+        print("🧪 Testing list-catalogs command...")
+        
+        result = self.run_command(["list-catalogs"])
+        
+        # Check if catalogs are listed
+        success = (
+            result["exit_code"] == 0 and
+            "ClusterCatalog" in result["stdout"] and
+            "Serving" in result["stdout"] and
+            ("openshift-redhat-operators" in result["stdout"] or
+             "openshift-community-operators" in result["stdout"])
+        )
+        
+        self.test_results.append({
+            "test": "list_catalogs_command",
+            "success": success,
+            "details": {
+                "exit_code": result["exit_code"],
+                "has_catalog_output": success,
+                "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+            }
+        })
+        
+        print(f"   {'✅' if success else '❌'} List catalogs: command executed successfully")
+        return success
+    
     def run_all_tests(self) -> Dict[str, Any]:
         """Run all catalogd tests"""
         print("🚀 Starting Catalogd Test Suite")
@@ -496,10 +654,14 @@ class CatalogdTestSuite:
         # Run all tests
         tests = [
             self.test_basic_catalogd_help,
+            self.test_list_catalogs_command,
             self.test_list_packages,
             self.test_list_channels,
             self.test_list_versions,
             self.test_get_metadata,
+            self.test_generate_config_template,
+            self.test_generate_config_with_params,
+            self.test_generate_config_file_output,
             self.test_interactive_catalog_selection,
             self.test_invalid_catalog,
             self.test_misspelled_catalog,

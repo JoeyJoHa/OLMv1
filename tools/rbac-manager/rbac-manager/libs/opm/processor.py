@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, Optional
 
 from ..core.exceptions import BundleProcessingError
-from ..core.constants import OPMConstants
+from ..core.constants import OPMConstants, KubernetesConstants
 from .client import OPMClient
 from .helm_generator import HelmValuesGenerator
 from .yaml_generator import YAMLManifestGenerator
@@ -351,7 +351,7 @@ class BundleProcessor:
         """
         return self.helm_generator.generate(bundle_metadata, operator_name, channel=channel)
     
-    def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = "default", 
+    def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = KubernetesConstants.DEFAULT_NAMESPACE, 
                               operator_name: Optional[str] = None) -> Dict[str, str]:
         """
         Generate Kubernetes YAML manifests from processed bundle metadata

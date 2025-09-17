@@ -9,10 +9,9 @@ DESCRIPTION:
     Helm values for OLMv1 operators.
 
 COMMANDS:
-    list-catalogs         List all available ClusterCatalogs with serving status and age
+    list-catalogs         List all available ClusterCatalogs with serving status and age                                                              
     catalogd              Query catalogd service for package information
     opm                   Extract metadata from operator bundle images
-    generate-config       Generate configuration file template
 
 GLOBAL OPTIONS:
     --help                Show this help message
@@ -28,8 +27,8 @@ EXAMPLES:
     # Extract bundle metadata
     rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
 
-    # Generate configuration
-    rbac-manager generate-config --output ./configs/
+    # Generate configuration from catalogd data
+    rbac-manager catalogd --generate-config --package argocd-operator --channel alpha
 
     # Show examples for specific commands
     rbac-manager opm --examples
