@@ -1,0 +1,215 @@
+# IMPORTANT: Verify Correct Channel Before Deployment
+# ====================================================
+# The 'channel' field below is set to 'stable' by default, but many operators
+# use different channels (alpha, beta, candidate, etc.).
+#
+# 🔍 FIND THE CORRECT CHANNEL:
+# Use the RBAC Manager tool to discover available channels for this operator:
+#
+#   # Step 1: List available catalogs
+#   python3 rbac-manager.py list-catalogs --skip-tls
+#
+#   # Step 2: Show channels for argocd-operator (use catalog from step 1)
+#   python3 rbac-manager.py catalogd --catalog-name operatorhubio-catalog \
+#     --package argocd-operator
+#
+#   # Alternative: Direct OpenShift API access
+#   python3 rbac-manager.py catalogd --catalog-name operatorhubio-catalog \
+#     --package argocd-operator --openshift-url https://api.cluster.example.com:6443 \
+#     --openshift-token sha256~your-token
+#
+#   # Example: ArgoCD operator uses 'alpha' channel, not 'stable':
+#   operator:
+#     channel: alpha  # ← Update this based on catalogd output
+#
+# ⚠️  Using wrong channel will cause deployment failures!
+#
+# =========================================================
+#
+# SECURITY NOTICE: Post-Installation RBAC Hardening Required
+# =========================================================
+# This values.yaml contains installer permissions with INTENTIONALLY BROAD SCOPE
+# for successful initial deployment. The installer ClusterRole uses wildcard
+# permissions (no resourceNames specified) which defaults to '*' behavior.
+#
+# CRITICAL: After successful OLMv1 installation, you MUST harden these permissions:
+#
+# Step 1: Inspect Created Resources
+# ---------------------------------
+# Run these commands to see what OLMv1 actually created:
+#   oc get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#   oc get clusterextensions
+#
+# Step 2: Update Installer Permissions  
+# ------------------------------------
+# In this values.yaml, look for rules with 'resourceNames: []' (empty arrays).
+# These are the rules that need hardening after the operator is installed:
+#
+# For ClusterRole/ClusterRoleBinding management rules:
+#   resourceNames: [] # After install, add: ["<packageName>.<hash1>", "<packageName>.<hash2>"]
+#   Example: ['argocd-operator.a1b2c3d4', 'argocd-operator.e5f6g7h8']
+#   Command: oc get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#
+# For ClusterExtension finalizer rules:
+#   resourceNames: [] # After install, add: ["<your-chosen-clusterextension-name>"]
+#   Example: ['my-argocd-operator'] or ['company-gitops']
+#   Command: oc get clusterextensions
+#
+# Step 3: Redeploy with Hardened Permissions
+# ------------------------------------------
+#   helm upgrade <release-name> <chart-path> -f <this-values.yaml>
+#
+# =========================================================
+#
+# Argocd-Operator Operator specific values for the generic operator-olm-v1 Helm chart
+# This file demonstrates how to configure the generic chart for the argocd-operator operator
+# Generated automatically from bundle metadata
+nameOverride: ''
+fullnameOverride: ''
+operator:
+  name: argocd-operator
+  create: true
+  appVersion: 0.7.0
+  channel: stable
+  packageName: argocd-operator
+serviceAccount:
+  create: true
+  name: ''
+  bind: true
+  annotations: {}
+  labels: {}
+permissions:
+  clusterRoles:
+  - name: ''
+    type: operator
+    create: true
+    customRules:
+    # Operator management permissions (CRDs, RBAC, finalizers)
+    - apiGroups: [olm.operatorframework.io]
+      resources: [clusterextensions/finalizers]
+      verbs: [update]
+      resourceNames: []
+    - apiGroups: [apiextensions.k8s.io]
+      resources: [customresourcedefinitions]
+      verbs: [create, list, watch]
+    - apiGroups: [apiextensions.k8s.io]
+      resources: [customresourcedefinitions]
+      verbs: [get, update, patch, delete]
+      resourceNames: [applications.argoproj.io, applicationsets.argoproj.io, appprojects.argoproj.io,
+        argocdexports.argoproj.io, argocds.argoproj.io]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterroles]
+      verbs: [create, list, watch]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterroles]
+      verbs: [delete, get, patch, update]
+      resourceNames: [argocd-operator.v0-1dhiybrldl1gyksid1dk2dqjsc72psdybc7iyvse5gpx, argocd-operator.v0-22gmilmgp91wu25is5i2ec598hni8owq3l71bbkl7iz3]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterroles]
+      verbs: [get, update, patch, delete]
+      resourceNames: [argocd-operator-metrics-reader]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterrolebindings]
+      verbs: [create, list, watch]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterrolebindings]
+      verbs: [delete, get, patch, update]
+      resourceNames: [ argocd-operator.v0-1dhiybrldl1gyksid1dk2dqjsc72psdybc7iyvse5gpx, argocd-operator.v0-22gmilmgp91wu25is5i2ec598hni8owq3l71bbkl7iz3]
+  - name: ''
+    type: grantor
+    create: true
+    customRules:
+    # Application-specific permissions from bundle metadata
+    - apiGroups: ['']
+      resources: [configmaps, endpoints, events, namespaces, persistentvolumeclaims,
+        pods, secrets, serviceaccounts, services, services/finalizers]
+      verbs: ['*']
+    - apiGroups: ['']
+      resources: [pods, pods/log]
+      verbs: [get]
+    - apiGroups: [apps]
+      resources: [daemonsets, deployments, replicasets, statefulsets]
+      verbs: ['*']
+    - apiGroups: [apps]
+      resources: [deployments/finalizers]
+      verbs: [update]
+      resourceNames: [argocd-operator]
+    - apiGroups: [apps.openshift.io]
+      resources: [deploymentconfigs]
+      verbs: ['*']
+    - apiGroups: [argoproj.io]
+      resources: [applications, appprojects]
+      verbs: ['*']
+    - apiGroups: [argoproj.io]
+      resources: [argocdexports, argocdexports/finalizers, argocdexports/status]
+      verbs: ['*']
+    - apiGroups: [argoproj.io]
+      resources: [argocds, argocds/finalizers, argocds/status]
+      verbs: ['*']
+    - apiGroups: [autoscaling]
+      resources: [horizontalpodautoscalers]
+      verbs: ['*']
+    - apiGroups: [batch]
+      resources: [cronjobs, jobs]
+      verbs: ['*']
+    - apiGroups: [config.openshift.io]
+      resources: [clusterversions]
+      verbs: [get, list, watch]
+    - apiGroups: [monitoring.coreos.com]
+      resources: [prometheuses, servicemonitors]
+      verbs: ['*']
+    - apiGroups: [networking.k8s.io]
+      resources: [ingresses]
+      verbs: ['*']
+    - apiGroups: [oauth.openshift.io]
+      resources: [oauthclients]
+      verbs: [create, delete, get, list, patch, update, watch]
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: ['*']
+      verbs: ['*']
+    - apiGroups: [rbac.authorization.k8s.io]
+      resources: [clusterrolebindings, clusterroles]
+      verbs: ['*']
+    - apiGroups: [route.openshift.io]
+      resources: [routes, routes/custom-host]
+      verbs: ['*']
+    - apiGroups: [template.openshift.io]
+      resources: [templateconfigs, templateinstances, templates]
+      verbs: ['*']
+    - apiGroups: [authentication.k8s.io]
+      resources: [tokenreviews]
+      verbs: [create]
+    - apiGroups: [authorization.k8s.io]
+      resources: [subjectaccessreviews]
+      verbs: [create]
+    - apiGroups: [apiextensions.k8s.io]
+      resources: [customresourcedefinitions]
+      verbs: [get, update, patch, delete]
+      resourceNames: [applications.argoproj.io, applicationsets.argoproj.io, appprojects.argoproj.io,
+        argocdexports.argoproj.io, argocds.argoproj.io]
+  roles:
+  - name: ''
+    type: grantor
+    create: true
+    customRules:
+    # Application-specific permissions from bundle metadata
+    - apiGroups: [coordination.k8s.io]
+      resources: [leases]
+      verbs: [get, list, watch, create, update, patch, delete]
+    - apiGroups: [apps]
+      resources: [deployments]
+      verbs: [get, update, patch, delete]
+      resourceNames: [argocd-operator-controller-manager]
+    - apiGroups: ['']
+      resources: [serviceaccounts]
+      verbs: [get, update, patch, delete]
+      resourceNames: [argocd-operator-controller-manager]
+    - apiGroups: ['']
+      resources: [configmaps]
+      verbs: [get, update, patch, delete]
+      resourceNames: [argocd-operator-manager-config]
+    - apiGroups: ['']
+      resources: [services]
+      verbs: [get, update, patch, delete]
+      resourceNames: [argocd-operator-controller-manager-metrics-service]
+additionalResources: []

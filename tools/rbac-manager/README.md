@@ -227,6 +227,7 @@ The RBAC Manager implements advanced **DRY (Don't Repeat Yourself)** deduplicati
 ### Example
 
 **Before Deduplication** (redundant):
+
 ```yaml
 # ClusterRole
 - apiGroups: ['']
@@ -243,6 +244,7 @@ The RBAC Manager implements advanced **DRY (Don't Repeat Yourself)** deduplicati
 ```
 
 **After Deduplication** (optimized):
+
 ```yaml
 # ClusterRole (unchanged)
 - apiGroups: ['']

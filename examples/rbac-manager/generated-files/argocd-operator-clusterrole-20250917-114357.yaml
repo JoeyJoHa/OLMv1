@@ -62,13 +62,17 @@ rules:
   verbs: [create, list, watch]
 - apiGroups: [rbac.authorization.k8s.io]
   resources: [clusterroles]
+  verbs: [delete, get, patch, update]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterroles]
   verbs: [get, update, patch, delete]
+  resourceNames: [argocd-operator-metrics-reader]
 - apiGroups: [rbac.authorization.k8s.io]
   resources: [clusterrolebindings]
   verbs: [create, list, watch]
 - apiGroups: [rbac.authorization.k8s.io]
   resources: [clusterrolebindings]
-  verbs: [get, update, patch, delete]
+  verbs: [delete, get, patch, update]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -146,7 +150,3 @@ rules:
   verbs: [get, update, patch, delete]
   resourceNames: [applications.argoproj.io, applicationsets.argoproj.io, appprojects.argoproj.io,
     argocdexports.argoproj.io, argocds.argoproj.io]
-- apiGroups: [rbac.authorization.k8s.io]
-  resources: [clusterroles]
-  verbs: [get, update, patch, delete]
-  resourceNames: [argocd-operator-metrics-reader]
