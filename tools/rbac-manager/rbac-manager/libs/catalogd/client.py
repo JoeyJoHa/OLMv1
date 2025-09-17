@@ -7,7 +7,6 @@ Handles low-level communication with catalogd service including port-forwarding 
 import json
 import logging
 import socket
-import ssl
 import time
 from typing import Dict, Any, Tuple, Optional
 
@@ -116,135 +115,6 @@ class PortForwardManager:
         except Exception as e:
             raise CatalogdError(f"Failed to start native port-forward: {e}")
     
-    def make_http_request(self, path: str, headers: Dict[str, str] = None) -> str:
-        """
-        Make HTTPS request through the port-forward socket
-        
-        Args:
-            path: API endpoint path
-            headers: Additional HTTP headers
-            
-        Returns:
-            str: Response body
-            
-        Raises:
-            NetworkError: If HTTP request fails
-        """
-        if not self._socket:
-            raise NetworkError("Port-forward not established")
-
-        headers = headers or {}
-
-        # Wrap socket with SSL for HTTPS
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE  # Skip certificate verification for port-forward
-
-        try:
-            # Wrap the socket with SSL
-            ssl_socket = context.wrap_socket(
-                self._socket, 
-                server_hostname=f"{self.service_name}.{self.namespace}.svc.cluster.local"
-            )
-
-            # Build HTTPS request
-            request_lines = [
-                f"GET {path} HTTP/1.1",
-                f"Host: {self.service_name}.{self.namespace}.svc.cluster.local",
-                "Connection: close"
-            ]
-
-            for key, value in headers.items():
-                request_lines.append(f"{key}: {value}")
-
-            request_lines.append("")  # Empty line to end headers
-            request_lines.append("")  # Empty line to end request
-
-            request_data = "\r\n".join(request_lines).encode('utf-8')
-
-            # Send HTTPS request through the SSL socket
-            ssl_socket.sendall(request_data)
-
-            # Read response
-            response_data = b""
-            headers_complete = False
-            content_length = None
-            body_start = 0
-
-            while True:
-                try:
-                    chunk = ssl_socket.recv(8192)  # Increased buffer size
-                    if not chunk:
-                        break
-                    response_data += chunk
-
-                    # Parse headers if not done yet
-                    if not headers_complete and b"\r\n\r\n" in response_data:
-                        header_end = response_data.find(b"\r\n\r\n")
-                        headers_part = response_data[:header_end].decode('utf-8')
-                        body_start = header_end + 4
-                        headers_complete = True
-
-                        # Parse Content-Length
-                        for line in headers_part.split('\r\n'):
-                            if line.lower().startswith('content-length:'):
-                                content_length = int(line.split(':')[1].strip())
-                                logger.debug(f"Content-Length: {content_length}")
-                                break
-
-                    # Check if we have all the data
-                    if headers_complete:
-                        body_length = len(response_data) - body_start
-                        if content_length is not None:
-                            if body_length >= content_length:
-                                logger.debug(f"Received complete response: {body_length}/{content_length} bytes")
-                                break
-                        else:
-                            # For responses without Content-Length, continue until connection closes
-                            continue
-
-                except ssl.SSLWantReadError:
-                    continue
-                except Exception as e:
-                    logger.debug(f"SSL read error: {e}")
-                    break
-
-            # Parse HTTP response (handle chunked transfer and compression)
-            if not headers_complete:
-                raise NetworkError("Invalid HTTPS response received - no headers")
-
-            headers_raw = response_data[:body_start - 4].decode('utf-8')
-            body_bytes = response_data[body_start:]
-
-            # Status line and headers
-            status_line = headers_raw.split("\r\n", 1)[0]
-            status_code = int(status_line.split(" ")[1])
-            if status_code != 200:
-                raise NetworkError(f"HTTPS request failed with status {status_code}: {status_line}")
-
-            # Handle Content-Encoding (gzip/deflate)
-            content_encoding = None
-            for line in headers_raw.split('\r\n'):
-                if line.lower().startswith('content-encoding:'):
-                    content_encoding = line.split(':')[1].strip().lower()
-                    break
-
-            if content_encoding == 'gzip':
-                import gzip
-                body_bytes = gzip.decompress(body_bytes)
-            elif content_encoding == 'deflate':
-                import zlib
-                body_bytes = zlib.decompress(body_bytes)
-
-            return body_bytes.decode('utf-8')
-
-        except Exception as e:
-            raise NetworkError(f"HTTPS request through socket failed: {e}")
-        finally:
-            try:
-                ssl_socket.close()
-            except:
-                pass
     
     def stop(self) -> None:
         """Stop the port-forward connection"""
@@ -424,13 +294,12 @@ class CatalogdClient:
         headers = auth_headers or {}
         
         try:
-            # Use session manager if available for better performance
-            if self._session:
-                logger.debug(f"Making request through session manager: {url}")
-                text_body = self._session.make_request(url, headers)
-            else:
-                logger.debug(f"Making request through port-forward: {url}")
-                text_body = port_forward_manager.make_http_request(url, headers)
+            # Use session manager for all requests
+            if not self._session:
+                raise CatalogdError("Session manager not initialized. Ensure port-forward is established.")
+            
+            logger.debug(f"Making request through session manager: {url}")
+            text_body = self._session.make_request(url, headers)
             
             # Cache the response
             if self.cache and catalog_name and text_body:
