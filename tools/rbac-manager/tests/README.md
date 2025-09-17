@@ -9,8 +9,11 @@ This directory contains comprehensive test suites for the RBAC Manager tool func
 Tests catalogd functionality including:
 
 - Authentication and port-forwarding
-- Catalog listing and selection
+- Catalog listing and selection (new `list-catalogs` subcommand)
 - Package, channel, and version queries
+- **NEW:** Config generation with `--generate-config` flag
+- **NEW:** Real cluster data extraction and placeholder fallback
+- **NEW:** Config file output to stdout and files
 - Error handling and edge cases
 - Output formatting and truncation handling
 
@@ -20,10 +23,26 @@ Tests OPM functionality including:
 
 - Bundle image processing and metadata extraction
 - RBAC generation (Helm values and YAML manifests)
+- **NEW:** Config file functionality with `--config` flag
+- **NEW:** FlowStyleList YAML formatting for Helm output
+- **NEW:** Channel placeholder and guidance comments
+- **NEW:** Config validation and error handling
 - DRY deduplication logic validation
 - Permission scenario handling (cluster-only, namespace-only, both, none)
 - Output formatting and file generation
 - Error handling and edge cases
+
+### `test_workflow.py` *(NEW)*
+
+Tests complete end-to-end workflow including:
+
+- **Complete Workflow:** `catalogd --generate-config` → `opm --config`
+- Real cluster authentication and data extraction
+- YAML and Helm workflow validation
+- Config file generation and consumption
+- Parameter discovery from live cluster
+- Cross-command integration testing
+- Error handling across the complete workflow
 
 ## Running Tests
 
@@ -40,11 +59,14 @@ cd tools/rbac-manager/
 export OPENSHIFT_URL="https://api.your-cluster.com:6443"
 export TOKEN="your-openshift-token"
 
-# Run catalogd tests
+# Run catalogd tests (requires cluster authentication)
 python3 tests/test_catalogd.py
 
 # Run OPM tests (no authentication required)
 python3 tests/test_opm.py
+
+# Run complete workflow tests (requires cluster authentication)
+python3 tests/test_workflow.py
 ```
 
 ### Test Configuration
@@ -65,10 +87,13 @@ python3 tests/test_opm.py
 
 ### Catalogd Test Coverage
 
-- ✅ Cluster catalog listing
+- ✅ Cluster catalog listing (`list-catalogs` subcommand)
 - ✅ Package discovery and filtering
 - ✅ Channel and version queries
 - ✅ Authentication handling
+- ✅ **NEW:** Config template generation (`--generate-config`)
+- ✅ **NEW:** Config generation with real cluster data
+- ✅ **NEW:** Config file output (stdout and file modes)
 - ✅ Error scenarios and edge cases
 - ✅ Output formatting validation
 
@@ -77,11 +102,25 @@ python3 tests/test_opm.py
 - ✅ Bundle image processing
 - ✅ YAML manifest generation
 - ✅ Helm values generation
+- ✅ **NEW:** Config file functionality (`--config` flag)
+- ✅ **NEW:** FlowStyleList YAML formatting
+- ✅ **NEW:** Channel placeholder and guidance
+- ✅ **NEW:** Config validation and error handling
 - ✅ RBAC component analysis
 - ✅ DRY deduplication validation
 - ✅ Permission scenario handling
 - ✅ Output directory functionality
 - ✅ Error handling and validation
+
+### Complete Workflow Test Coverage *(NEW)*
+
+- ✅ **End-to-end workflow:** `catalogd --generate-config` → `opm --config`
+- ✅ **Real cluster integration:** Live data extraction and validation
+- ✅ **YAML workflow:** Config generation and YAML manifest creation
+- ✅ **Helm workflow:** Config generation and Helm values creation
+- ✅ **Parameter discovery:** Automatic test parameter discovery from cluster
+- ✅ **Config validation:** Invalid config handling across commands
+- ✅ **Cross-command integration:** Seamless data flow between commands
 
 ## Test Output
 
@@ -97,6 +136,7 @@ Example output files:
 
 - `catalogd_test_results_YYYYMMDD_HHMMSS.json`
 - `opm_test_results_YYYYMMDD_HHMMSS.json`
+- `workflow_test_results_YYYYMMDD_HHMMSS.json` *(NEW)*
 
 ## Continuous Integration
 
@@ -107,9 +147,15 @@ These tests can be integrated into CI/CD pipelines:
 - name: Run RBAC Manager Tests
   run: |
     cd tools/rbac-manager
+    
+    # Run OPM tests (no cluster required)
     python3 tests/test_opm.py
-    # Catalogd tests require cluster access
-    # python3 tests/test_catalogd.py
+    
+    # Run cluster-dependent tests if secrets available
+    if [[ -n "${{ secrets.OPENSHIFT_URL }}" ]]; then
+      python3 tests/test_catalogd.py
+      python3 tests/test_workflow.py
+    fi
   env:
     OPENSHIFT_URL: ${{ secrets.OPENSHIFT_URL }}
     TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
@@ -121,8 +167,9 @@ These tests can be integrated into CI/CD pipelines:
 
 1. **Catalogd Tests**: Add methods to `CatalogdTestSuite` class
 2. **OPM Tests**: Add methods to `OPMTestSuite` class
-3. **Follow Patterns**: Use existing test methods as templates
-4. **Update Coverage**: Add new tests to `run_all_tests()` method
+3. **Workflow Tests**: Add methods to `WorkflowTestSuite` class *(NEW)*
+4. **Follow Patterns**: Use existing test methods as templates
+5. **Update Coverage**: Add new tests to `run_all_tests()` method
 
 ### Test Structure
 
@@ -177,9 +224,20 @@ Individual test methods can be run manually:
 
 ```python
 # In Python REPL from tools/rbac-manager/
-from tests.test_opm import OPMTestSuite
 
+# OPM tests
+from tests.test_opm import OPMTestSuite
 suite = OPMTestSuite()
 result = suite.test_bundle_processing("test", "bundle-image-url")
+print(result)
+
+# Workflow tests (requires authentication)
+from tests.test_workflow import WorkflowTestSuite
+import os
+suite = WorkflowTestSuite(
+    openshift_url=os.getenv("OPENSHIFT_URL"),
+    openshift_token=os.getenv("TOKEN")
+)
+result = suite.test_complete_yaml_workflow()
 print(result)
 ```

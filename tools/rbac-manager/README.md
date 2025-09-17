@@ -6,6 +6,8 @@ A comprehensive Python tool for extracting and managing RBAC permissions from op
 
 - **🔍 Catalog Discovery**: List and query OpenShift ClusterCatalogs for available operators
 - **📡 Catalogd Integration**: Port-forward to catalogd service and fetch real-time package information
+- **⚙️ Configuration Management**: Generate and reuse configuration files for consistent deployments
+- **🌐 Real Cluster Integration**: Extract actual bundle images and metadata from live OpenShift clusters
 - **📦 Bundle Analysis**: Extract comprehensive metadata from operator bundle images using `opm render`
 - **🔐 Smart RBAC Generation**: Auto-generate secure RBAC resources with intelligent permissions logic:
   - **Both `clusterPermissions` + `permissions`**: ClusterRoles + grantor Roles (e.g., ArgoCD)
@@ -16,7 +18,7 @@ A comprehensive Python tool for extracting and managing RBAC permissions from op
   - Preserves resource-specific rules with `resourceNames`
   - Handles wildcard permissions intelligently
   - Reduces RBAC complexity and improves security posture
-- **⚙️ Helm Integration**: Generate Helm values with mixed block/flow YAML style and security notices
+- **🎨 Enhanced YAML Formatting**: FlowStyleList formatting for readable Helm values with channel guidance
 - **🏗️ Microservice Architecture**: Clean separation with BundleProcessor orchestrator
 - **🛡️ Security Best Practices**: Implements OLMv1 security patterns with comprehensive RBAC optimization
 - **📋 Comprehensive Output**: ServiceAccount, ClusterRole, ClusterRoleBinding, Role, RoleBinding manifests
@@ -133,12 +135,13 @@ tools/rbac-manager/
 
 ## Usage
 
-### Global Flags
+The RBAC Manager uses a subcommand structure with three main commands: `list-catalogs`, `catalogd`, and `opm`.
 
-- `--skip-tls`: Make insecure requests (skip TLS verification)
-- `--debug`: Enable debug logging for detailed output
-- `--help`: Show comprehensive help information
-- `--examples`: Show detailed usage examples
+### Global Help
+
+```bash
+python3 rbac-manager.py --help
+```
 
 ### Commands
 
@@ -147,120 +150,168 @@ tools/rbac-manager/
 List all available ClusterCatalogs in your cluster:
 
 ```bash
-python3 rbac-manager.py --list-catalogs
+python3 rbac-manager.py list-catalogs --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token
 ```
 
-#### 2. Query Catalogd Service
+**Available flags:**
 
-Query the catalogd service for package information. The tool can either use port-forwarding or direct API access.
+- `--openshift-url URL`: OpenShift cluster URL
+- `--openshift-token TOKEN`: OpenShift authentication token  
+- `--skip-tls`: Skip TLS verification
+- `--debug`: Enable debug logging
+- `--examples`: Show usage examples
+
+#### 2. Query Catalogd Service and Generate Configuration
+
+Query the catalogd service for package information and generate configuration files:
 
 **Basic usage with interactive catalog selection:**
 
 ```bash
-python3 rbac-manager.py --catalogd
+python3 rbac-manager.py catalogd --package quay-operator --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
 ```
 
-**With specific catalog:**
+**Query specific catalog packages:**
 
 ```bash
-python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators
-```
-
-**Using direct OpenShift API:**
-
-```bash
-python3 rbac-manager.py --catalogd \
-  --catalog-name openshift-redhat-operators \
-  --openshift-url https://api.cluster.example.com:6443 \
-  --openshift-token sha256~your-token-here
+python3 rbac-manager.py catalogd --catalog-name openshift-community-operators --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
 ```
 
 **Query specific package channels:**
 
 ```bash
-python3 rbac-manager.py --catalogd \
-  --catalog-name openshift-redhat-operators \
-  --package quay-operator
+python3 rbac-manager.py catalogd --catalog-name openshift-community-operators --package argocd-operator --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
 ```
 
 **Query specific channel versions:**
 
 ```bash
-python3 rbac-manager.py --catalogd \
-  --catalog-name openshift-redhat-operators \
-  --package quay-operator \
-  --channel stable-3.10
+python3 rbac-manager.py catalogd --catalog-name openshift-community-operators --package argocd-operator --channel alpha --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
 ```
 
 **Get detailed version metadata:**
 
 ```bash
-python3 rbac-manager.py --catalogd \
-  --catalog-name openshift-redhat-operators \
-  --package quay-operator \
-  --channel stable-3.10 \
-  --version 3.10.13
+python3 rbac-manager.py catalogd --catalog-name openshift-community-operators --package argocd-operator --channel alpha --version 0.8.0 --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
 ```
 
-#### 3. Extract Bundle Metadata
+#### 3. Generate Configuration Files
+
+**Generate config template:**
+
+```bash
+python3 rbac-manager.py catalogd --generate-config
+```
+
+**Generate config with real cluster data (to stdout):**
+
+```bash
+python3 rbac-manager.py catalogd --generate-config \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha --version 0.8.0 \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~token --skip-tls
+```
+
+**Generate config to file:**
+
+```bash
+python3 rbac-manager.py catalogd --generate-config \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha --version 0.8.0 \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~token --skip-tls \
+  --output ./config
+```
+
+#### 4. Extract Bundle Metadata and Generate RBAC
 
 Extract metadata from operator bundle images and generate RBAC resources:
 
-**Basic bundle extraction (YAML manifests):**
+**Using configuration file (YAML manifests):**
 
 ```bash
-python3 rbac-manager.py --opm \
-  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2
+python3 rbac-manager.py opm --config rbac-manager-config.yaml
+```
+
+**Using configuration file (Helm values) - modify config file to set `output.type: helm`:**
+
+```bash
+python3 rbac-manager.py opm --config rbac-manager-config.yaml
+```
+
+**Direct bundle extraction (YAML manifests):**
+
+```bash
+python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2
 ```
 
 **Generate Helm values:**
 
 ```bash
-python3 rbac-manager.py --opm \
-  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
-  --helm
+python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --helm
 ```
 
 **With custom namespace:**
 
 ```bash
-python3 rbac-manager.py --opm \
-  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
-  --namespace quay-operator
+python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --namespace quay-operator
 ```
 
 **Save to files:**
 
 ```bash
-python3 rbac-manager.py --opm \
-  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
-  --output ./rbac-files
+python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --output ./rbac-files
 ```
 
-**With TLS skip (for development):**
+### Configuration-Based Workflow
 
 ```bash
-python3 rbac-manager.py --opm \
-  --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 \
-  --skip-tls --helm
+# Step 1: List available catalogs
+python3 rbac-manager.py list-catalogs --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
+
+# Step 2: Generate configuration with real cluster data  
+python3 rbac-manager.py catalogd --generate-config \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha --version 0.8.0 \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~token --skip-tls \
+  --output ./config
+
+# Step 3: Extract RBAC using configuration
+python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+
+# Step 4: For Helm values, modify config file to set output.type: helm, then:
+python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
 ```
 
-### Catalogd Flags
+### Command-Specific Flags
+
+#### Catalogd Command Flags
 
 - `--catalog-name NAME`: Specify catalog name (interactive prompt if not provided)
-- `--openshift-url URL`: OpenShift cluster URL for direct API access
-- `--openshift-token TOKEN`: OpenShift authentication token
 - `--package NAME`: Show channels for specific package
 - `--channel NAME`: Show versions for specific channel (requires --package)
 - `--version VERSION`: Show metadata for specific version (requires --package and --channel)
+- `--generate-config`: Generate configuration file (stdout by default)
+- `--output DIR`: Output directory for generated config file
+- `--openshift-url URL`: OpenShift cluster URL for direct API access
+- `--openshift-token TOKEN`: OpenShift authentication token
+- `--skip-tls`: Skip TLS verification
+- `--debug`: Enable debug logging
+- `--examples`: Show usage examples
 
-### OPM Flags
+#### OPM Command Flags
 
-- `--image IMAGE`: Operator bundle image URL (required)
+- `--config FILE`: Configuration file path (recommended workflow)
+- `--image IMAGE`: Operator bundle image URL (alternative to config)
 - `--helm`: Generate Helm values instead of YAML manifests
 - `--namespace NAMESPACE`: Target namespace for generated manifests (default: default)
 - `--output DIR`: Save output files to directory (default: stdout)
 - `--registry-token TOKEN`: Authentication token for private registries
+- `--skip-tls`: Skip TLS verification
+- `--debug`: Enable debug logging
+- `--examples`: Show usage examples
 
 ## DRY Deduplication
 
@@ -353,24 +404,24 @@ generated-quay-operator/
 
 ## Examples
 
-### Complete Workflow Example
+### Direct Command Workflow
 
 1. **List available catalogs:**
 
    ```bash
-   python3 rbac-manager.py --list-catalogs
+   python3 rbac-manager.py list-catalogs
    ```
 
 2. **Explore a catalog interactively:**
 
    ```bash
-   python3 rbac-manager.py --catalogd
+   python3 rbac-manager.py catalogd
    ```
 
 3. **Find a specific operator version:**
 
    ```bash
-   python3 rbac-manager.py --catalogd \
+   python3 rbac-manager.py catalogd \
      --catalog-name openshift-redhat-operators \
      --package quay-operator \
      --channel stable-3.10
@@ -379,7 +430,7 @@ generated-quay-operator/
 4. **Extract bundle and generate resources:**
 
    ```bash
-   python3 rbac-manager.py --opm \
+   python3 rbac-manager.py opm \
      --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
      --namespace quay-operator
    ```

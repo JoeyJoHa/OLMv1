@@ -107,15 +107,12 @@ OLMv1/
 │   │   ├── rbac-only-example.yaml    # RBAC-only deployment example
 │   │   └── values-quay-operator.yaml # Quay operator Helm values
 │   ├── rbac-manager/                 # RBAC Manager tool output examples
-│   │   ├── generated-files/          # Generated RBAC files with DRY deduplication
-│   │   │   ├── argocd-operator-*.yaml # Complete Helm values with channel guidance
-│   │   │   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole with deduplication
-│   │   │   ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
-│   │   │   ├── argocd-operator-role-*.yaml # Generated Role (deduplicated)
-│   │   │   ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
-│   │   │   └── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
-│   │   └── post-installation/        # Post-installation hardening examples
-│   │       └── argocd-operator-clusterrole-*.yaml # Hardened ClusterRole with resourceNames
+│   │   ├── argocd-operator-*.yaml    # Generated RBAC files with real cluster data
+│   │   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole with deduplication
+│   │   ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
+│   │   ├── argocd-operator-role-*.yaml # Generated Role (deduplicated)
+│   │   ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
+│   │   └── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
 │   └── yamls/                        # Example Kubernetes YAML files
 │       ├── 00-namespace.yaml         # Namespace definition
 │       ├── 01-serviceaccount.yaml    # Service account for operator
@@ -186,23 +183,32 @@ source rbac-manager-env/bin/activate  # On Linux/macOS
 pip install -r requirements.txt
 
 # Get help for specific commands
-python3 rbac-manager.py --catalogd --help
-python3 rbac-manager.py --opm --help
+python3 rbac-manager.py catalogd --help
+python3 rbac-manager.py opm --help
+python3 rbac-manager.py list-catalogs --help
 
 # View comprehensive examples
-python3 rbac-manager.py --examples
+python3 rbac-manager.py catalogd --examples
+python3 rbac-manager.py opm --examples
 
-# Extract RBAC for an operator using OPM workflow
-python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --helm
+# List available catalogs on cluster
+python3 rbac-manager.py list-catalogs --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token
+
+# Generate configuration file with real cluster data
+python3 rbac-manager.py catalogd --generate-config \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha --version 0.8.0 \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~token
+
+# Extract RBAC using generated configuration
+python3 rbac-manager.py opm --config rbac-manager-config.yaml
+
+# Direct RBAC extraction with bundle image
+python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --helm
 
 # Save RBAC files for later use
-python3 rbac-manager.py --opm --image <bundle-image> --output ./rbac-files
-
-# Generate YAML manifests (default)
-python3 rbac-manager.py --opm --image <bundle-image>
-
-# Generate Helm values with security notices
-python3 rbac-manager.py --opm --image <bundle-image> --helm
+python3 rbac-manager.py opm --image <bundle-image> --output ./rbac-files
 ```
 
 ### Benefits for OLMv1 Deployment
@@ -216,7 +222,10 @@ python3 rbac-manager.py --opm --image <bundle-image> --helm
 4. **DRY Deduplication**: Advanced permission deduplication eliminates redundant RBAC rules between ClusterRoles and Roles
 5. **Microservice Architecture**: Clean BundleProcessor orchestrator with separated concerns
 6. **Live Catalog Access**: Query catalogd directly for real-time operator bundle information
-7. **Automation Ready**: Supports scripting and CI/CD integration for GitOps workflows
+7. **Configuration Management**: Generate and reuse configuration files for consistent deployments
+8. **Real Cluster Integration**: Extract actual bundle images and metadata from live OpenShift clusters
+9. **Enhanced YAML Formatting**: FlowStyleList formatting for readable Helm values with channel guidance
+10. **Automation Ready**: Supports scripting and CI/CD integration for GitOps workflows
 
 ### DRY Deduplication Features
 
@@ -241,20 +250,29 @@ The RBAC Manager integrates seamlessly with the OLMv1 deployment process:
 5. **Deploy RBAC**: Apply the RBAC resources before deploying the ClusterExtension
 6. **Deploy Operator**: Use the generated ServiceAccount in your ClusterExtension manifest
 
-#### Configuration File Workflows
+#### Complete Workflow Examples
 
 ```bash
-# Create OPM configuration template for team reuse
-python3 rbac_manager.py --generate-config ~/.team-rbac-config.yaml --opm
+# Step 1: List available catalogs
+python3 rbac-manager.py list-catalogs --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
 
-# Extract live metadata from catalogd for specific operator version
-python3 rbac_manager.py --generate-config ./operator-metadata.json \
-  --catalogd --package prometheus --channel stable --version v0.47.0 \
-  --catalog-name operatorhubio --insecure
+# Step 2: Generate configuration with real cluster data
+python3 rbac-manager.py catalogd --generate-config \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha --version 0.8.0 \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~token --skip-tls \
+  --output ./config
 
-# Use configuration for streamlined RBAC extraction
-python3 rbac_manager.py --config ~/.team-rbac-config.yaml --opm \
-  --image <bundle-from-metadata> --helm
+# Step 3: Extract RBAC using configuration (YAML manifests)
+python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+
+# Step 4: Extract RBAC using configuration (Helm values)
+# First, modify config file to set output.type: helm
+python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+
+# Alternative: Generate template config for reuse
+python3 rbac-manager.py catalogd --generate-config --output ./templates
 ```
 
 For comprehensive usage instructions, examples, and troubleshooting guides, see the [RBAC Manager Documentation](tools/rbac-manager/README.md).

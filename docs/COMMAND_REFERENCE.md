@@ -6,6 +6,7 @@ This section provides practical commands for interacting with OLMv1 catalogs and
 
 ## Table of Contents
 
+- [RBAC Manager Tool Commands](#rbac-manager-tool-commands)
 - [Package Discovery](#package-discovery)
 - [Channel Information](#channel-information)
 - [Version Queries](#version-queries)
@@ -14,6 +15,121 @@ This section provides practical commands for interacting with OLMv1 catalogs and
 - [Permission Analysis](#permission-analysis)
 - [Advanced Queries](#advanced-queries)
 - [Troubleshooting](#troubleshooting)
+
+## RBAC Manager Tool Commands
+
+The RBAC Manager Tool provides a streamlined interface for catalog discovery, configuration management, and RBAC extraction. Use these commands for the most efficient OLMv1 workflow:
+
+### List Available Catalogs
+
+```bash
+# List all ClusterCatalogs on your cluster
+python3 rbac-manager.py list-catalogs \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~your-token \
+  --skip-tls
+```
+
+### Query Catalog Information
+
+```bash
+# List packages in a catalog
+python3 rbac-manager.py catalogd \
+  --catalog-name openshift-community-operators \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~your-token \
+  --skip-tls
+
+# List channels for a package
+python3 rbac-manager.py catalogd \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~your-token \
+  --skip-tls
+
+# List versions for a channel
+python3 rbac-manager.py catalogd \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~your-token \
+  --skip-tls
+
+# Get bundle metadata for specific version
+python3 rbac-manager.py catalogd \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha --version 0.8.0 \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~your-token \
+  --skip-tls
+```
+
+### Generate Configuration Files
+
+```bash
+# Generate configuration template
+python3 rbac-manager.py catalogd --generate-config
+
+# Generate configuration with real cluster data
+python3 rbac-manager.py catalogd --generate-config \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha --version 0.8.0 \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~your-token \
+  --skip-tls \
+  --output ./config
+```
+
+### Extract RBAC Resources
+
+```bash
+# Using configuration file (recommended)
+python3 rbac-manager.py opm --config rbac-manager-config.yaml
+
+# Direct bundle extraction
+python3 rbac-manager.py opm \
+  --image quay.io/openshift-community-operators/argocd-operator@sha256:abc123... \
+  --helm --skip-tls
+
+# Save RBAC to files
+python3 rbac-manager.py opm \
+  --config rbac-manager-config.yaml \
+  --output ./rbac-files
+```
+
+### Complete Workflow Example
+
+```bash
+# Step 1: List catalogs
+python3 rbac-manager.py list-catalogs \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~your-token --skip-tls
+
+# Step 2: Generate config with real data
+python3 rbac-manager.py catalogd --generate-config \
+  --catalog-name openshift-community-operators \
+  --package argocd-operator --channel alpha --version 0.8.0 \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~your-token --skip-tls \
+  --output ./config
+
+# Step 3: Extract RBAC
+python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+
+# Step 4: Deploy RBAC resources
+kubectl apply -f argocd-operator-serviceaccount-*.yaml
+kubectl apply -f argocd-operator-clusterrole-*.yaml
+kubectl apply -f argocd-operator-clusterrolebinding-*.yaml
+kubectl apply -f argocd-operator-role-*.yaml
+kubectl apply -f argocd-operator-rolebinding-*.yaml
+```
+
+---
+
+## Manual OPM and Catalogd Commands
+
+For advanced users or automation scenarios, these manual commands provide direct access to OPM and catalogd functionality:
 
 ## Package Discovery
 
