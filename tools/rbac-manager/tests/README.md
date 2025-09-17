@@ -5,7 +5,9 @@ This directory contains comprehensive test suites for the RBAC Manager tool func
 ## Test Files
 
 ### `test_catalogd.py`
+
 Tests catalogd functionality including:
+
 - Authentication and port-forwarding
 - Catalog listing and selection
 - Package, channel, and version queries
@@ -13,7 +15,9 @@ Tests catalogd functionality including:
 - Output formatting and truncation handling
 
 ### `test_opm.py`
+
 Tests OPM functionality including:
+
 - Bundle image processing and metadata extraction
 - RBAC generation (Helm values and YAML manifests)
 - DRY deduplication logic validation
@@ -29,7 +33,6 @@ Tests OPM functionality including:
 2. **Dependencies**: Install required packages from `requirements.txt`
 3. **Working Directory**: Run tests from the `tools/rbac-manager/` directory
 
-### Running Catalogd Tests
 
 ```bash
 cd tools/rbac-manager/
@@ -40,12 +43,6 @@ export TOKEN="your-openshift-token"
 
 # Run catalogd tests
 python3 tests/test_catalogd.py
-```
-
-### Running OPM Tests
-
-```bash
-cd tools/rbac-manager/
 
 # Run OPM tests (no authentication required)
 python3 tests/test_opm.py
@@ -54,11 +51,13 @@ python3 tests/test_opm.py
 ### Test Configuration
 
 #### Catalogd Tests
+
 - **OPENSHIFT_URL**: OpenShift cluster API URL
 - **TOKEN**: Valid OpenShift authentication token
 - **Skip TLS**: Tests run with `--skip-tls` by default
 
 #### OPM Tests
+
 - **Bundle Images**: Tests use real operator bundle images
 - **Skip TLS**: Tests run with `--skip-tls` by default
 - **Output**: Tests create temporary directories for output validation
@@ -66,6 +65,7 @@ python3 tests/test_opm.py
 ## Test Coverage
 
 ### Catalogd Test Coverage
+
 - ✅ Cluster catalog listing
 - ✅ Package discovery and filtering
 - ✅ Channel and version queries
@@ -74,6 +74,7 @@ python3 tests/test_opm.py
 - ✅ Output formatting validation
 
 ### OPM Test Coverage
+
 - ✅ Bundle image processing
 - ✅ YAML manifest generation
 - ✅ Helm values generation
@@ -86,6 +87,7 @@ python3 tests/test_opm.py
 ## Test Output
 
 Tests generate detailed JSON reports with:
+
 - Test execution summary
 - Individual test results
 - Performance metrics
@@ -93,6 +95,7 @@ Tests generate detailed JSON reports with:
 - Error diagnostics
 
 Example output files:
+
 - `catalogd_test_results_YYYYMMDD_HHMMSS.json`
 - `opm_test_results_YYYYMMDD_HHMMSS.json`
 
