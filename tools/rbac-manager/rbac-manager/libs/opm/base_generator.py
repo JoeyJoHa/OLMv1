@@ -1371,8 +1371,8 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         """
         # Use existing analyze_permissions method
         analysis = self.analyze_permissions(bundle_metadata)
-        has_cluster_permissions = analysis['has_cluster_permissions']
-        has_namespace_permissions = analysis['has_namespace_permissions']
+        has_cluster_permissions = analysis.has_cluster_permissions
+        has_namespace_permissions = analysis.has_namespace_permissions
         
         # Initialize result structure
         result = {
