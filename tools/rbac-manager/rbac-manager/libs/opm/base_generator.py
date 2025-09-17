@@ -369,6 +369,9 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         """
         Merge broad rules (without resourceNames) by combining verbs
         
+        Special handling for RBAC resources: Don't merge rules that mix
+        broad verbs (create, list, watch) with scoped verbs (get, update, patch, delete)
+        
         Args:
             broad_rules: Rules without resourceNames
             
@@ -381,6 +384,11 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         if len(broad_rules) == 1:
             return broad_rules
         
+        # Special case: RBAC resources should not merge broad and scoped verbs
+        if self._is_rbac_resource_group(broad_rules):
+            return self._merge_rbac_broad_rules(broad_rules)
+        
+        # General case: merge all verbs
         # Collect all verbs from broad rules
         all_verbs = set()
         for rule in broad_rules:
@@ -396,6 +404,81 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         merged_rule['verbs'] = sorted(list(all_verbs))
         
         return [merged_rule]
+    
+    def _is_rbac_resource_group(self, rules: List[Dict[str, Any]]) -> bool:
+        """Check if rules are for RBAC resources (clusterroles, clusterrolebindings, roles, rolebindings)"""
+        if not rules:
+            return False
+        
+        first_rule = rules[0]
+        api_groups = first_rule.get('apiGroups', [])
+        resources = first_rule.get('resources', [])
+        
+        return ('rbac.authorization.k8s.io' in api_groups and 
+                any(resource in ['clusterroles', 'clusterrolebindings', 'roles', 'rolebindings'] 
+                    for resource in resources))
+    
+    def _merge_rbac_broad_rules(self, broad_rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Special merge logic for RBAC resources that preserves separation between
+        broad verbs (create, list, watch) and scoped verbs (get, update, patch, delete)
+        """
+        if not broad_rules:
+            return []
+        
+        # Define verb categories for RBAC resources
+        broad_verbs = {'create', 'list', 'watch'}
+        scoped_verbs = {'get', 'update', 'patch', 'delete'}
+        
+        # Separate rules by verb categories
+        rules_with_broad_verbs = []
+        rules_with_scoped_verbs = []
+        rules_with_mixed_verbs = []
+        
+        for rule in broad_rules:
+            verbs = set(rule.get('verbs', []))
+            
+            # If wildcard, treat as mixed
+            if '*' in verbs:
+                rules_with_mixed_verbs.append(rule)
+                continue
+            
+            has_broad = bool(verbs & broad_verbs)
+            has_scoped = bool(verbs & scoped_verbs)
+            
+            if has_broad and has_scoped:
+                rules_with_mixed_verbs.append(rule)
+            elif has_broad:
+                rules_with_broad_verbs.append(rule)
+            elif has_scoped:
+                rules_with_scoped_verbs.append(rule)
+        
+        result_rules = []
+        
+        # Merge broad verb rules
+        if rules_with_broad_verbs:
+            broad_verb_set = set()
+            for rule in rules_with_broad_verbs:
+                broad_verb_set.update(rule.get('verbs', []))
+            
+            merged_broad_rule = rules_with_broad_verbs[0].copy()
+            merged_broad_rule['verbs'] = sorted(list(broad_verb_set & broad_verbs))
+            result_rules.append(merged_broad_rule)
+        
+        # Merge scoped verb rules
+        if rules_with_scoped_verbs:
+            scoped_verb_set = set()
+            for rule in rules_with_scoped_verbs:
+                scoped_verb_set.update(rule.get('verbs', []))
+            
+            merged_scoped_rule = rules_with_scoped_verbs[0].copy()
+            merged_scoped_rule['verbs'] = sorted(list(scoped_verb_set & scoped_verbs))
+            result_rules.append(merged_scoped_rule)
+        
+        # Handle mixed verb rules (keep as-is, don't merge)
+        result_rules.extend(rules_with_mixed_verbs)
+        
+        return result_rules
     
     def _deduplicate_specific_rules(self, specific_rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
