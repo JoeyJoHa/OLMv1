@@ -13,16 +13,105 @@ Comprehensive tests for OPM functionality including:
 
 import json
 import os
-import sys
 import subprocess
+import sys
 import tempfile
 import time
 import yaml
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, NamedTuple
 
 # Add the rbac-manager directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "rbac-manager"))
+
+
+class OPMTestConstants:
+    """Constants for OPM test configuration"""
+    DEFAULT_TIMEOUT = 60
+    DEFAULT_NAMESPACE = "test-namespace"
+    PRODUCTION_NAMESPACE = "production"
+    OUTPUT_SUBDIR = "test-output"
+    
+    # Test bundle images
+    ARGOCD_BUNDLE = "registry.redhat.io/argocd/argocd-operator-bundle@sha256:9c5c2d1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+    QUAY_BUNDLE = "registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2"
+    CLUSTER_BUNDLE = "registry.redhat.io/example/cluster-operator-bundle@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    INVALID_BUNDLE = "invalid-registry.com/nonexistent/bundle:latest"
+    
+    # Expected document types
+    EXPECTED_YAML_DOCS = ["ServiceAccount", "ClusterRole", "ClusterRoleBinding"]
+    EXPECTED_HELM_KEYS = ["operator", "serviceAccount", "permissions"]
+    EXPECTED_FILE_PATTERNS = ["serviceaccount", "clusterrole", "clusterrolebinding"]
+    
+    # Test channels and versions
+    STABLE_CHANNEL = "stable"
+    ALPHA_CHANNEL = "alpha"
+    TEST_VERSION = "1.0.0"
+    
+    # Validation keywords
+    ERROR_KEYWORDS = ["image", "bundle", "failed", "error"]
+    DEDUP_KEYWORDS = ["deduplicated", "dry", "filtered"]
+    
+    # Formatting patterns
+    FLOW_STYLE_PATTERNS = ["apiGroups: [", "resources: [", "verbs: ["]
+    RESOURCE_PLACEHOLDER = "#<ADD_CREATED_RESOURCE_NAMES_HERE>"
+    CHANNEL_PLACEHOLDER = "#<VERIFY_WITH_CATALOGD_AND_SET_CHANNEL>"
+    CHANNEL_GUIDANCE = "IMPORTANT: Verify Correct Channel"
+
+
+class OPMTestResult(NamedTuple):
+    """Structured test result for OPM tests"""
+    test_name: str
+    description: str
+    success: bool
+    duration: float
+    details: Dict[str, Any]
+
+
+class OPMCommandBuilder:
+    """Builder pattern for OPM test commands"""
+    
+    def __init__(self, base_cmd: List[str]):
+        self.cmd = base_cmd.copy()
+    
+    def with_image(self, image: str) -> 'OPMCommandBuilder':
+        """Add bundle image argument"""
+        self.cmd.extend(["--image", image])
+        return self
+    
+    def with_helm(self) -> 'OPMCommandBuilder':
+        """Add Helm flag"""
+        self.cmd.append("--helm")
+        return self
+    
+    def with_namespace(self, namespace: str) -> 'OPMCommandBuilder':
+        """Add namespace argument"""
+        self.cmd.extend(["--namespace", namespace])
+        return self
+    
+    def with_output(self, output_path: str) -> 'OPMCommandBuilder':
+        """Add output directory argument"""
+        self.cmd.extend(["--output", output_path])
+        return self
+    
+    def with_config(self, config_file: str) -> 'OPMCommandBuilder':
+        """Add config file argument"""
+        self.cmd.extend(["--config", config_file])
+        return self
+    
+    def with_skip_tls(self) -> 'OPMCommandBuilder':
+        """Add skip TLS flag"""
+        self.cmd.append("--skip-tls")
+        return self
+    
+    def with_debug(self) -> 'OPMCommandBuilder':
+        """Add debug flag"""
+        self.cmd.append("--debug")
+        return self
+    
+    def build(self) -> List[str]:
+        """Build the final command"""
+        return self.cmd.copy()
 
 class OPMTestSuite:
     """Test suite for OPM functionality"""
@@ -37,25 +126,28 @@ class OPMTestSuite:
         """
         self.skip_tls = skip_tls
         self.debug = debug
-        self.base_cmd = ["python3", "rbac-manager.py", "opm"]
-        if self.skip_tls:
-            self.base_cmd.append("--skip-tls")
-        if self.debug:
-            self.base_cmd.append("--debug")
+        
+        # Build base command using builder pattern
+        builder = OPMCommandBuilder(["python3", "rbac-manager.py", "opm"])
+        if skip_tls:
+            builder = builder.with_skip_tls()
+        if debug:
+            builder = builder.with_debug()
+        self.base_cmd = builder.build()
         
         self.test_results = []
         
-        # Test bundle images for different scenarios
+        # Test bundle images for different scenarios (using constants)
         self.test_bundles = {
             # ArgoCD operator - has both cluster and namespace permissions
-            "argocd_both": "registry.redhat.io/argocd/argocd-operator-bundle@sha256:9c5c2d1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            "argocd_both": OPMTestConstants.ARGOCD_BUNDLE,
             # Quay operator - has only namespace permissions (treated as cluster)
-            "quay_namespace": "registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2",
+            "quay_namespace": OPMTestConstants.QUAY_BUNDLE,
             # Example cluster-only operator
-            "cluster_only": "registry.redhat.io/example/cluster-operator-bundle@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+            "cluster_only": OPMTestConstants.CLUSTER_BUNDLE,
         }
         
-        # Test scenarios for comprehensive coverage
+        # Test scenarios for comprehensive coverage (using constants)
         self.test_scenarios = [
             {
                 "name": "yaml_generation",
@@ -70,21 +162,22 @@ class OPMTestSuite:
             {
                 "name": "custom_namespace",
                 "description": "Generate with custom namespace",
-                "flags": ["--namespace", "test-operator"]
+                "flags": ["--namespace", OPMTestConstants.DEFAULT_NAMESPACE]
             },
             {
                 "name": "output_directory",
                 "description": "Generate with output directory",
-                "flags": ["--output", "./test-output"]
+                "flags": ["--output", f"./{OPMTestConstants.OUTPUT_SUBDIR}"]
             },
             {
                 "name": "helm_with_namespace",
                 "description": "Generate Helm values with custom namespace",
-                "flags": ["--helm", "--namespace", "production"]
+                "flags": ["--helm", "--namespace", OPMTestConstants.PRODUCTION_NAMESPACE]
             }
         ]
     
-    def run_command(self, cmd: List[str], input_data: str = None, timeout: int = 60) -> Dict[str, Any]:
+    def run_command(self, cmd: List[str], input_data: str = None, 
+                   timeout: int = OPMTestConstants.DEFAULT_TIMEOUT) -> Dict[str, Any]:
         """
         Execute a command and return structured results
         
@@ -129,158 +222,257 @@ class OPMTestSuite:
                 "command": " ".join(cmd)
             }
     
+    def _create_test_result(self, test_name: str, description: str, success: bool, 
+                           details: Dict[str, Any], duration: float = 0.0) -> Dict[str, Any]:
+        """Create standardized test result structure"""
+        return {
+            "test": test_name,
+            "description": description,
+            "success": success,
+            "duration": duration,
+            "details": details
+        }
+    
+    def _is_placeholder_bundle(self, bundle_image: str) -> bool:
+        """Check if bundle image is a placeholder"""
+        return "1234567890" in bundle_image or "example" in bundle_image
+    
+    def _extract_yaml_content(self, output: str, start_marker: str = "apiVersion:") -> str:
+        """Extract YAML content from command output"""
+        output_lines = output.split('\n')
+        yaml_start_idx = 0
+        
+        # Find the start of YAML content
+        for i, line in enumerate(output_lines):
+            if line.strip().startswith(start_marker):
+                yaml_start_idx = i
+                break
+        
+        return '\n'.join(output_lines[yaml_start_idx:])
+    
+    def _extract_helm_content(self, output: str) -> str:
+        """Extract Helm YAML content from command output"""
+        output_lines = output.split('\n')
+        yaml_start_idx = 0
+        
+        # Find the start of YAML content (look for Helm-specific keys)
+        helm_markers = ['nameOverride:', 'fullnameOverride:', 'operator:']
+        for i, line in enumerate(output_lines):
+            if any(line.strip().startswith(marker) for marker in helm_markers):
+                yaml_start_idx = i
+                break
+        
+        return '\n'.join(output_lines[yaml_start_idx:])
+    
+    def _parse_yaml_documents(self, yaml_content: str) -> List[Dict[str, Any]]:
+        """Parse YAML content into document sections"""
+        sections = []
+        current_section = []
+        
+        for line in yaml_content.split('\n'):
+            if line.strip().startswith('=') and len(line.strip()) > 10:
+                # New section header, save previous section
+                if current_section:
+                    sections.append('\n'.join(current_section))
+                    current_section = []
+            elif line.strip() == '---':
+                # YAML document separator, save previous section
+                if current_section:
+                    sections.append('\n'.join(current_section))
+                    current_section = []
+            else:
+                current_section.append(line)
+        
+        # Add final section
+        if current_section:
+            sections.append('\n'.join(current_section))
+        
+        # Parse sections into YAML documents
+        documents = []
+        for section in sections:
+            section = section.strip()
+            if section and ('apiVersion:' in section or 'kind:' in section):
+                try:
+                    parsed = yaml.safe_load(section)
+                    if parsed and "kind" in parsed:
+                        documents.append(parsed)
+                except yaml.YAMLError:
+                    continue
+        
+        return documents
+    
+    def _validate_yaml_documents(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Validate YAML documents against expected structure"""
+        found_docs = [doc.get("kind", "") for doc in documents]
+        has_minimum = all(doc in found_docs for doc in OPMTestConstants.EXPECTED_YAML_DOCS[:2])
+        
+        return {
+            "found_documents": found_docs,
+            "yaml_document_count": len(documents),
+            "has_minimum_docs": has_minimum
+        }
+    
+    def _validate_helm_structure(self, helm_values: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate Helm values structure"""
+        found_keys = list(helm_values.keys()) if helm_values else []
+        has_required_structure = all(key in found_keys for key in OPMTestConstants.EXPECTED_HELM_KEYS)
+        
+        validation = {
+            "found_keys": found_keys,
+            "has_required_structure": has_required_structure
+        }
+        
+        # Validate permissions structure
+        if "permissions" in helm_values:
+            perms = helm_values["permissions"]
+            validation["cluster_roles_count"] = len(perms.get("clusterRoles", []))
+            validation["roles_count"] = len(perms.get("roles", []))
+        
+        return validation
+    
+    def _create_config_file(self, temp_dir: str, bundle_image: str, output_type: str = "yaml", 
+                           channel: str = OPMTestConstants.STABLE_CHANNEL) -> str:
+        """Create a test configuration file"""
+        config_file = os.path.join(temp_dir, f"test-{output_type}-config.yaml")
+        
+        config_content = f"""
+operator:
+  image: "{bundle_image}"
+  namespace: "{OPMTestConstants.DEFAULT_NAMESPACE}"
+  channel: "{channel}"
+  packageName: "test-operator"
+  version: "{OPMTestConstants.TEST_VERSION}"
+output:
+  mode: "file"
+  type: "{output_type}"
+  path: "{temp_dir}"
+global:
+  skip_tls: true
+  debug: false
+  registry_token: ""
+"""
+        with open(config_file, 'w') as f:
+            f.write(config_content)
+        
+        return config_file
+    
+    def _test_config_output(self, test_name: str, description: str, config_file: str, 
+                           temp_dir: str, output_type: str) -> Dict[str, Any]:
+        """Test config file output generation"""
+        cmd = OPMCommandBuilder(self.base_cmd).with_config(config_file).build()
+        result = self.run_command(cmd)
+        
+        details = {
+            "config_file": config_file,
+            "command": result["command"],
+            "returncode": result["returncode"]
+        }
+        
+        if result["success"]:
+            if output_type == "yaml":
+                # Check if YAML files were created
+                yaml_files = list(Path(temp_dir).glob("*-serviceaccount-*.yaml"))
+                details["yaml_files_created"] = len(yaml_files) > 0
+                details["files_count"] = len(list(Path(temp_dir).glob("*.yaml"))) - 1  # Exclude config file
+            elif output_type == "helm":
+                # Check if Helm values file was created
+                helm_files = list(Path(temp_dir).glob("*-*.yaml"))
+                details["helm_file_created"] = len(helm_files) > 0
+                
+                # Check if channel from config appears in output
+                if helm_files:
+                    try:
+                        with open(helm_files[0], 'r') as f:
+                            helm_content = f.read()
+                        details["channel_from_config"] = f'channel: {OPMTestConstants.ALPHA_CHANNEL}' in helm_content
+                    except Exception:
+                        details["channel_from_config"] = False
+        else:
+            details["error"] = result["stderr"]
+        
+        return self._create_test_result(test_name, description, result["success"], details)
+    
     def test_bundle_processing(self, bundle_name: str, bundle_image: str) -> Dict[str, Any]:
         """Test basic bundle processing and metadata extraction"""
         print(f"🔍 Testing bundle processing: {bundle_name}")
         
-        cmd = self.base_cmd + ["--image", bundle_image]
+        cmd = OPMCommandBuilder(self.base_cmd).with_image(bundle_image).build()
         result = self.run_command(cmd)
         
-        test_result = {
-            "test": f"bundle_processing_{bundle_name}",
-            "description": f"Process bundle {bundle_name} and extract RBAC",
-            "success": result["success"],
-            "duration": 0,
-            "details": {
-                "bundle_image": bundle_image,
-                "command": result["command"],
-                "returncode": result["returncode"]
-            }
+        details = {
+            "bundle_image": bundle_image,
+            "command": result["command"],
+            "returncode": result["returncode"]
         }
         
         if result["success"]:
-            # Validate YAML output structure
             try:
-                # Extract YAML content after status messages
-                output_lines = result["stdout"].split('\n')
-                yaml_start_idx = 0
+                # Extract and parse YAML content using helper methods
+                yaml_content = self._extract_yaml_content(result["stdout"])
+                documents = self._parse_yaml_documents(yaml_content)
+                validation = self._validate_yaml_documents(documents)
                 
-                # Find the start of YAML content (skip status messages)
-                for i, line in enumerate(output_lines):
-                    if line.strip().startswith('apiVersion:'):
-                        yaml_start_idx = i
-                        break
+                details.update(validation)
                 
-                yaml_content = '\n'.join(output_lines[yaml_start_idx:])
-                
-                # Split by section headers and --- separators
-                sections = []
-                current_section = []
-                
-                for line in yaml_content.split('\n'):
-                    if line.strip().startswith('=') and len(line.strip()) > 10:
-                        # New section header, save previous section
-                        if current_section:
-                            sections.append('\n'.join(current_section))
-                            current_section = []
-                    elif line.strip() == '---':
-                        # YAML document separator, save previous section
-                        if current_section:
-                            sections.append('\n'.join(current_section))
-                            current_section = []
-                    else:
-                        current_section.append(line)
-                
-                # Add final section
-                if current_section:
-                    sections.append('\n'.join(current_section))
-                
-                expected_docs = ["ServiceAccount", "ClusterRole", "ClusterRoleBinding"]
-                found_docs = []
-                
-                for section in sections:
-                    section = section.strip()
-                    if section and ('apiVersion:' in section or 'kind:' in section):
-                        try:
-                            parsed = yaml.safe_load(section)
-                            if parsed and "kind" in parsed:
-                                found_docs.append(parsed["kind"])
-                        except yaml.YAMLError:
-                            continue
-                
-                test_result["details"]["found_documents"] = found_docs
-                test_result["details"]["yaml_document_count"] = len(sections)
-                
-                # Validate that we have at least the minimum expected documents
-                has_minimum = all(doc in found_docs for doc in expected_docs[:2])  # SA, CR (CRB might be separate)
-                test_result["details"]["has_minimum_docs"] = has_minimum
-                
-                if not has_minimum:
-                    test_result["success"] = False
-                    test_result["details"]["error"] = f"Missing expected documents. Found: {found_docs}"
+                if not validation["has_minimum_docs"]:
+                    result["success"] = False
+                    details["error"] = f"Missing expected documents. Found: {validation['found_documents']}"
                 
             except Exception as e:
-                test_result["success"] = False
-                test_result["details"]["error"] = f"Failed to parse YAML output: {e}"
+                result["success"] = False
+                details["error"] = f"Failed to parse YAML output: {e}"
         else:
-            test_result["details"]["error"] = result["stderr"]
+            details["error"] = result["stderr"]
         
-        return test_result
+        return self._create_test_result(
+            f"bundle_processing_{bundle_name}",
+            f"Process bundle {bundle_name} and extract RBAC",
+            result["success"],
+            details
+        )
     
     def test_helm_generation(self, bundle_name: str, bundle_image: str) -> Dict[str, Any]:
         """Test Helm values generation"""
         print(f"⚙️ Testing Helm generation: {bundle_name}")
         
-        cmd = self.base_cmd + ["--image", bundle_image, "--helm"]
+        cmd = OPMCommandBuilder(self.base_cmd).with_image(bundle_image).with_helm().build()
         result = self.run_command(cmd)
         
-        test_result = {
-            "test": f"helm_generation_{bundle_name}",
-            "description": f"Generate Helm values for {bundle_name}",
-            "success": result["success"],
-            "duration": 0,
-            "details": {
-                "bundle_image": bundle_image,
-                "command": result["command"],
-                "returncode": result["returncode"]
-            }
+        details = {
+            "bundle_image": bundle_image,
+            "command": result["command"],
+            "returncode": result["returncode"]
         }
         
         if result["success"]:
             try:
-                # Extract YAML content after status messages and headers
-                output_lines = result["stdout"].split('\n')
-                yaml_start_idx = 0
+                # Extract and parse Helm content using helper methods
+                helm_content = self._extract_helm_content(result["stdout"])
+                helm_values = yaml.safe_load(helm_content)
+                validation = self._validate_helm_structure(helm_values)
                 
-                # Find the start of YAML content (look for nameOverride or other YAML keys)
-                for i, line in enumerate(output_lines):
-                    if line.strip().startswith('nameOverride:') or line.strip().startswith('fullnameOverride:'):
-                        yaml_start_idx = i
-                        break
+                details.update(validation)
                 
-                yaml_content = '\n'.join(output_lines[yaml_start_idx:])
+                # Check for channel guidance comment in output
+                has_channel_guidance = OPMTestConstants.CHANNEL_GUIDANCE in result["stdout"]
+                details["has_channel_guidance"] = has_channel_guidance
                 
-                # Parse YAML output
-                helm_values = yaml.safe_load(yaml_content)
-                
-                # Validate Helm values structure
-                expected_keys = ["operator", "serviceAccount", "permissions"]
-                found_keys = list(helm_values.keys()) if helm_values else []
-                
-                test_result["details"]["found_keys"] = found_keys
-                test_result["details"]["has_required_structure"] = all(key in found_keys for key in expected_keys)
-                
-                # Validate permissions structure
-                if "permissions" in helm_values:
-                    perms = helm_values["permissions"]
-                    test_result["details"]["cluster_roles_count"] = len(perms.get("clusterRoles", []))
-                    test_result["details"]["roles_count"] = len(perms.get("roles", []))
-                    
-                    # Check for channel guidance comment in output
-                    has_channel_guidance = "IMPORTANT: Verify Correct Channel" in result["stdout"]
-                    test_result["details"]["has_channel_guidance"] = has_channel_guidance
-                
-                if not test_result["details"]["has_required_structure"]:
-                    test_result["success"] = False
-                    test_result["details"]["error"] = f"Invalid Helm structure. Expected: {expected_keys}, Found: {found_keys}"
+                if not validation["has_required_structure"]:
+                    result["success"] = False
+                    details["error"] = f"Invalid Helm structure. Expected: {OPMTestConstants.EXPECTED_HELM_KEYS}, Found: {validation['found_keys']}"
                 
             except yaml.YAMLError as e:
-                test_result["success"] = False
-                test_result["details"]["error"] = f"Failed to parse Helm YAML: {e}"
+                result["success"] = False
+                details["error"] = f"Failed to parse Helm YAML: {e}"
         else:
-            test_result["details"]["error"] = result["stderr"]
+            details["error"] = result["stderr"]
         
-        return test_result
+        return self._create_test_result(
+            f"helm_generation_{bundle_name}",
+            f"Generate Helm values for {bundle_name}",
+            result["success"],
+            details
+        )
     
     def test_rbac_component_analysis(self, bundle_name: str, bundle_image: str) -> Dict[str, Any]:
         """Test centralized RBAC component analysis"""
@@ -469,35 +661,176 @@ class OPMTestSuite:
         """Test error handling with invalid inputs"""
         print("❌ Testing error handling")
         
-        # Test with invalid bundle image
-        invalid_image = "invalid-registry.com/nonexistent/bundle:latest"
-        cmd = self.base_cmd + ["--image", invalid_image]
+        # Test with invalid bundle image using constants
+        cmd = OPMCommandBuilder(self.base_cmd).with_image(OPMTestConstants.INVALID_BUNDLE).build()
         result = self.run_command(cmd, timeout=30)
         
         # The tool returns 0 but outputs error messages, so check for error content instead
         has_error_output = bool(result["stderr"]) or "Error:" in result["stdout"] or "Failed" in result["stdout"]
         
-        test_result = {
-            "test": "error_handling_invalid_image",
-            "description": "Test error handling with invalid bundle image",
-            "success": has_error_output,  # Success if error is properly reported
-            "duration": 0,
-            "details": {
-                "invalid_image": invalid_image,
-                "command": result["command"],
-                "returncode": result["returncode"],
-                "error_message": result["stderr"],
-                "stdout_message": result["stdout"]
-            }
+        details = {
+            "invalid_image": OPMTestConstants.INVALID_BUNDLE,
+            "command": result["command"],
+            "returncode": result["returncode"],
+            "error_message": result["stderr"],
+            "stdout_message": result["stdout"]
         }
         
-        # Check for helpful error message
+        # Check for helpful error message using constants
         error_text = result["stderr"] + " " + result["stdout"]
         if error_text:
-            has_helpful_error = any(keyword in error_text.lower() for keyword in ["image", "bundle", "failed", "error"])
-            test_result["details"]["has_helpful_error"] = has_helpful_error
+            has_helpful_error = any(keyword in error_text.lower() for keyword in OPMTestConstants.ERROR_KEYWORDS)
+            details["has_helpful_error"] = has_helpful_error
         
-        return test_result
+        return self._create_test_result(
+            "error_handling_invalid_image",
+            "Test error handling with invalid bundle image",
+            has_error_output,  # Success if error is properly reported
+            details
+        )
+    
+    def test_config_functionality(self) -> List[Dict[str, Any]]:
+        """Test config file functionality"""
+        print("⚙️ Testing config file functionality")
+        
+        results = []
+        test_bundle_image = next(iter(self.test_bundles.values()))
+        
+        # Skip if placeholder bundle
+        if self._is_placeholder_bundle(test_bundle_image):
+            return [self._create_test_result(
+                "config_functionality_skipped",
+                "Config tests skipped - no valid bundle image",
+                True,
+                {"reason": "No valid test bundle available"}
+            )]
+        
+        # Test 1: Config file with YAML output
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = self._create_config_file(temp_dir, test_bundle_image, "yaml", OPMTestConstants.STABLE_CHANNEL)
+            result = self._test_config_output("config_yaml_output", "Test config file with YAML output", 
+                                            config_file, temp_dir, "yaml")
+            results.append(result)
+        
+        # Test 2: Config file with Helm output
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = self._create_config_file(temp_dir, test_bundle_image, "helm", OPMTestConstants.ALPHA_CHANNEL)
+            result = self._test_config_output("config_helm_output", "Test config file with Helm output", 
+                                            config_file, temp_dir, "helm")
+            results.append(result)
+        
+        # Test 3: Invalid config file handling
+        with tempfile.TemporaryDirectory() as temp_dir:
+            invalid_config_file = os.path.join(temp_dir, "invalid-config.yaml")
+            
+            # Create invalid config file
+            with open(invalid_config_file, 'w') as f:
+                f.write("invalid: yaml: content: [")
+            
+            cmd = OPMCommandBuilder(self.base_cmd).with_config(invalid_config_file).build()
+            result = self.run_command(cmd)
+            
+            invalid_result = self._create_test_result(
+                "invalid_config_handling",
+                "Test handling of invalid config file",
+                not result["success"],  # Should fail gracefully
+                {
+                    "config_file": invalid_config_file,
+                    "command": result["command"],
+                    "returncode": result["returncode"],
+                    "failed_as_expected": not result["success"]
+                }
+            )
+            results.append(invalid_result)
+        
+        return results
+    
+    def test_formatting_features(self) -> List[Dict[str, Any]]:
+        """Test FlowStyleList formatting and channel placeholder features"""
+        print("🎨 Testing formatting features")
+        
+        results = []
+        test_bundle_image = next(iter(self.test_bundles.values()))
+        
+        # Skip if placeholder bundle
+        if self._is_placeholder_bundle(test_bundle_image):
+            return [self._create_test_result(
+                "formatting_features_skipped",
+                "Formatting tests skipped - no valid bundle image",
+                True,
+                {"reason": "No valid test bundle available"}
+            )]
+        
+        # Test 1: FlowStyleList formatting in Helm output
+        cmd = OPMCommandBuilder(self.base_cmd).with_image(test_bundle_image).with_helm().build()
+        result = self.run_command(cmd)
+        
+        details = {
+            "command": result["command"],
+            "returncode": result["returncode"]
+        }
+        
+        if result["success"]:
+            # Check for flow-style arrays in output using constants
+            has_flow_arrays = all(pattern in result["stdout"] for pattern in OPMTestConstants.FLOW_STYLE_PATTERNS)
+            details["has_flow_style_arrays"] = has_flow_arrays
+            
+            # Check for resourceNames placeholder using constants
+            has_resource_placeholder = OPMTestConstants.RESOURCE_PLACEHOLDER in result["stdout"]
+            details["has_resource_names_placeholder"] = has_resource_placeholder
+            
+            result["success"] = has_flow_arrays and has_resource_placeholder
+        else:
+            details["error"] = result["stderr"]
+        
+        flow_style_result = self._create_test_result(
+            "flowstylelist_formatting",
+            "Test FlowStyleList formatting in Helm output",
+            result["success"],
+            details
+        )
+        results.append(flow_style_result)
+        
+        # Test 2: Channel placeholder when no config provided
+        cmd = OPMCommandBuilder(self.base_cmd).with_image(test_bundle_image).with_helm().build()
+        result = self.run_command(cmd)
+        
+        details = {
+            "command": result["command"],
+            "returncode": result["returncode"]
+        }
+        
+        if result["success"]:
+            # Check for channel placeholder using constants
+            has_channel_placeholder = OPMTestConstants.CHANNEL_PLACEHOLDER in result["stdout"]
+            details["has_channel_placeholder"] = has_channel_placeholder
+            result["success"] = has_channel_placeholder
+        else:
+            details["error"] = result["stderr"]
+        
+        channel_result = self._create_test_result(
+            "channel_placeholder",
+            "Test channel placeholder when no config provided",
+            result["success"],
+            details
+        )
+        results.append(channel_result)
+        
+        # Test 3: Channel guidance comments
+        if result["success"]:
+            has_channel_guidance = OPMTestConstants.CHANNEL_GUIDANCE in result["stdout"]
+            guidance_result = self._create_test_result(
+                "channel_guidance_comments",
+                "Test channel guidance comments in Helm output",
+                has_channel_guidance,
+                {
+                    "has_guidance_comments": has_channel_guidance,
+                    "command": result["command"]
+                }
+            )
+            results.append(guidance_result)
+        
+        return results
     
     def test_permission_scenarios(self) -> List[Dict[str, Any]]:
         """Test different permission scenarios comprehensively"""
@@ -601,6 +934,16 @@ class OPMTestSuite:
             result = self.test_output_directory(bundle_name, bundle_image)
             all_results.append(result)
             self.test_results.append(result)
+        
+        # Config file tests
+        config_results = self.test_config_functionality()
+        all_results.extend(config_results)
+        self.test_results.extend(config_results)
+        
+        # FlowStyleList and channel placeholder tests
+        formatting_results = self.test_formatting_features()
+        all_results.extend(formatting_results)
+        self.test_results.extend(formatting_results)
         
         # Error handling tests
         result = self.test_error_handling()
