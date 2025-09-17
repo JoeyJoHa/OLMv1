@@ -745,13 +745,14 @@ def main():
     args = parser.parse_args()
     
     # Get configuration from environment or command line
-    openshift_url = args.openshift_url or os.getenv("OPENSHIFT_URL", "https://api.example.com:6443")
+    openshift_url = args.openshift_url or os.getenv("OPENSHIFT_URL")
     openshift_token = args.openshift_token or os.getenv("OPENSHIFT_TOKEN") or os.getenv("TOKEN")
     
-    if not openshift_token:
-        print("❌ Error: OPENSHIFT_TOKEN or TOKEN environment variable required")
+    if not openshift_token or not openshift_url:
+        print("❌ Error: OPENSHIFT_TOKEN or TOKEN, and an OPENSHIFT_URL environment variable required")
         print("   Set with: export TOKEN='your-openshift-token'")
-        print("   Or use: python3 test_catalogd.py --openshift-token 'your-token'")
+        print("   Set with: export OPENSHIFT_URL='https://api.example.com:6443'")
+        print("   Or use: python3 test_catalogd.py --openshift-token 'your-token' --openshift-url 'https://api.example.com:6443'    ")
         sys.exit(1)
     
     # Initialize and run test suite
