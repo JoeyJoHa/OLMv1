@@ -253,6 +253,50 @@ def handle_network_error(error: Exception, context: str = "", exception_class: T
         raise exception_class(f"{context}: {error}")
 
 
+def handle_api_error(error: Exception, exception_class: Type[RBACManagerError] = None) -> None:
+    """
+    Centralized API error handling for Kubernetes API exceptions
+    
+    Args:
+        error: The caught exception (ApiException or other)
+        exception_class: The specific exception class to raise (defaults to CatalogdError)
+        
+    Raises:
+        RBACManagerError: Appropriate error type with user-friendly message
+    """
+    from .exceptions import CatalogdError  # Import here to avoid circular imports
+    
+    if exception_class is None:
+        exception_class = CatalogdError
+    
+    error_str = str(error).lower()
+    
+    # Check for authentication/authorization errors
+    if "unauthorized" in error_str or "401" in error_str:
+        raise exception_class(
+            "Unauthorized (401). Verify that your token is valid and has permissions. "
+            "If passing via shell, ensure correct syntax (zsh/bash: $TOKEN, PowerShell: $env:TOKEN)."
+        )
+    
+    # Check for forbidden errors
+    if "forbidden" in error_str or "403" in error_str:
+        raise exception_class(
+            "Forbidden (403). Your credentials are valid but lack necessary permissions. "
+            "Contact your cluster administrator to grant appropriate RBAC permissions."
+        )
+    
+    # Check for SSL/TLS related errors
+    if any(ssl_indicator in error_str for ssl_indicator in ["ssl", "certificate", "tls"]):
+        handle_ssl_error(error, exception_class)
+    
+    # Check for connection-related errors
+    if any(conn_indicator in error_str for conn_indicator in ["connection", "timeout", "refused"]):
+        handle_network_error(error, "API connection failed", exception_class)
+    
+    # For other errors, re-raise with the original message
+    raise exception_class(f"API error: {error}")
+
+
 def create_user_friendly_error(error_type: str, details: str, suggestions: list = None) -> str:
     """
     Create a user-friendly error message with suggestions

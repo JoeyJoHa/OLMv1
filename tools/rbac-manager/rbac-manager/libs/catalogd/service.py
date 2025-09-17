@@ -13,7 +13,7 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 
 from ..core.exceptions import CatalogdError
-from ..core.utils import handle_ssl_error
+from ..core.utils import handle_ssl_error, handle_api_error
 from ..core.constants import KubernetesConstants
 from ..core.utils import is_output_piped
 from .client import CatalogdClient
@@ -69,18 +69,9 @@ class CatalogdService:
             logger.info(f"Found {len(cluster_catalogs.get('items', []))} ClusterCatalogs")
             return cluster_catalogs.get('items', [])
             
-        except ApiException as e:
-            error_msg = str(e).lower()
-            if "unauthorized" in error_msg or "401" in error_msg:
-                raise CatalogdError(
-                    "Unauthorized (401). Verify that your token is valid and has permissions. "
-                    "If passing via shell, ensure correct syntax (zsh/bash: $TOKEN, PowerShell: $env:TOKEN)."
-                )
-            # Use centralized SSL error handler for other errors
-            handle_ssl_error(e, CatalogdError)
-        except Exception as e:
-            # Use centralized SSL error handler
-            handle_ssl_error(e, CatalogdError)
+        except (ApiException, Exception) as e:
+            # Use centralized API error handler for all exceptions
+            handle_api_error(e, CatalogdError)
     
     def display_catalogs_enhanced(self) -> int:
         """
