@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional, Tuple
 
 from ..core.exceptions import NetworkError
 from ..core.constants import NetworkConstants
+from ..core.utils import format_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -417,15 +418,8 @@ class CatalogdSession:
             stats = self.get_session_stats()
             logger.info(f"Session closed: {self._request_count} requests, "
                        f"{stats['average_request_time']:.2f}s avg, "
-                       f"{self._format_bytes(self._total_bytes_received)} transferred")
+                       f"{format_bytes(self._total_bytes_received)} transferred")
     
-    def _format_bytes(self, bytes_count: int) -> str:
-        """Format bytes in human-readable format"""
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if bytes_count < 1024:
-                return f"{bytes_count:.1f} {unit}"
-            bytes_count /= 1024
-        return f"{bytes_count:.1f} TB"
     
     def __enter__(self):
         """Context manager entry"""

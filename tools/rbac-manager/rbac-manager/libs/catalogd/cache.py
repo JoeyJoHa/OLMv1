@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from ..core.constants import FileConstants
+from ..core.utils import format_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +264,7 @@ class CatalogdCache:
                 'ttl': self.ttl,
                 'total_entries': len(cache_files),
                 'total_size_bytes': total_size,
-                'total_size_human': self._format_bytes(total_size),
+                'total_size_human': format_bytes(total_size),
                 'entries_by_catalog': catalog_counts
             }
             
@@ -271,13 +272,6 @@ class CatalogdCache:
             logger.error(f"Error getting cache stats: {e}")
             return {'error': str(e)}
     
-    def _format_bytes(self, bytes_count: int) -> str:
-        """Format bytes in human-readable format"""
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if bytes_count < 1024:
-                return f"{bytes_count:.1f} {unit}"
-            bytes_count /= 1024
-        return f"{bytes_count:.1f} TB"
     
     def clear_all(self) -> None:
         """Clear all cache entries"""
