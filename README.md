@@ -141,38 +141,7 @@ OLMv1/
 │       ├── 01-clustercatalog.yaml    # ClusterCatalog example
 │       └── 02-clusterextension.yaml  # ClusterExtension example
 ├── tools/                            # Development and management tools
-│   └── rbac-manager/                 # RBAC Manager tool
-│       ├── rbac-manager/             # Main tool package
-│       │   ├── help/                 # Help text files
-│       │   │   ├── catalogd_help.txt # Catalogd command help
-│       │   │   ├── examples_help.txt # Comprehensive examples
-│       │   │   ├── main_help.txt     # Main command help
-│       │   │   └── opm_help.txt      # OPM command help
-│       │   └── libs/                 # Core libraries
-│       │       ├── catalogd/         # Catalogd integration
-│       │       │   ├── cache.py      # Caching functionality
-│       │       │   ├── client.py     # Low-level catalogd client
-│       │       │   ├── parser.py     # Response parsing
-│       │       │   ├── service.py    # High-level service
-│       │       │   └── session.py    # Session management
-│       │       ├── core/             # Core utilities
-│       │       │   ├── auth.py       # Authentication handling
-│       │       │   ├── config.py     # Configuration management
-│       │       │   ├── exceptions.py # Custom exceptions
-│       │       │   └── utils.py      # Utility functions
-│       │       ├── opm/              # OPM integration
-│       │       │   ├── base_generator.py # Base generator with DRY deduplication logic
-│       │       │   ├── client.py     # OPM binary client
-│       │       │   ├── helm_generator.py # Helm values generator (deduplicated)
-│       │       │   ├── processor.py  # Bundle processor
-│       │       │   └── yaml_generator.py # YAML manifest generator (deduplicated)
-│       │       ├── help_manager.py   # Help system manager
-│       │       └── main_app.py       # Main application logic
-│       ├── tests/                    # Test suite
-│       │   └── test_catalogd.py      # Catalogd integration tests
-│       ├── rbac-manager.py           # CLI entry point
-│       ├── requirements.txt          # Python dependencies
-│       └── README.md                 # Tool documentation
+│   └── rbac-manager/                 # RBAC Manager tool (see README.md for detailed structure)
 ├── config/                           # Configuration files (future use)
 ├── scripts/                          # Utility scripts (future use)
 ├── tests/                            # Test files (future use)
