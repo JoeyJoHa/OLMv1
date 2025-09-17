@@ -181,7 +181,13 @@ class BundleProcessor:
     
     def _is_cluster_scoped_resource(self, kind: str) -> bool:
         """
-        Determine if a resource kind is cluster-scoped
+        Determine if a resource kind is cluster-scoped using algorithmic approach
+        
+        Uses Kubernetes naming conventions:
+        1. Resources starting with "Cluster" are typically cluster-scoped
+        2. Global infrastructure resources are cluster-scoped
+        3. Security and policy resources are often cluster-scoped
+        4. Storage classes and drivers are cluster-scoped
         
         Args:
             kind: Kubernetes resource kind
@@ -189,30 +195,65 @@ class BundleProcessor:
         Returns:
             True if cluster-scoped, False otherwise
         """
-        # Standard Kubernetes cluster-scoped resources
-        cluster_scoped_kinds = {
-            'ClusterRole', 'ClusterRoleBinding', 'CustomResourceDefinition',
-            'PersistentVolume', 'StorageClass', 'VolumeAttachment',
-            'CSIDriver', 'CSINode', 'CSIStorageCapacity',
-            'IngressClass', 'RuntimeClass', 'PriorityClass',
-            'PodSecurityPolicy', 'NetworkPolicy', 'MutatingWebhookConfiguration',
-            'ValidatingWebhookConfiguration', 'APIService', 'TokenReview',
-            'CertificateSigningRequest', 'FlowSchema', 'PriorityLevelConfiguration'
-        }
+        if not kind:
+            return False
         
-        # OpenShift-specific cluster-scoped resources
-        openshift_cluster_scoped = {
-            'ClusterOperator', 'DNS', 'Infrastructure', 'Network', 'OAuth',
-            'Project', 'Security', 'Scheduler', 'Image', 'ClusterVersion',
-            'OperatorHub', 'Proxy', 'Build', 'ImageStream', 'Template',
-            'Route', 'SecurityContextConstraints'
-        }
+        # Special case: ClusterServiceVersion is neither cluster nor namespace scoped
+        # It's a special OLM resource that exists in a namespace but describes cluster resources
+        if kind == 'ClusterServiceVersion':
+            return False
         
-        return kind in cluster_scoped_kinds or kind in openshift_cluster_scoped
+        # Rule 1: Resources with "Cluster" prefix are cluster-scoped
+        if kind.startswith('Cluster'):
+            return True
+        
+        # Rule 2: Resources ending with "Class" are typically cluster-scoped
+        if kind.endswith('Class'):
+            return True
+        
+        # Rule 3: Custom Resource Definitions are always cluster-scoped
+        if kind == 'CustomResourceDefinition':
+            return True
+        
+        # Rule 4: Persistent Volumes (not Claims) are cluster-scoped
+        if kind == 'PersistentVolume':
+            return True
+        
+        # Rule 5: CSI (Container Storage Interface) resources are cluster-scoped
+        if kind.startswith('CSI'):
+            return True
+        
+        # Rule 6: Webhook configurations are cluster-scoped
+        if 'WebhookConfiguration' in kind:
+            return True
+        
+        # Rule 7: API services and reviews are cluster-scoped
+        if kind in ('APIService', 'TokenReview', 'SubjectAccessReview', 'SelfSubjectAccessReview'):
+            return True
+        
+        # Rule 8: Certificate and flow control resources are cluster-scoped
+        if kind in ('CertificateSigningRequest', 'FlowSchema', 'PriorityLevelConfiguration'):
+            return True
+        
+        # Rule 9: Volume attachments are cluster-scoped
+        if 'VolumeAttachment' in kind:
+            return True
+        
+        # Rule 10: Node-related resources are typically cluster-scoped
+        if 'Node' in kind:
+            return True
+        
+        # Default: assume namespace-scoped (safer default)
+        return False
     
     def _is_namespace_scoped_resource(self, kind: str) -> bool:
         """
-        Determine if a resource kind is namespace-scoped
+        Determine if a resource kind is namespace-scoped using algorithmic approach
+        
+        Uses logical rules:
+        1. If cluster-scoped, then not namespace-scoped
+        2. ClusterServiceVersion is special (neither truly cluster nor namespace scoped)
+        3. Most other resources are namespace-scoped by default
         
         Args:
             kind: Kubernetes resource kind
@@ -220,20 +261,21 @@ class BundleProcessor:
         Returns:
             True if namespace-scoped, False otherwise
         """
-        # Standard Kubernetes namespace-scoped resources
-        namespace_scoped_kinds = {
-            'Pod', 'Service', 'ServiceAccount', 'Secret', 'ConfigMap',
-            'Deployment', 'ReplicaSet', 'StatefulSet', 'DaemonSet', 'Job',
-            'CronJob', 'Ingress', 'PersistentVolumeClaim', 'Role', 'RoleBinding',
-            'NetworkPolicy', 'PodDisruptionBudget', 'HorizontalPodAutoscaler',
-            'VerticalPodAutoscaler', 'Event', 'Endpoints', 'EndpointSlice',
-            'LimitRange', 'ResourceQuota', 'ServiceMonitor', 'PrometheusRule'
-        }
+        if not kind:
+            return False
         
-        # If not explicitly cluster-scoped and looks like a standard resource, assume namespace-scoped
-        return (kind in namespace_scoped_kinds or 
-                (not self._is_cluster_scoped_resource(kind) and 
-                 kind not in {'ClusterServiceVersion'}))  # CSV is special case
+        # Special case: ClusterServiceVersion is neither truly cluster nor namespace scoped
+        # It's a special OLM resource that exists in a namespace but describes cluster resources
+        if kind == 'ClusterServiceVersion':
+            return False
+        
+        # If it's cluster-scoped, it's not namespace-scoped
+        if self._is_cluster_scoped_resource(kind):
+            return False
+        
+        # Default: most Kubernetes resources are namespace-scoped
+        # This is the safer default and handles custom resources correctly
+        return True
     
     def _extract_rbac_rules(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """

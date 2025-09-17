@@ -693,55 +693,85 @@ e        Generate installer service account Role permissions - ONLY installer-sp
     
     def _kind_to_resource_type(self, kind: str) -> str:
         """
-        Convert Kubernetes kind to resource type
+        Convert Kubernetes kind to resource type using algorithmic approach
+        
+        Follows Kubernetes naming conventions:
+        1. Convert PascalCase to lowercase
+        2. Apply English pluralization rules
+        3. Handle compound words properly
         
         Args:
-            kind: Kubernetes resource kind
+            kind: Kubernetes resource kind (e.g., 'Pod', 'ServiceAccount')
             
         Returns:
-            Resource type (pluralized, lowercase)
+            Resource type (pluralized, lowercase, e.g., 'pods', 'serviceaccounts')
         """
-        # Handle special cases first
-        special_cases = {
-            'Service': 'services',
-            'ConfigMap': 'configmaps',
-            'ServiceAccount': 'serviceaccounts',
-            'ClusterRole': 'clusterroles',
-            'ClusterRoleBinding': 'clusterrolebindings',
-            'RoleBinding': 'rolebindings',
-            'CustomResourceDefinition': 'customresourcedefinitions',
-            'HorizontalPodAutoscaler': 'horizontalpodautoscalers',
-            'NetworkPolicy': 'networkpolicies',
-            'PodSecurityPolicy': 'podsecuritypolicies',
-            'PersistentVolumeClaim': 'persistentvolumeclaims',
-            'StorageClass': 'storageclasses',
-            'IngressClass': 'ingressclasses',
-            'PriorityClass': 'priorityclasses',
-            'RuntimeClass': 'runtimeclasses',
-            'VolumeAttachment': 'volumeattachments',
-            'CSIDriver': 'csidrivers',
-            'CSINode': 'csinodes',
-            'PrometheusRule': 'prometheusrules',
-            'ServiceMonitor': 'servicemonitors'
+        if not kind:
+            return ""
+        
+        # Convert PascalCase/CamelCase to lowercase with word boundaries
+        # This handles cases like 'ServiceAccount' -> 'service account' -> 'serviceaccounts'
+        import re
+        
+        # Insert spaces before capital letters (except the first one)
+        spaced = re.sub(r'(?<!^)(?=[A-Z])', ' ', kind)
+        
+        # Convert to lowercase and remove spaces
+        normalized = spaced.lower().replace(' ', '')
+        
+        # Apply English pluralization rules
+        return self._pluralize_english_word(normalized)
+    
+    def _pluralize_english_word(self, word: str) -> str:
+        """
+        Apply English pluralization rules algorithmically
+        
+        Args:
+            word: Singular word to pluralize
+            
+        Returns:
+            Pluralized word following English grammar rules
+        """
+        if not word:
+            return word
+        
+        # Handle irregular plurals that don't follow standard rules
+        # These are genuine linguistic exceptions, not Kubernetes-specific
+        irregular_plurals = {
+            'person': 'people',
+            'child': 'children', 
+            'foot': 'feet',
+            'tooth': 'teeth',
+            'mouse': 'mice',
+            'goose': 'geese'
         }
         
-        if kind in special_cases:
-            return special_cases[kind]
+        if word in irregular_plurals:
+            return irregular_plurals[word]
         
-        # General pluralization rules
-        kind_lower = kind.lower()
+        # Handle words ending in 'y' preceded by consonant
+        if len(word) > 1 and word.endswith('y') and word[-2] not in 'aeiou':
+            return word[:-1] + 'ies'  # policy -> policies, category -> categories
         
-        # Handle common patterns
-        if kind_lower.endswith('y'):
-            return kind_lower[:-1] + 'ies'  # Policy -> policies
-        elif kind_lower.endswith(('s', 'sh', 'ch', 'x', 'z')):
-            return kind_lower + 'es'  # Process -> processes
-        elif kind_lower.endswith('f'):
-            return kind_lower[:-1] + 'ves'  # Leaf -> leaves
-        elif kind_lower.endswith('fe'):
-            return kind_lower[:-2] + 'ves'  # Life -> lives
-        else:
-            return kind_lower + 's'  # Most cases: Pod -> pods
+        # Handle words ending in 's', 'ss', 'sh', 'ch', 'x', 'z'
+        if word.endswith(('s', 'ss', 'sh', 'ch', 'x', 'z')):
+            return word + 'es'  # class -> classes, box -> boxes
+        
+        # Handle words ending in 'f' or 'fe'
+        if word.endswith('f'):
+            return word[:-1] + 'ves'  # leaf -> leaves, shelf -> shelves
+        elif word.endswith('fe'):
+            return word[:-2] + 'ves'  # knife -> knives, life -> lives
+        
+        # Handle words ending in 'o' preceded by consonant
+        if len(word) > 1 and word.endswith('o') and word[-2] not in 'aeiou':
+            # Most words ending in consonant + 'o' add 'es'
+            # But some just add 's' (like 'photo' -> 'photos')
+            # For Kubernetes resources, this is typically 'es'
+            return word + 'es'  # hero -> heroes, potato -> potatoes
+        
+        # Default rule: just add 's'
+        return word + 's'  # pod -> pods, deployment -> deployments
 
     def _generate_operator_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
