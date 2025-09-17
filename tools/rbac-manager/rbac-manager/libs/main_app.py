@@ -485,8 +485,9 @@ Use --help with specific commands for detailed help.
     catalogd_parser.add_argument('--package', help='Package name')
     catalogd_parser.add_argument('--channel', help='Channel name')
     catalogd_parser.add_argument('--version', help='Version')
+    catalogd_parser.add_argument('--output', help='Output directory for generated files')
     catalogd_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
-    catalogd_parser.add_argument('--generate-config', action='store_true', help='Generate configuration file with extracted values')
+    catalogd_parser.add_argument('--generate-config', action='store_true', help='Generate configuration file (stdout by default, use --output to save to file)')
     
     # opm subcommand
     opm_parser = subparsers.add_parser(
@@ -526,7 +527,7 @@ def configure_authentication(rbac_manager, args):
         rbac_manager.configure_authentication()
 
 
-def generate_config_file(args, extracted_data=None, output_path=None):
+def generate_config_file(args, extracted_data=None, output_path=None, stdout=False):
     """
     Generate configuration file using ConfigManager (DRY principle).
     
@@ -534,32 +535,59 @@ def generate_config_file(args, extracted_data=None, output_path=None):
         args: Parsed command-line arguments
         extracted_data: Dictionary with extracted values from catalogd/opm (optional)
         output_path: Custom output path (optional)
+        stdout: Output to stdout instead of file (optional)
     
     Returns:
-        str: Path to generated config file
+        str: Path to generated config file, or None if output to stdout
     """
     config_manager = ConfigManager()
     
-    # Determine output directory
-    if output_path:
-        output_dir = output_path
-    elif hasattr(args, 'output') and args.output:
-        output_dir = args.output
-    else:
-        output_dir = './config'
+    # Determine if we should output to stdout or file
+    output_to_stdout = stdout or (not output_path and not (hasattr(args, 'output') and args.output))
     
-    if extracted_data:
-        # Generate config with extracted values
-        return config_manager.generate_config_with_values(
-            extracted_data=extracted_data,
-            output_dir=output_dir,
-            output_mode='file' if (hasattr(args, 'output') and args.output) else 'stdout',
-            output_type='helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
-            namespace=getattr(args, 'namespace', 'default')
-        )
+    if output_to_stdout:
+        # Generate config content and output to stdout
+        if extracted_data:
+            # Create temporary config to get the YAML content
+            import tempfile
+            import os
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_file = config_manager.generate_config_with_values(
+                    extracted_data=extracted_data,
+                    output_dir=temp_dir,
+                    output_mode='file' if (hasattr(args, 'output') and args.output) else 'stdout',
+                    output_type='helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
+                    namespace=getattr(args, 'namespace', 'default')
+                )
+                with open(temp_file, 'r') as f:
+                    print(f.read())
+        else:
+            # Create temporary template config to get the YAML content
+            import tempfile
+            
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_file = config_manager.generate_config_template(output_dir=temp_dir)
+                with open(temp_file, 'r') as f:
+                    print(f.read())
+        
+        return None
     else:
-        # Generate template config
-        return config_manager.generate_config_template(output_dir=output_dir)
+        # Save to file
+        output_dir = output_path or (args.output if hasattr(args, 'output') and args.output else './config')
+        
+        if extracted_data:
+            # Generate config with extracted values
+            return config_manager.generate_config_with_values(
+                extracted_data=extracted_data,
+                output_dir=output_dir,
+                output_mode='file' if (hasattr(args, 'output') and args.output) else 'stdout',
+                output_type='helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
+                namespace=getattr(args, 'namespace', 'default')
+            )
+        else:
+            # Generate template config
+            return config_manager.generate_config_template(output_dir=output_dir)
 
 
 def merge_config_with_args(args, config, command_name: str):
@@ -647,10 +675,14 @@ def handle_catalogd_command(args, rbac_manager, config):
     
     # Handle generate-config flag
     if hasattr(args, 'generate_config') and args.generate_config:
+        # Determine output mode: stdout by default, file if --output is specified
+        output_to_stdout = not (hasattr(args, 'output') and args.output)
+        
         # If no other flags provided, generate template
         if not any([args.catalog_name, args.package, args.channel, args.version]):
-            config_file = generate_config_file(args)
-            print(f"Configuration template generated: {config_file}")
+            config_file = generate_config_file(args, stdout=output_to_stdout)
+            if not output_to_stdout:
+                print(f"Configuration template generated: {config_file}")
             return
         
         # Otherwise, extract data first, then generate config
@@ -667,9 +699,10 @@ def handle_catalogd_command(args, rbac_manager, config):
             'package': args.package or 'package-name',
             'version': args.version or 'version'
         }
-        config_file = generate_config_file(args, extracted_data)
-        print(f"Configuration template generated with provided values: {config_file}")
-        print("Note: Bundle image URL should be updated with actual value from catalogd query.")
+        config_file = generate_config_file(args, extracted_data, stdout=output_to_stdout)
+        if not output_to_stdout:
+            print(f"Configuration template generated with provided values: {config_file}")
+            print("Note: Bundle image URL should be updated with actual value from catalogd query.")
         return
     
     # Check if any operational flags are provided

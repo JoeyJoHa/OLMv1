@@ -45,6 +45,22 @@ ADVANCED OPTIONS:
       --openshift-url https://api.cluster.example.com:6443 \
       --openshift-token $env:TOKEN --skip-tls
 
+CONFIGURATION GENERATION:
+    # Generate config template to stdout
+    python3 rbac-manager.py catalogd --generate-config
+
+    # Generate config template to file
+    python3 rbac-manager.py catalogd --generate-config --output ./config
+
+    # Generate config with extracted values to stdout
+    python3 rbac-manager.py catalogd --generate-config \
+      --package argocd-operator --channel alpha --version v0.8.0
+
+    # Generate config with extracted values to file
+    python3 rbac-manager.py catalogd --generate-config \
+      --package argocd-operator --channel alpha --version v0.8.0 \
+      --output ./my-configs
+
 PIPING OUTPUT:
     # Get package list and pipe to grep
     python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators | \
@@ -53,3 +69,7 @@ PIPING OUTPUT:
     # Save metadata to file
     python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators \
       --package quay-operator --channel stable-3.10 --version 3.10.0 > metadata.json
+
+    # Generate config and pipe to file
+    python3 rbac-manager.py catalogd --generate-config \
+      --package argocd-operator --channel alpha > my-config.yaml
