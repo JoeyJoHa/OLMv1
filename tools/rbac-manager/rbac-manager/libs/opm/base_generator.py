@@ -1544,3 +1544,163 @@ class HelmValueTemplates:
             },
             'additionalResources': []
         }
+    
+    def analyze_rbac_components(self, bundle_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analyze bundle metadata and determine which RBAC components are needed.
+        
+        This method centralizes the decision-making logic for RBAC component creation,
+        eliminating duplication between HelmValuesGenerator and YAMLManifestGenerator.
+        
+        Args:
+            bundle_metadata: Bundle metadata from OPM
+            
+        Returns:
+            Dictionary containing:
+            {
+                'components_needed': {
+                    'installer_cluster_role': bool,
+                    'grantor_cluster_role': bool,
+                    'namespace_role': bool,
+                    'cluster_role_bindings': bool,
+                    'role_bindings': bool
+                },
+                'rules': {
+                    'installer_cluster_role': [...],  # Rules for operator management ClusterRole
+                    'grantor_cluster_role': [...],    # Rules for grantor ClusterRole
+                    'namespace_role': [...]           # Rules for namespace Role
+                },
+                'permission_scenario': str,  # Description of the permission scenario
+                'analysis': dict             # Result from analyze_permissions method
+            }
+        """
+        # Use existing analyze_permissions method
+        analysis = self.analyze_permissions(bundle_metadata)
+        has_cluster_permissions = analysis['has_cluster_permissions']
+        has_namespace_permissions = analysis['has_namespace_permissions']
+        
+        # Initialize result structure
+        result = {
+            'components_needed': {
+                'installer_cluster_role': True,  # Always needed for operator management
+                'grantor_cluster_role': False,
+                'namespace_role': False,
+                'cluster_role_bindings': True,   # Always needed for installer ClusterRole
+                'role_bindings': False
+            },
+            'rules': {
+                'installer_cluster_role': [],
+                'grantor_cluster_role': [],
+                'namespace_role': []
+            },
+            'permission_scenario': '',
+            'analysis': analysis
+        }
+        
+        # Generate base operator management rules (always needed)
+        operator_rules = self._generate_operator_rules(bundle_metadata)
+        bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+        combined_operator_rules = operator_rules + bundled_cluster_rules
+        result['rules']['installer_cluster_role'] = self._process_and_deduplicate_rules(combined_operator_rules)
+        
+        # Decision logic based on permission types
+        if has_cluster_permissions and has_namespace_permissions:
+            # Scenario 1: Both clusterPermissions and permissions (e.g., ArgoCD)
+            # - installer ClusterRole: operator management + bundled cluster resources
+            # - grantor ClusterRole: CSV cluster permissions + bundled cluster resources (excluding ClusterRoles)
+            # - namespace Role: CSV namespace permissions (deduplicated against cluster rules)
+            result['permission_scenario'] = 'both_cluster_and_namespace'
+            result['components_needed']['grantor_cluster_role'] = True
+            result['components_needed']['namespace_role'] = True
+            result['components_needed']['role_bindings'] = True
+            
+            # Generate grantor ClusterRole rules
+            cluster_grantor_rules = []
+            from ..core.constants import OPMConstants
+            for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
+                cluster_grantor_rules.extend(perm.get('rules', []))
+            
+            # Add bundled cluster resources (excluding ClusterRoles for grantor)
+            bundled_cluster_rules_grantor = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
+            cluster_grantor_rules.extend(bundled_cluster_rules_grantor)
+            
+            if cluster_grantor_rules:
+                result['rules']['grantor_cluster_role'] = self._process_and_deduplicate_rules(cluster_grantor_rules)
+            else:
+                result['components_needed']['grantor_cluster_role'] = False
+            
+            # Generate namespace Role rules (deduplicated against cluster rules)
+            namespace_rules = self._generate_namespace_rules(bundle_metadata)
+            installer_rules = self._generate_installer_service_account_rules(bundle_metadata)
+            combined_role_rules = namespace_rules + installer_rules
+            
+            if combined_role_rules:
+                deduplicated_role_rules = self._process_and_deduplicate_rules(combined_role_rules)
+                
+                # Get cluster rules for filtering (combine installer + grantor)
+                all_cluster_rules = result['rules']['installer_cluster_role'] + result['rules']['grantor_cluster_role']
+                final_role_rules = self._filter_unique_role_rules(deduplicated_role_rules, all_cluster_rules)
+                
+                if final_role_rules:
+                    result['rules']['namespace_role'] = final_role_rules
+                else:
+                    result['components_needed']['namespace_role'] = False
+                    result['components_needed']['role_bindings'] = False
+            else:
+                result['components_needed']['namespace_role'] = False
+                result['components_needed']['role_bindings'] = False
+                
+        elif has_cluster_permissions:
+            # Scenario 2: Only clusterPermissions (cluster-only operator)
+            # - installer ClusterRole: operator management + bundled cluster resources
+            # - grantor ClusterRole: CSV cluster permissions + bundled cluster resources (excluding ClusterRoles)
+            # - No namespace Role needed
+            result['permission_scenario'] = 'cluster_only'
+            result['components_needed']['grantor_cluster_role'] = True
+            
+            # Generate grantor ClusterRole rules
+            cluster_grantor_rules = []
+            from ..core.constants import OPMConstants
+            for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
+                cluster_grantor_rules.extend(perm.get('rules', []))
+            
+            # Add bundled cluster resources (excluding ClusterRoles for grantor)
+            bundled_cluster_rules_grantor = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
+            cluster_grantor_rules.extend(bundled_cluster_rules_grantor)
+            
+            if cluster_grantor_rules:
+                result['rules']['grantor_cluster_role'] = self._process_and_deduplicate_rules(cluster_grantor_rules)
+            else:
+                result['components_needed']['grantor_cluster_role'] = False
+                
+        elif has_namespace_permissions:
+            # Scenario 3: Only permissions (e.g., Quay operator - treat as ClusterRoles)
+            # - installer ClusterRole: operator management + bundled cluster resources
+            # - grantor ClusterRole: CSV namespace permissions (treated as cluster-scoped) + bundled cluster resources
+            # - No namespace Role needed
+            result['permission_scenario'] = 'namespace_treated_as_cluster'
+            result['components_needed']['grantor_cluster_role'] = True
+            
+            # Generate grantor ClusterRole rules (treat namespace permissions as cluster-scoped)
+            namespace_rules = self._generate_namespace_rules(bundle_metadata)
+            bundled_cluster_rules_grantor = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
+            combined_rules = namespace_rules + bundled_cluster_rules_grantor
+            
+            if combined_rules:
+                result['rules']['grantor_cluster_role'] = combined_rules
+            else:
+                result['components_needed']['grantor_cluster_role'] = False
+                
+        else:
+            # Scenario 4: No permissions defined (unusual case)
+            # - installer ClusterRole: operator management + bundled cluster resources only
+            # - No grantor ClusterRole needed
+            # - Add empty namespace Role for Helm compatibility
+            result['permission_scenario'] = 'no_permissions'
+            # grantor_cluster_role already False
+            # For Helm compatibility, we might need an empty Role
+            result['components_needed']['namespace_role'] = True  # Empty role for Helm
+            result['components_needed']['role_bindings'] = True
+            result['rules']['namespace_role'] = []  # Empty rules
+        
+        return result

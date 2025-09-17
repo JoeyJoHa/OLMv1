@@ -47,20 +47,17 @@ class YAMLManifestGenerator(BaseGenerator):
             operator_name, namespace
         )
         
-        # Generate Roles and RoleBindings based on permissions logic
-        has_cluster_permissions = bool(bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []))
-        has_namespace_permissions = bool(bundle_metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []))
+        # Generate Roles and RoleBindings using centralized component analysis
+        rbac_analysis = self.analyze_rbac_components(bundle_metadata)
+        components_needed = rbac_analysis['components_needed']
         
-        # Only generate Roles if both clusterPermissions and permissions exist
-        if has_cluster_permissions and has_namespace_permissions:
-            # Both exist (e.g., ArgoCD) - generate grantor Role for namespace permissions
-            namespace_rules = self._generate_namespace_rules(bundle_metadata)
-            if namespace_rules:
-                manifests[f'{operator_name}-role'] = self._generate_roles(
-                    bundle_metadata, operator_name, namespace
-                )
-                
-                # Generate RoleBindings
+        # Generate namespace Role and RoleBinding if needed
+        if components_needed['namespace_role']:
+            manifests[f'{operator_name}-role'] = self._generate_roles(
+                bundle_metadata, operator_name, namespace
+            )
+            
+            if components_needed['role_bindings']:
                 manifests[f'{operator_name}-rolebinding'] = self._generate_role_bindings(
                     operator_name, namespace
                 )
