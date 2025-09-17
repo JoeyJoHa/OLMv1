@@ -14,13 +14,14 @@ class HelmValuesGenerator(BaseGenerator):
     """Generates Helm values.yaml content from bundle metadata"""
     
     def generate(self, bundle_metadata: Dict[str, Any], 
-                operator_name: Optional[str] = None) -> str:
+                operator_name: Optional[str] = None, channel: Optional[str] = None) -> str:
         """
         Generate Helm values.yaml content from bundle metadata
         
         Args:
             bundle_metadata: Bundle metadata from OPM
             operator_name: Optional custom operator name
+            channel: Optional channel name for the operator
             
         Returns:
             YAML string for values.yaml
@@ -31,7 +32,7 @@ class HelmValuesGenerator(BaseGenerator):
         operator_name = operator_name or package_name
         
         # Create base values structure
-        values = HelmValueTemplates.base_values_template(operator_name, version, package_name)
+        values = HelmValueTemplates.base_values_template(operator_name, version, package_name, channel)
         
         # Generate permissions structure
         permissions = self._generate_permissions_structure(bundle_metadata)

@@ -232,7 +232,8 @@ class RBACManager:
             print(f"Error: {e}", file=sys.stderr)
     
     def extract_bundle(self, image: str, namespace: str = "default", registry_token: str = None,
-                      helm: bool = False, output_dir: str = None, stdout: bool = False) -> None:
+                      helm: bool = False, output_dir: str = None, stdout: bool = False, 
+                      channel: str = None) -> None:
         """
         Extract RBAC from operator bundle
         
@@ -243,6 +244,7 @@ class RBACManager:
             helm: Generate Helm values
             output_dir: Output directory (optional)
             stdout: Output to stdout instead of files
+            channel: Operator channel (optional, used in Helm values)
         """
         try:
             # Extract bundle metadata
@@ -257,7 +259,7 @@ class RBACManager:
             
             # Generate outputs based on flags
             if helm:
-                self._generate_helm_output(metadata, output_dir, stdout)
+                self._generate_helm_output(metadata, output_dir, stdout, channel)
             else:
                 self._generate_yaml_output(metadata, namespace, output_dir, stdout)
                 
@@ -383,12 +385,12 @@ class RBACManager:
             
             print(f"{content_type} generated successfully")
 
-    def _generate_helm_output(self, metadata: Dict[str, Any], output_dir: str, stdout: bool) -> None:
+    def _generate_helm_output(self, metadata: Dict[str, Any], output_dir: str, stdout: bool, channel: str = None) -> None:
         """Generate Helm values output"""
         package_name = metadata.get('package_name', 'my-operator')
         
-        # Generate Helm values
-        helm_values = self.bundle_processor.generate_helm_values(metadata, package_name)
+        # Generate Helm values with channel information
+        helm_values = self.bundle_processor.generate_helm_values(metadata, package_name, channel=channel)
         
         # Use unified output method (single file, so use package name as key)
         content_dict = {package_name: helm_values}
@@ -624,15 +626,21 @@ def merge_config_with_args(args, config, command_name: str):
                 args.image = operator_config['image']
         if hasattr(args, 'namespace') and (not args.namespace or args.namespace == 'default') and 'namespace' in operator_config:
             args.namespace = operator_config['namespace']
+        if hasattr(args, 'channel') and (not args.channel or args.channel == '') and 'channel' in operator_config:
+            args.channel = operator_config['channel']
+        if hasattr(args, 'package') and (not args.package or args.package == '') and 'packageName' in operator_config:
+            args.package = operator_config['packageName']
+        if hasattr(args, 'version') and (not args.version or args.version == '') and 'version' in operator_config:
+            args.version = operator_config['version']
     
-        if 'output' in config:
-            # Map output config to args - config takes precedence
-            output_config = config['output']
-            if hasattr(args, 'output') and output_config.get('mode') == 'file' and 'path' in output_config:
-                args.output = output_config['path']
-            if hasattr(args, 'helm'):
-                # Set helm flag based on config type, regardless of command line
-                args.helm = (output_config.get('type') == 'helm')
+    if 'output' in config:
+        # Map output config to args - config takes precedence
+        output_config = config['output']
+        if hasattr(args, 'output') and output_config.get('mode') == 'file' and 'path' in output_config:
+            args.output = output_config['path']
+        if hasattr(args, 'helm'):
+            # Set helm flag based on config type, regardless of command line
+            args.helm = (output_config.get('type') == 'helm')
     
     if 'global' in config:
         # Map global config to args
@@ -739,13 +747,19 @@ def handle_opm_command(args, rbac_manager, config):
     args.namespace = args.namespace or KubernetesConstants.DEFAULT_NAMESPACE
     args.helm = args.helm or False
     
+    # Extract channel from config if available
+    channel = None
+    if config and 'operator' in config and 'channel' in config['operator']:
+        channel = config['operator']['channel']
+    
     rbac_manager.extract_bundle(
         image=args.image,
         namespace=args.namespace,
         registry_token=args.registry_token,
         helm=args.helm,
         output_dir=args.output,
-        stdout=not args.output
+        stdout=not args.output,
+        channel=channel
     )
 
 

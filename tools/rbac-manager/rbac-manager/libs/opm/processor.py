@@ -337,18 +337,19 @@ class BundleProcessor:
         
         return summary
     
-    def generate_helm_values(self, bundle_metadata: Dict[str, Any], operator_name: Optional[str] = None) -> str:
+    def generate_helm_values(self, bundle_metadata: Dict[str, Any], operator_name: Optional[str] = None, channel: Optional[str] = None) -> str:
         """
         Generate Helm values from processed bundle metadata
         
         Args:
             bundle_metadata: Processed bundle metadata
             operator_name: Optional custom operator name
+            channel: Optional channel name for the operator
             
         Returns:
             Helm values YAML string
         """
-        return self.helm_generator.generate(bundle_metadata, operator_name)
+        return self.helm_generator.generate(bundle_metadata, operator_name, channel=channel)
     
     def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = "default", 
                               operator_name: Optional[str] = None) -> Dict[str, str]:

@@ -1674,7 +1674,7 @@ class HelmValueTemplates:
     """Templates for Helm values structures"""
     
     @staticmethod
-    def base_values_template(operator_name: str, version: str, package_name: str) -> Dict[str, Any]:
+    def base_values_template(operator_name: str, version: str, package_name: str, channel: str = None) -> Dict[str, Any]:
         """Base Helm values template with channel guidance"""
         return {
             'nameOverride': '',
@@ -1686,7 +1686,7 @@ class HelmValueTemplates:
                 # IMPORTANT: Verify correct channel with catalogd before deployment!
                 # Many operators use 'alpha', 'beta', or 'candidate' instead of 'stable'
                 # Run: kubectl get package <package-name> -o jsonpath='{.status.channels[*].name}'
-                'channel': KubernetesConstants.DEFAULT_CHANNEL,  # ← Update if needed
+                'channel': channel or KubernetesConstants.DEFAULT_CHANNEL,  # Use provided channel or default
                 'packageName': package_name
             },
             'serviceAccount': {
