@@ -239,6 +239,10 @@ class OPMTestSuite:
     
     def _extract_yaml_content(self, output: str, start_marker: str = "apiVersion:") -> str:
         """Extract YAML content from command output"""
+        # Check for error conditions first
+        if "Failed to extract bundle metadata" in output or "ERROR -" in output:
+            return ""
+        
         output_lines = output.split('\n')
         yaml_start_idx = 0
         
@@ -248,12 +252,21 @@ class OPMTestSuite:
                 yaml_start_idx = i
                 break
         
+        # If no YAML markers found, return empty
+        if yaml_start_idx == 0 and not any(line.strip().startswith(start_marker) for line in output_lines):
+            return ""
+        
         return '\n'.join(output_lines[yaml_start_idx:])
     
     def _extract_helm_content(self, output: str) -> str:
         """Extract Helm YAML content from command output"""
+        # Check for error conditions first
+        if "Failed to extract bundle metadata" in output or "ERROR -" in output:
+            return ""
+        
         output_lines = output.split('\n')
         yaml_start_idx = 0
+        yaml_end_idx = len(output_lines)
         
         # Find the start of YAML content (look for Helm-specific keys)
         helm_markers = ['nameOverride:', 'fullnameOverride:', 'operator:']
@@ -262,7 +275,33 @@ class OPMTestSuite:
                 yaml_start_idx = i
                 break
         
-        return '\n'.join(output_lines[yaml_start_idx:])
+        # If no YAML markers found, return empty
+        if yaml_start_idx == 0 and not any(any(line.strip().startswith(marker) for marker in helm_markers) for line in output_lines):
+            return ""
+        
+        # Find the end of YAML content (stop at section headers or non-YAML lines)
+        for i in range(yaml_start_idx, len(output_lines)):
+            line = output_lines[i].strip()
+            # Stop at section headers (lines with = characters)
+            if line.startswith('=') and len(line) > 10:
+                yaml_end_idx = i
+                break
+            # Stop at lines that look like status messages
+            if line.startswith('2025-') or 'INFO -' in line or 'ERROR -' in line:
+                yaml_end_idx = i
+                break
+        
+        # Extract only the YAML content, filtering out comments and empty lines at the start
+        yaml_lines = []
+        for line in output_lines[yaml_start_idx:yaml_end_idx]:
+            stripped = line.strip()
+            # Skip comment lines and empty lines, but keep YAML content
+            if stripped and not stripped.startswith('#'):
+                yaml_lines.append(line)
+            elif yaml_lines:  # If we've started collecting YAML, keep empty lines for formatting
+                yaml_lines.append(line)
+        
+        return '\n'.join(yaml_lines)
     
     def _parse_yaml_documents(self, yaml_content: str) -> List[Dict[str, Any]]:
         """Parse YAML content into document sections"""
@@ -874,14 +913,17 @@ global:
                     # Analyze output structure
                     try:
                         if output_type == "helm":
-                            parsed = yaml.safe_load(result["stdout"])
+                            # Use the helper method to extract clean Helm content
+                            helm_content = self._extract_helm_content(result["stdout"])
+                            parsed = yaml.safe_load(helm_content)
                             if parsed and "permissions" in parsed:
                                 perms = parsed["permissions"]
                                 scenario_test["cluster_roles"] = len(perms.get("clusterRoles", []))
                                 scenario_test["roles"] = len(perms.get("roles", []))
                         else:
-                            # Count YAML documents
-                            docs = result["stdout"].split("---")
+                            # Count YAML documents using helper method
+                            yaml_content = self._extract_yaml_content(result["stdout"])
+                            docs = yaml_content.split("---")
                             scenario_test["yaml_documents"] = len([d for d in docs if d.strip()])
                     except Exception as e:
                         scenario_test["parse_error"] = str(e)
