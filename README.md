@@ -102,19 +102,18 @@ OLMv1/
 │   ├── DEPLOYMENT.md                 # Deployment instructions
 │   └── PROJECT_STRUCTURE.md          # Repository organization guide
 ├── examples/                          # Example configurations and use cases
-│   ├── bundle.json                   # Example ArgoCD operator bundle metadata
-│   ├── bundlepromethous.json         # Example Prometheus operator bundle
-│   ├── bundlequay.json               # Example Quay operator bundle  
 │   ├── helm/                         # Example Helm values files
 │   │   ├── additional-resources-example.yaml # Additional resources example
 │   │   ├── rbac-only-example.yaml    # RBAC-only deployment example
 │   │   └── values-quay-operator.yaml # Quay operator Helm values
 │   ├── rbac-manager/                 # RBAC Manager tool output examples
-│   │   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole with DRY deduplication
-│   │   ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
-│   │   ├── argocd-operator-role-*.yaml # Generated Role (deduplicated)
-│   │   ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
-│   │   └── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
+│   │   └── generated-files/          # Generated RBAC files with DRY deduplication
+│   │       ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole with deduplication
+│   │       ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
+│   │       ├── argocd-operator-role-*.yaml # Generated Role (deduplicated)
+│   │       ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
+│   │       ├── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
+│   │       └── post-installation/    # Post-installation hardening examples
 │   └── yamls/                        # Example Kubernetes YAML files
 │       ├── 00-namespace.yaml         # Namespace definition
 │       ├── 01-serviceaccount.yaml    # Service account for operator
