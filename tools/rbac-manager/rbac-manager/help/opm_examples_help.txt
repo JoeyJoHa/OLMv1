@@ -2,56 +2,56 @@ OPM Command Examples
 
 BASIC USAGE:
     # Extract RBAC from bundle image
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0
 
     # Extract with custom namespace
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --namespace quay-system
 
     # Extract with registry authentication
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --registry-token your-registry-token
 
 HELM VALUES GENERATION:
     # Generate Helm values file
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --helm
 
     # Generate with Helm values
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --helm
 
     # Custom output directory
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --helm --output ./my-output
 
 ADVANCED OPTIONS:
     # With debug logging and TLS skip
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --debug --skip-tls
 
     # Generate all outputs
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --helm --output ./complete-output
 
 REGISTRY AUTHENTICATION:
     # Using Docker config
-    python3 rbac-manager.py --opm --image private-registry.com/operator-bundle:v1.0.0 \
+    python3 rbac-manager.py opm --image private-registry.com/operator-bundle:v1.0.0 \
       --registry-token $(cat ~/.docker/config.json | jq -r '.auths["private-registry.com"].auth')
 
     # Using environment variable
     export REGISTRY_TOKEN="your-token"
-    python3 rbac-manager.py --opm --image private-registry.com/operator-bundle:v1.0.0 \
+    python3 rbac-manager.py opm --image private-registry.com/operator-bundle:v1.0.0 \
       --registry-token $REGISTRY_TOKEN
 
 OUTPUT FORMATS:
     # YAML manifests (default)
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0
 
     # Helm values only
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --helm --output ./helm-values
 
     # Both YAML and Helm
-    python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
+    python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --helm

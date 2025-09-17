@@ -2,50 +2,50 @@ List Catalogs Command Examples
 
 BASIC USAGE:
     # List all ClusterCatalogs (requires kubeconfig)
-    python3 rbac-manager.py --list-catalogs
+    python3 rbac-manager.py list-catalogs
 
     # List with authentication flags
-    python3 rbac-manager.py --list-catalogs \
+    python3 rbac-manager.py list-catalogs \
       --openshift-url https://api.cluster.example.com:6443 \
       --openshift-token sha256~abc123...
 
     # Skip TLS verification for self-signed certificates
-    python3 rbac-manager.py --list-catalogs --skip-tls
+    python3 rbac-manager.py list-catalogs --skip-tls
 
 AUTHENTICATION EXAMPLES:
     # Using environment variables
     export TOKEN="sha256~your-token-here"
-    python3 rbac-manager.py --list-catalogs \
+    python3 rbac-manager.py list-catalogs \
       --openshift-url https://api.cluster.example.com:6443 \
       --openshift-token $TOKEN --skip-tls
 
     # PowerShell environment variable
     $env:TOKEN = "sha256~your-token-here"
-    python3 rbac-manager.py --list-catalogs \
+    python3 rbac-manager.py list-catalogs \
       --openshift-url https://api.cluster.example.com:6443 \
       --openshift-token $env:TOKEN --skip-tls
 
     # With debug logging
-    python3 rbac-manager.py --list-catalogs --debug --skip-tls
+    python3 rbac-manager.py list-catalogs --debug --skip-tls
 
 OUTPUT FORMATS:
     # Default enhanced output (human-readable)
-    python3 rbac-manager.py --list-catalogs
+    python3 rbac-manager.py list-catalogs
 
     # JSON output for piping
-    python3 rbac-manager.py --list-catalogs | jq '.'
+    python3 rbac-manager.py list-catalogs | jq '.'
 
     # Filter serving catalogs only
-    python3 rbac-manager.py --list-catalogs | jq '.[] | select(.serving == true)'
+    python3 rbac-manager.py list-catalogs | jq '.[] | select(.serving == true)'
 
     # Get catalog names only
-    python3 rbac-manager.py --list-catalogs | jq -r '.[].name'
+    python3 rbac-manager.py list-catalogs | jq -r '.[].name'
 
 TROUBLESHOOTING:
     # Test connection with debug
-    python3 rbac-manager.py --list-catalogs --debug \
+    python3 rbac-manager.py list-catalogs --debug \
       --openshift-url https://api.cluster.example.com:6443 \
       --openshift-token $TOKEN --skip-tls
 
     # Check if catalogs are serving
-    python3 rbac-manager.py --list-catalogs | jq '.[] | {name: .name, serving: .serving}'
+    python3 rbac-manager.py list-catalogs | jq '.[] | {name: .name, serving: .serving}'

@@ -2,54 +2,54 @@ Catalogd Command Examples
 
 BASIC USAGE:
     # Interactive catalog selection with port-forwarding
-    python3 rbac-manager.py --catalogd
+    python3 rbac-manager.py catalogd
 
     # Query specific catalog
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators
 
     # Query with authentication flags
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators \
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators \
       --openshift-url https://api.cluster.example.com:6443 \
       --openshift-token sha256~abc123...
 
 HIERARCHICAL QUERIES:
     # List all packages in catalog
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators
 
     # Show channels for specific package
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators \
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators \
       --package quay-operator
 
     # Show versions for specific channel
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators \
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators \
       --package quay-operator --channel stable-3.10
 
     # Get detailed metadata for specific version
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators \
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators \
       --package quay-operator --channel stable-3.10 --version 3.10.0
 
 ADVANCED OPTIONS:
     # With debug logging and TLS skip
-    python3 rbac-manager.py --catalogd --catalog-name test-catalog \
+    python3 rbac-manager.py catalogd --catalog-name test-catalog \
       --debug --skip-tls
 
     # Using environment variables for token
     export TOKEN="sha256~your-token-here"
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators \
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators \
       --openshift-url https://api.cluster.example.com:6443 \
       --openshift-token $TOKEN --skip-tls
 
     # PowerShell environment variable
     $env:TOKEN = "sha256~your-token-here"
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators \
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators \
       --openshift-url https://api.cluster.example.com:6443 \
       --openshift-token $env:TOKEN --skip-tls
 
 PIPING OUTPUT:
     # Get package list and pipe to grep
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators | \
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators | \
       jq -r '.data[].name' | grep -i "operator"
 
     # Save metadata to file
-    python3 rbac-manager.py --catalogd --catalog-name openshift-redhat-operators \
+    python3 rbac-manager.py catalogd --catalog-name openshift-redhat-operators \
       --package quay-operator --channel stable-3.10 --version 3.10.0 > metadata.json
