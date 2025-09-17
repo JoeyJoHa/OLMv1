@@ -67,10 +67,10 @@
 nameOverride: ''
 fullnameOverride: ''
 operator:
-  name: argocd-operator
+  name: argocd-example
   create: true
   appVersion: 0.7.0
-  channel: stable
+  channel: alpha
   packageName: argocd-operator
 serviceAccount:
   create: true
@@ -88,7 +88,7 @@ permissions:
     - apiGroups: [olm.operatorframework.io]
       resources: [clusterextensions/finalizers]
       verbs: [update]
-      resourceNames: []
+      resourceNames: [argocd-example]
     - apiGroups: [apiextensions.k8s.io]
       resources: [customresourcedefinitions]
       verbs: [create, list, watch]
