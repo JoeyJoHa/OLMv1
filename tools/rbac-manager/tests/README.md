@@ -33,7 +33,6 @@ Tests OPM functionality including:
 2. **Dependencies**: Install required packages from `requirements.txt`
 3. **Working Directory**: Run tests from the `tools/rbac-manager/` directory
 
-
 ```bash
 cd tools/rbac-manager/
 

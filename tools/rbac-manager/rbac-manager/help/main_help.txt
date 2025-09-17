@@ -15,10 +15,7 @@ COMMANDS:
     generate-config       Generate configuration file template
 
 GLOBAL OPTIONS:
-    --skip-tls            Make insecure requests (skip TLS verification)
-    --debug               Enable debug logging
     --help                Show this help message
-    --examples            Show usage examples
     --config FILE         Use configuration file for default values
 
 EXAMPLES:
@@ -34,8 +31,9 @@ EXAMPLES:
     # Generate configuration
     rbac-manager generate-config --output ./configs/
 
-    # Show examples
-    rbac-manager --examples
+    # Show examples for specific commands
+    rbac-manager opm --examples
+    rbac-manager catalogd --examples
 
 For more information about a specific command, use:
-    rbac-manager help <command>
+    rbac-manager <command> --help

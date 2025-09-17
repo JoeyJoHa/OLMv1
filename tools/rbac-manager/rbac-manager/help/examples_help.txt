@@ -195,4 +195,4 @@ to work with operator bundles and OpenShift catalogs.
       -f generated-*/helm/values-*.yaml
 
 For more detailed information about specific commands, use:
-    rbac-manager help <command>
+    rbac-manager <command> --help

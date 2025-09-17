@@ -37,14 +37,13 @@ class CatalogdTestSuite:
         self.openshift_url = openshift_url
         self.openshift_token = openshift_token
         self.skip_tls = skip_tls
-        self.base_cmd = ["python3", "rbac-manager.py"]
-        if self.skip_tls:
-            self.base_cmd.append("--skip-tls")
-        self.base_cmd.extend([
-            "catalogd",
+        self.base_cmd = [
+            "python3", "rbac-manager.py", "catalogd",
             "--openshift-url", self.openshift_url,
             "--openshift-token", self.openshift_token
-        ])
+        ]
+        if self.skip_tls:
+            self.base_cmd.append("--skip-tls")
         
         self.test_results = []
         self.test_catalog = "openshift-redhat-operators"

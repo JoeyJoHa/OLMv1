@@ -454,9 +454,8 @@ Use --help with specific commands for detailed help.
         """
     )
     
-    # Global flags (only config and examples at top level)
+    # Global flags (only config at top level)
     parser.add_argument('--config', help='Configuration file path')
-    parser.add_argument('--examples', action='store_true', help='Show usage examples')
     
     # Create subparsers for commands
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -471,6 +470,7 @@ Use --help with specific commands for detailed help.
     list_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     list_parser.add_argument('--openshift-url', help='OpenShift cluster URL')
     list_parser.add_argument('--openshift-token', help='OpenShift authentication token')
+    list_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
     
     # catalogd subcommand
     catalogd_parser = subparsers.add_parser(
@@ -486,6 +486,7 @@ Use --help with specific commands for detailed help.
     catalogd_parser.add_argument('--package', help='Package name')
     catalogd_parser.add_argument('--channel', help='Channel name')
     catalogd_parser.add_argument('--version', help='Version')
+    catalogd_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
     
     # opm subcommand
     opm_parser = subparsers.add_parser(
@@ -495,12 +496,13 @@ Use --help with specific commands for detailed help.
     )
     opm_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
     opm_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
-    opm_parser.add_argument('--image', required=True, help='Container image URL')
+    opm_parser.add_argument('--image', help='Container image URL')
     opm_parser.add_argument('--namespace', default=KubernetesConstants.DEFAULT_NAMESPACE, help='Target namespace')
     opm_parser.add_argument('--openshift-namespace', help='Alias for --namespace')
     opm_parser.add_argument('--registry-token', help='Registry authentication token')
     opm_parser.add_argument('--helm', action='store_true', help='Generate Helm values')
     opm_parser.add_argument('--output', help='Output directory')
+    opm_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
     
     # generate-config subcommand
     config_parser = subparsers.add_parser(
@@ -510,6 +512,7 @@ Use --help with specific commands for detailed help.
     )
     config_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     config_parser.add_argument('--output', help='Output directory for configuration file')
+    config_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
     
     return parser
 
@@ -536,31 +539,14 @@ def main():
             rbac_manager_temp = create_rbac_manager()
             config = rbac_manager_temp.load_config(args.config)
         
-        # Handle examples flag
-        if args.examples:
-            help_manager = HelpManager()
-            # Show command-specific examples if a command is specified
-            if args.command == 'catalogd':
-                help_manager.show_help("catalogd_examples")
-            elif args.command == 'opm':
-                help_manager.show_help("opm_examples")
-            elif args.command == 'list-catalogs':
-                help_manager.show_help("list_catalogs_examples")
-            elif args.command == 'generate-config':
-                help_manager.show_help("generate_config_examples")
-            else:
-                # Show general examples if no specific command
-                help_manager.show_examples()
-            return
-        
         # Check if a command was specified
         if not args.command:
             print("Error: No command specified. Use --help for usage information.")
             sys.exit(1)
         
-        # Apply configuration overrides
-        skip_tls = args.skip_tls
-        debug = args.debug
+        # Apply configuration overrides (some commands may not have all flags)
+        skip_tls = getattr(args, 'skip_tls', False)
+        debug = getattr(args, 'debug', False)
         
         if config:
             config_defaults = config
@@ -572,6 +558,12 @@ def main():
         try:
             # Execute commands based on subcommand
             if args.command == 'list-catalogs':
+                # Handle examples flag
+                if hasattr(args, 'examples') and args.examples:
+                    help_manager = HelpManager()
+                    help_manager.show_help("list_catalogs_examples")
+                    return
+                
                 # Configure authentication if URL and token are provided
                 if args.openshift_url and args.openshift_token:
                     if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
@@ -585,6 +577,12 @@ def main():
                 sys.exit(exit_code)
             
             elif args.command == 'catalogd':
+                # Handle examples flag
+                if hasattr(args, 'examples') and args.examples:
+                    help_manager = HelpManager()
+                    help_manager.show_help("catalogd_examples")
+                    return
+                
                 # If user passed only catalogd (no operational flags), show help for catalogd
                 if not any([args.catalog_name, args.package, args.channel, args.version]):
                     print("No catalogd operation specified. Use 'rbac-manager catalogd --help' to see available options.\n")
@@ -620,6 +618,17 @@ def main():
                 )
             
             elif args.command == 'opm':
+                # Handle examples flag
+                if hasattr(args, 'examples') and args.examples:
+                    help_manager = HelpManager()
+                    help_manager.show_help("opm_examples")
+                    return
+                
+                # Check if image is provided (required for non-examples operations)
+                if not args.image:
+                    print("Error: --image is required for OPM operations. Use 'rbac-manager opm --examples' to see usage examples.")
+                    sys.exit(1)
+                
                 # Apply config overrides for opm
                 image = args.image
                 namespace = args.namespace
@@ -650,9 +659,15 @@ def main():
                 )
             
             elif args.command == 'generate-config':
+                # Handle examples flag
+                if hasattr(args, 'examples') and args.examples:
+                    help_manager = HelpManager()
+                    help_manager.show_help("generate_config_examples")
+                    return
+                
                 config_file = rbac_manager.generate_config(args.output)
                 print(f"Configuration template generated: {config_file}")
-        
+            
         except KeyboardInterrupt:
             print("\nOperation cancelled by user.")
             sys.exit(1)
