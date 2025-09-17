@@ -447,15 +447,12 @@ def create_argument_parser():
         epilog="""
 Examples:
   rbac-manager list-catalogs --skip-tls
-  rbac-manager catalogd --catalog-name operatorhubio-catalog --skip-tls
-  rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.0 --skip-tls
+  rbac-manager catalogd --generate-config --package argocd-operator --channel alpha
+  rbac-manager opm --config config.yaml
   
 Use --help with specific commands for detailed help.
         """
     )
-    
-    # Global flags (only config at top level)
-    parser.add_argument('--config', help='Configuration file path')
     
     # Create subparsers for commands
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -487,6 +484,7 @@ Use --help with specific commands for detailed help.
     catalogd_parser.add_argument('--channel', help='Channel name')
     catalogd_parser.add_argument('--version', help='Version')
     catalogd_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
+    catalogd_parser.add_argument('--generate-config', action='store_true', help='Generate configuration file with extracted values')
     
     # opm subcommand
     opm_parser = subparsers.add_parser(
@@ -494,6 +492,7 @@ Use --help with specific commands for detailed help.
         help='Extract RBAC from bundle using OPM',
         description='Extract RBAC permissions from operator bundle images using OPM'
     )
+    opm_parser.add_argument('--config', help='Configuration file path')
     opm_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
     opm_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     opm_parser.add_argument('--image', help='Container image URL')
@@ -503,16 +502,6 @@ Use --help with specific commands for detailed help.
     opm_parser.add_argument('--helm', action='store_true', help='Generate Helm values')
     opm_parser.add_argument('--output', help='Output directory')
     opm_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
-    
-    # generate-config subcommand
-    config_parser = subparsers.add_parser(
-        'generate-config',
-        help='Generate configuration template',
-        description='Generate a configuration template file'
-    )
-    config_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
-    config_parser.add_argument('--output', help='Output directory for configuration file')
-    config_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
     
     return parser
 
@@ -535,6 +524,82 @@ def configure_authentication(rbac_manager, args):
         rbac_manager.configure_authentication()
 
 
+def generate_config_file(args, extracted_data=None, output_path=None):
+    """
+    Generate configuration file with extracted values or default template.
+    
+    Args:
+        args: Parsed command-line arguments
+        extracted_data: Dictionary with extracted values from catalogd/opm (optional)
+        output_path: Custom output path (optional)
+    
+    Returns:
+        str: Path to generated config file
+    """
+    import yaml
+    from pathlib import Path
+    
+    # Determine output directory
+    if output_path:
+        output_dir = Path(output_path)
+    elif hasattr(args, 'output') and args.output:
+        output_dir = Path(args.output)
+    else:
+        output_dir = Path('./config')
+    
+    output_dir.mkdir(exist_ok=True)
+    config_file = output_dir / 'rbac-manager-config.yaml'
+    
+    # Build configuration structure
+    config_data = {
+        'operator': {
+            'image': extracted_data.get('bundle_image', 'image-url') if extracted_data else 'image-url',
+            'namespace': getattr(args, 'namespace', 'default'),
+            'channel': extracted_data.get('channel', 'channel-name') if extracted_data else 'channel-name',
+            'packageName': extracted_data.get('package', 'package-name') if extracted_data else 'package-name',
+            'version': extracted_data.get('version', 'version') if extracted_data else 'version'
+        },
+        'output': {
+            'mode': 'file' if (hasattr(args, 'output') and args.output) else 'stdout',
+            'type': 'helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
+            'path': getattr(args, 'output', './output') or './output'
+        },
+        'global': {
+            'skip_tls': getattr(args, 'skip_tls', False),
+            'debug': getattr(args, 'debug', False),
+            'registry_token': getattr(args, 'registry_token', '') or ''
+        }
+    }
+    
+    # Add comments to the YAML
+    yaml_content = f"""# RBAC Manager Configuration File
+# Generated from {'extracted values' if extracted_data else 'template'}
+
+operator:
+  image: "{config_data['operator']['image']}" # Bundle image URL
+  namespace: "{config_data['operator']['namespace']}" # Target namespace for generated RBAC Manifests
+  channel: "{config_data['operator']['channel']}" # Channel name (extracted from catalogd)
+  packageName: "{config_data['operator']['packageName']}" # Package name (extracted from catalogd or opm)
+  version: "{config_data['operator']['version']}" # Version (extracted from catalogd or opm)
+
+output:
+  mode: {config_data['output']['mode']} # stdout or file
+  type: {config_data['output']['type']} # yaml or helm
+  path: "{config_data['output']['path']}" # Output directory if mode is file
+
+global:
+  skip_tls: {str(config_data['global']['skip_tls']).lower()} # Skip TLS verification for insecure requests True or False
+  debug: {str(config_data['global']['debug']).lower()} # Enable debug logging True or False
+  registry_token: "{config_data['global']['registry_token']}" # Registry token for private registry
+"""
+    
+    # Write the config file
+    with open(config_file, 'w') as f:
+        f.write(yaml_content)
+    
+    return str(config_file)
+
+
 def merge_config_with_args(args, config, command_name: str):
     """
     Merge configuration file values with command-line arguments.
@@ -547,20 +612,51 @@ def merge_config_with_args(args, config, command_name: str):
         config: Loaded configuration dictionary  
         command_name: Name of the command (used as config section key)
     """
-    if not config or command_name not in config:
+    if not config:
         return
     
-    command_config = config[command_name]
+    # Handle new config structure with operator, output, and global sections
+    if 'operator' in config:
+        # Map operator config to args
+        operator_config = config['operator']
+        if hasattr(args, 'image') and (not args.image or args.image == '') and 'image' in operator_config:
+            if operator_config['image'] and operator_config['image'] != 'image-url':
+                args.image = operator_config['image']
+        if hasattr(args, 'namespace') and (not args.namespace or args.namespace == 'default') and 'namespace' in operator_config:
+            args.namespace = operator_config['namespace']
     
-    # Iterate through all config values for this command
-    for config_key, config_value in command_config.items():
-        if config_value is not None and hasattr(args, config_key):
-            current_value = getattr(args, config_key)
-            
-            # Only override if the current value is None, empty string, or False
-            # This ensures command-line arguments take precedence
-            if current_value is None or current_value == '' or current_value is False:
-                setattr(args, config_key, config_value)
+        if 'output' in config:
+            # Map output config to args - config takes precedence
+            output_config = config['output']
+            if hasattr(args, 'output') and output_config.get('mode') == 'file' and 'path' in output_config:
+                args.output = output_config['path']
+            if hasattr(args, 'helm'):
+                # Set helm flag based on config type, regardless of command line
+                args.helm = (output_config.get('type') == 'helm')
+    
+    if 'global' in config:
+        # Map global config to args
+        global_config = config['global']
+        if hasattr(args, 'skip_tls') and not args.skip_tls and global_config.get('skip_tls'):
+            args.skip_tls = global_config['skip_tls']
+        if hasattr(args, 'debug') and not args.debug and global_config.get('debug'):
+            args.debug = global_config['debug']
+        if hasattr(args, 'registry_token') and (not args.registry_token or args.registry_token == '') and 'registry_token' in global_config:
+            args.registry_token = global_config['registry_token']
+    
+    # Handle legacy config structure for backward compatibility
+    if command_name in config:
+        command_config = config[command_name]
+        
+        # Iterate through all config values for this command
+        for config_key, config_value in command_config.items():
+            if config_value is not None and hasattr(args, config_key):
+                current_value = getattr(args, config_key)
+                
+                # Only override if the current value is None, empty string, or False
+                # This ensures command-line arguments take precedence
+                if current_value is None or current_value == '' or current_value is False:
+                    setattr(args, config_key, config_value)
 
 
 def handle_list_catalogs_command(args, rbac_manager, config):
@@ -580,6 +676,33 @@ def handle_catalogd_command(args, rbac_manager, config):
     """Handle catalogd command execution."""
     if hasattr(args, 'examples') and args.examples:
         return handle_examples('catalogd')
+    
+    # Handle generate-config flag
+    if hasattr(args, 'generate_config') and args.generate_config:
+        # If no other flags provided, generate template
+        if not any([args.catalog_name, args.package, args.channel, args.version]):
+            config_file = generate_config_file(args)
+            print(f"Configuration template generated: {config_file}")
+            return
+        
+        # Otherwise, extract data first, then generate config
+        # Merge configuration file values with command-line arguments
+        merge_config_with_args(args, config, 'catalogd')
+        
+        configure_authentication(rbac_manager, args)
+        
+        # For now, generate config template with provided values
+        # TODO: In future, we could enhance catalogd service to return data for config generation
+        extracted_data = {
+            'bundle_image': 'bundle-image-from-catalogd',  # This would come from catalogd query
+            'channel': args.channel or 'channel-name',
+            'package': args.package or 'package-name',
+            'version': args.version or 'version'
+        }
+        config_file = generate_config_file(args, extracted_data)
+        print(f"Configuration template generated with provided values: {config_file}")
+        print("Note: Bundle image URL should be updated with actual value from catalogd query.")
+        return
     
     # Check if any operational flags are provided
     if not any([args.catalog_name, args.package, args.channel, args.version]):
@@ -604,22 +727,17 @@ def handle_opm_command(args, rbac_manager, config):
     if hasattr(args, 'examples') and args.examples:
         return handle_examples('opm')
     
+    # Merge configuration file values with command-line arguments first
+    merge_config_with_args(args, config, 'opm')
+    
     # Check if image is provided (required for non-examples operations)
     if not args.image:
         print("Error: --image is required for OPM operations. Use 'rbac-manager opm --examples' to see usage examples.")
         sys.exit(1)
     
-    # Merge configuration file values with command-line arguments
-    merge_config_with_args(args, config, 'opm')
-    
     # Set defaults for opm-specific fields
     args.namespace = args.namespace or KubernetesConstants.DEFAULT_NAMESPACE
     args.helm = args.helm or False
-    
-    # image is required and enforced by argparse, but double-check
-    if not args.image:
-        print("Error: --image is required for OPM operations")
-        sys.exit(1)
     
     rbac_manager.extract_bundle(
         image=args.image,
@@ -631,24 +749,11 @@ def handle_opm_command(args, rbac_manager, config):
     )
 
 
-def handle_generate_config_command(args, rbac_manager, config):
-    """Handle generate-config command execution."""
-    if hasattr(args, 'examples') and args.examples:
-        return handle_examples('generate-config')
-    
-    # Merge configuration file values with command-line arguments
-    merge_config_with_args(args, config, 'generate-config')
-    
-    config_file = rbac_manager.generate_config(args.output)
-    print(f"Configuration template generated: {config_file}")
-
-
 # Command dispatcher mapping
 COMMAND_HANDLERS = {
     'list-catalogs': handle_list_catalogs_command,
     'catalogd': handle_catalogd_command,
     'opm': handle_opm_command,
-    'generate-config': handle_generate_config_command,
 }
 
 
@@ -668,9 +773,9 @@ def main():
         if hasattr(args, 'openshift_namespace') and args.openshift_namespace:
             args.namespace = args.openshift_namespace
         
-        # Load configuration if provided
+        # Load configuration if provided (only opm command has --config)
         config = None
-        if args.config:
+        if hasattr(args, 'config') and args.config:
             rbac_manager_temp = create_rbac_manager()
             config = rbac_manager_temp.load_config(args.config)
         
