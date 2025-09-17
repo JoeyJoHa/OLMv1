@@ -405,4 +405,25 @@ python3 rbac-manager.py --opm --image <bundle-image> --output ./rbac-files
 python3 rbac-manager.py --opm --image <bundle-image> --namespace production | kubectl apply -f -
 ```
 
+### Generated Examples Structure
+
+The RBAC Manager tool outputs examples in the following structure:
+
+```tree
+examples/rbac-manager/
+├── generated-files/          # Fresh tool outputs with DRY deduplication
+│   ├── argocd-operator-*.yaml # Complete Helm values with channel guidance
+│   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole (deduplicated)
+│   ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
+│   ├── argocd-operator-role-*.yaml # Generated Role (deduplicated against ClusterRole)
+│   ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
+│   └── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
+└── post-installation/        # Hardened examples after deployment
+    └── argocd-operator-clusterrole-*.yaml # ClusterRole with resourceNames hardening
+```
+
+**Usage:**
+- **`generated-files/`**: Use these files for initial deployment with installer permissions
+- **`post-installation/`**: Reference these examples after deployment to harden permissions with specific `resourceNames`
+
 The RBAC Manager tool automates many of these manual processes and provides additional features like configuration file support, automatic cluster discovery, live catalogd data extraction, and integrated deployment capabilities.

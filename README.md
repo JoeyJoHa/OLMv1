@@ -107,13 +107,15 @@ OLMv1/
 │   │   ├── rbac-only-example.yaml    # RBAC-only deployment example
 │   │   └── values-quay-operator.yaml # Quay operator Helm values
 │   ├── rbac-manager/                 # RBAC Manager tool output examples
-│   │   └── generated-files/          # Generated RBAC files with DRY deduplication
-│   │       ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole with deduplication
-│   │       ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
-│   │       ├── argocd-operator-role-*.yaml # Generated Role (deduplicated)
-│   │       ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
-│   │       ├── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
-│   │       └── post-installation/    # Post-installation hardening examples
+│   │   ├── generated-files/          # Generated RBAC files with DRY deduplication
+│   │   │   ├── argocd-operator-*.yaml # Complete Helm values with channel guidance
+│   │   │   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole with deduplication
+│   │   │   ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
+│   │   │   ├── argocd-operator-role-*.yaml # Generated Role (deduplicated)
+│   │   │   ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
+│   │   │   └── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
+│   │   └── post-installation/        # Post-installation hardening examples
+│   │       └── argocd-operator-clusterrole-*.yaml # Hardened ClusterRole with resourceNames
 │   └── yamls/                        # Example Kubernetes YAML files
 │       ├── 00-namespace.yaml         # Namespace definition
 │       ├── 01-serviceaccount.yaml    # Service account for operator
