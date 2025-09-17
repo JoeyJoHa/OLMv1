@@ -517,6 +517,141 @@ Use --help with specific commands for detailed help.
     return parser
 
 
+def handle_examples(command_name: str) -> bool:
+    """Handle examples flag for any command. Returns True if examples were shown."""
+    help_manager = HelpManager()
+    help_manager.show_help(f"{command_name.replace('-', '_')}_examples")
+    return True
+
+
+def configure_authentication(rbac_manager, args):
+    """Configure authentication for commands that need it."""
+    if hasattr(args, 'openshift_url') and hasattr(args, 'openshift_token') and args.openshift_url and args.openshift_token:
+        if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
+            print("Failed to configure OpenShift authentication")
+            sys.exit(1)
+    else:
+        # Try to configure with default context
+        rbac_manager.configure_authentication()
+
+
+def apply_config_overrides(args, config, config_section: str, field_mappings: dict):
+    """Apply configuration file overrides to command arguments."""
+    result = {}
+    
+    # First, get values from args
+    for field, arg_name in field_mappings.items():
+        if hasattr(args, arg_name):
+            result[field] = getattr(args, arg_name)
+        else:
+            result[field] = None
+    
+    # Then apply config overrides if available
+    if config and config_section in config:
+        section_config = config[config_section]
+        for field, arg_name in field_mappings.items():
+            if result[field] is None:  # Only override if not set via args
+                result[field] = section_config.get(field)
+    
+    return result
+
+
+def handle_list_catalogs_command(args, rbac_manager, config):
+    """Handle list-catalogs command execution."""
+    if hasattr(args, 'examples') and args.examples:
+        return handle_examples('list-catalogs')
+    
+    configure_authentication(rbac_manager, args)
+    exit_code = rbac_manager.list_catalogs()
+    sys.exit(exit_code)
+
+
+def handle_catalogd_command(args, rbac_manager, config):
+    """Handle catalogd command execution."""
+    if hasattr(args, 'examples') and args.examples:
+        return handle_examples('catalogd')
+    
+    # Check if any operational flags are provided
+    if not any([args.catalog_name, args.package, args.channel, args.version]):
+        print("No catalogd operation specified. Use 'rbac-manager catalogd --help' to see available options.\n")
+        return
+    
+    # Apply config overrides
+    field_mappings = {
+        'catalog_name': 'catalog_name',
+        'package': 'package',
+        'channel': 'channel',
+        'version': 'version'
+    }
+    params = apply_config_overrides(args, config, 'catalogd', field_mappings)
+    
+    configure_authentication(rbac_manager, args)
+    
+    rbac_manager.query_catalogd(
+        catalog_name=params['catalog_name'],
+        package=params['package'],
+        channel=params['channel'],
+        version=params['version']
+    )
+
+
+def handle_opm_command(args, rbac_manager, config):
+    """Handle opm command execution."""
+    if hasattr(args, 'examples') and args.examples:
+        return handle_examples('opm')
+    
+    # Check if image is provided (required for non-examples operations)
+    if not args.image:
+        print("Error: --image is required for OPM operations. Use 'rbac-manager opm --examples' to see usage examples.")
+        sys.exit(1)
+    
+    # Apply config overrides
+    field_mappings = {
+        'image': 'image',
+        'namespace': 'namespace',
+        'registry_token': 'registry_token',
+        'helm': 'helm',
+        'output': 'output'
+    }
+    params = apply_config_overrides(args, config, 'opm', field_mappings)
+    
+    # Set defaults for opm-specific fields
+    params['namespace'] = params['namespace'] or KubernetesConstants.DEFAULT_NAMESPACE
+    params['helm'] = params['helm'] or False
+    
+    # image is required and enforced by argparse, but double-check
+    if not params['image']:
+        print("Error: --image is required for OPM operations")
+        sys.exit(1)
+    
+    rbac_manager.extract_bundle(
+        image=params['image'],
+        namespace=params['namespace'],
+        registry_token=params['registry_token'],
+        helm=params['helm'],
+        output_dir=params['output'],
+        stdout=not params['output']
+    )
+
+
+def handle_generate_config_command(args, rbac_manager, config):
+    """Handle generate-config command execution."""
+    if hasattr(args, 'examples') and args.examples:
+        return handle_examples('generate-config')
+    
+    config_file = rbac_manager.generate_config(args.output)
+    print(f"Configuration template generated: {config_file}")
+
+
+# Command dispatcher mapping
+COMMAND_HANDLERS = {
+    'list-catalogs': handle_list_catalogs_command,
+    'catalogd': handle_catalogd_command,
+    'opm': handle_opm_command,
+    'generate-config': handle_generate_config_command,
+}
+
+
 def main():
     """Main entry point"""
     try:
@@ -556,117 +691,13 @@ def main():
         rbac_manager = create_rbac_manager(skip_tls=skip_tls, debug=debug)
         
         try:
-            # Execute commands based on subcommand
-            if args.command == 'list-catalogs':
-                # Handle examples flag
-                if hasattr(args, 'examples') and args.examples:
-                    help_manager = HelpManager()
-                    help_manager.show_help("list_catalogs_examples")
-                    return
-                
-                # Configure authentication if URL and token are provided
-                if args.openshift_url and args.openshift_token:
-                    if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
-                        print("Failed to configure OpenShift authentication")
-                        sys.exit(1)
-                else:
-                    # Try to configure with default context
-                    rbac_manager.configure_authentication()
-                
-                exit_code = rbac_manager.list_catalogs()
-                sys.exit(exit_code)
-            
-            elif args.command == 'catalogd':
-                # Handle examples flag
-                if hasattr(args, 'examples') and args.examples:
-                    help_manager = HelpManager()
-                    help_manager.show_help("catalogd_examples")
-                    return
-                
-                # If user passed only catalogd (no operational flags), show help for catalogd
-                if not any([args.catalog_name, args.package, args.channel, args.version]):
-                    print("No catalogd operation specified. Use 'rbac-manager catalogd --help' to see available options.\n")
-                    return
-                
-                # Apply config overrides for catalogd
-                catalog_name = args.catalog_name
-                package = args.package
-                channel = args.channel
-                version = args.version
-                
-                if config and 'catalogd' in config:
-                    catalogd_config = config['catalogd']
-                    catalog_name = catalog_name or catalogd_config.get('catalog_name')
-                    package = package or catalogd_config.get('package')
-                    channel = channel or catalogd_config.get('channel')
-                    version = version or catalogd_config.get('version')
-                
-                # Configure authentication
-                if args.openshift_url and args.openshift_token:
-                    if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
-                        print("Failed to configure OpenShift authentication")
-                        sys.exit(1)
-                else:
-                    # Try to configure with default context
-                    rbac_manager.configure_authentication()
-                
-                rbac_manager.query_catalogd(
-                    catalog_name=catalog_name,
-                    package=package,
-                    channel=channel,
-                    version=version
-                )
-            
-            elif args.command == 'opm':
-                # Handle examples flag
-                if hasattr(args, 'examples') and args.examples:
-                    help_manager = HelpManager()
-                    help_manager.show_help("opm_examples")
-                    return
-                
-                # Check if image is provided (required for non-examples operations)
-                if not args.image:
-                    print("Error: --image is required for OPM operations. Use 'rbac-manager opm --examples' to see usage examples.")
-                    sys.exit(1)
-                
-                # Apply config overrides for opm
-                image = args.image
-                namespace = args.namespace
-                registry_token = args.registry_token
-                helm = args.helm
-                output = args.output
-                
-                if config and 'opm' in config:
-                    opm_config = config['opm']
-                    image = image or opm_config.get('image')
-                    namespace = namespace or opm_config.get('namespace', KubernetesConstants.DEFAULT_NAMESPACE)
-                    registry_token = registry_token or opm_config.get('registry_token')
-                    helm = helm or opm_config.get('helm', False)
-                    output = output or opm_config.get('output')
-                
-                # image is required and enforced by argparse, but double-check
-                if not image:
-                    print("Error: --image is required for OPM operations")
-                    sys.exit(1)
-                
-                rbac_manager.extract_bundle(
-                    image=image,
-                    namespace=namespace,
-                    registry_token=registry_token,
-                    helm=helm,
-                    output_dir=output,
-                    stdout=not output
-                )
-            
-            elif args.command == 'generate-config':
-                # Handle examples flag
-                if hasattr(args, 'examples') and args.examples:
-                    help_manager = HelpManager()
-                    help_manager.show_help("generate_config_examples")
-                    return
-                
-                config_file = rbac_manager.generate_config(args.output)
-                print(f"Configuration template generated: {config_file}")
+            # Use dispatcher pattern to execute commands
+            handler = COMMAND_HANDLERS.get(args.command)
+            if handler:
+                handler(args, rbac_manager, config)
+            else:
+                print(f"Unknown command: {args.command}")
+                sys.exit(1)
             
         except KeyboardInterrupt:
             print("\nOperation cancelled by user.")
