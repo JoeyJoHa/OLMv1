@@ -1230,7 +1230,29 @@ e        Generate installer service account Role permissions - ONLY installer-sp
     
     def _generate_helm_header_comment(self, formatted_name: str, package_name: str) -> str:
         """Generate header comment for Helm values file"""
-        return f"""# SECURITY NOTICE: Post-Installation RBAC Hardening Required
+        return f"""# IMPORTANT: Verify Correct Channel Before Deployment
+# ====================================================
+# The 'channel' field below is set to 'stable' by default, but many operators
+# use different channels (alpha, beta, candidate, etc.).
+#
+# 🔍 FIND THE CORRECT CHANNEL:
+# Use catalogd to discover available channels for this operator:
+#
+#   # List available channels for {package_name}:
+#   kubectl get package {package_name} -o jsonpath='{{.status.channels[*].name}}'
+#
+#   # Get detailed channel information:
+#   kubectl get package {package_name} -o yaml
+#
+#   # Example: ArgoCD operator uses 'alpha' channel, not 'stable':
+#   operator:
+#     channel: alpha  # ← Update this based on catalogd output
+#
+# ⚠️  Using wrong channel will cause deployment failures!
+#
+# =========================================================
+#
+# SECURITY NOTICE: Post-Installation RBAC Hardening Required
 # =========================================================
 # This values.yaml contains installer permissions with INTENTIONALLY BROAD SCOPE
 # for successful initial deployment. The installer ClusterRole uses wildcard
@@ -1489,7 +1511,7 @@ class HelmValueTemplates:
     
     @staticmethod
     def base_values_template(operator_name: str, version: str, package_name: str) -> Dict[str, Any]:
-        """Base Helm values template"""
+        """Base Helm values template with channel guidance"""
         return {
             'nameOverride': '',
             'fullnameOverride': '',
@@ -1497,7 +1519,10 @@ class HelmValueTemplates:
                 'name': operator_name,
                 'create': True,
                 'appVersion': version,
-                'channel': KubernetesConstants.DEFAULT_CHANNEL,
+                # IMPORTANT: Verify correct channel with catalogd before deployment!
+                # Many operators use 'alpha', 'beta', or 'candidate' instead of 'stable'
+                # Run: kubectl get package <package-name> -o jsonpath='{.status.channels[*].name}'
+                'channel': KubernetesConstants.DEFAULT_CHANNEL,  # ← Update if needed
                 'packageName': package_name
             },
             'serviceAccount': {
