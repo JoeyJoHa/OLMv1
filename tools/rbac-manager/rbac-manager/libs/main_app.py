@@ -535,31 +535,41 @@ def configure_authentication(rbac_manager, args):
         rbac_manager.configure_authentication()
 
 
-def apply_config_overrides(args, config, config_section: str, field_mappings: dict):
-    """Apply configuration file overrides to command arguments."""
-    result = {}
+def merge_config_with_args(args, config, command_name: str):
+    """
+    Merge configuration file values with command-line arguments.
     
-    # First, get values from args
-    for field, arg_name in field_mappings.items():
-        if hasattr(args, arg_name):
-            result[field] = getattr(args, arg_name)
-        else:
-            result[field] = None
+    This function directly updates the args object with values from the configuration
+    file, but only for attributes that are None or False (not provided via command line).
     
-    # Then apply config overrides if available
-    if config and config_section in config:
-        section_config = config[config_section]
-        for field, arg_name in field_mappings.items():
-            if result[field] is None:  # Only override if not set via args
-                result[field] = section_config.get(field)
+    Args:
+        args: Parsed command-line arguments object
+        config: Loaded configuration dictionary  
+        command_name: Name of the command (used as config section key)
+    """
+    if not config or command_name not in config:
+        return
     
-    return result
+    command_config = config[command_name]
+    
+    # Iterate through all config values for this command
+    for config_key, config_value in command_config.items():
+        if config_value is not None and hasattr(args, config_key):
+            current_value = getattr(args, config_key)
+            
+            # Only override if the current value is None, empty string, or False
+            # This ensures command-line arguments take precedence
+            if current_value is None or current_value == '' or current_value is False:
+                setattr(args, config_key, config_value)
 
 
 def handle_list_catalogs_command(args, rbac_manager, config):
     """Handle list-catalogs command execution."""
     if hasattr(args, 'examples') and args.examples:
         return handle_examples('list-catalogs')
+    
+    # Merge configuration file values with command-line arguments
+    merge_config_with_args(args, config, 'list-catalogs')
     
     configure_authentication(rbac_manager, args)
     exit_code = rbac_manager.list_catalogs()
@@ -576,22 +586,16 @@ def handle_catalogd_command(args, rbac_manager, config):
         print("No catalogd operation specified. Use 'rbac-manager catalogd --help' to see available options.\n")
         return
     
-    # Apply config overrides
-    field_mappings = {
-        'catalog_name': 'catalog_name',
-        'package': 'package',
-        'channel': 'channel',
-        'version': 'version'
-    }
-    params = apply_config_overrides(args, config, 'catalogd', field_mappings)
+    # Merge configuration file values with command-line arguments
+    merge_config_with_args(args, config, 'catalogd')
     
     configure_authentication(rbac_manager, args)
     
     rbac_manager.query_catalogd(
-        catalog_name=params['catalog_name'],
-        package=params['package'],
-        channel=params['channel'],
-        version=params['version']
+        catalog_name=args.catalog_name,
+        package=args.package,
+        channel=args.channel,
+        version=args.version
     )
 
 
@@ -605,32 +609,25 @@ def handle_opm_command(args, rbac_manager, config):
         print("Error: --image is required for OPM operations. Use 'rbac-manager opm --examples' to see usage examples.")
         sys.exit(1)
     
-    # Apply config overrides
-    field_mappings = {
-        'image': 'image',
-        'namespace': 'namespace',
-        'registry_token': 'registry_token',
-        'helm': 'helm',
-        'output': 'output'
-    }
-    params = apply_config_overrides(args, config, 'opm', field_mappings)
+    # Merge configuration file values with command-line arguments
+    merge_config_with_args(args, config, 'opm')
     
     # Set defaults for opm-specific fields
-    params['namespace'] = params['namespace'] or KubernetesConstants.DEFAULT_NAMESPACE
-    params['helm'] = params['helm'] or False
+    args.namespace = args.namespace or KubernetesConstants.DEFAULT_NAMESPACE
+    args.helm = args.helm or False
     
     # image is required and enforced by argparse, but double-check
-    if not params['image']:
+    if not args.image:
         print("Error: --image is required for OPM operations")
         sys.exit(1)
     
     rbac_manager.extract_bundle(
-        image=params['image'],
-        namespace=params['namespace'],
-        registry_token=params['registry_token'],
-        helm=params['helm'],
-        output_dir=params['output'],
-        stdout=not params['output']
+        image=args.image,
+        namespace=args.namespace,
+        registry_token=args.registry_token,
+        helm=args.helm,
+        output_dir=args.output,
+        stdout=not args.output
     )
 
 
@@ -638,6 +635,9 @@ def handle_generate_config_command(args, rbac_manager, config):
     """Handle generate-config command execution."""
     if hasattr(args, 'examples') and args.examples:
         return handle_examples('generate-config')
+    
+    # Merge configuration file values with command-line arguments
+    merge_config_with_args(args, config, 'generate-config')
     
     config_file = rbac_manager.generate_config(args.output)
     print(f"Configuration template generated: {config_file}")
