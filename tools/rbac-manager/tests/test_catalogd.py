@@ -10,17 +10,86 @@ Comprehensive tests for catalogd functionality including:
 - Output formatting and truncation handling
 """
 
+import argparse
 import json
 import os
-import sys
+import re
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, NamedTuple
 
 # Add the rbac-manager directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "rbac-manager"))
+
+
+class TestConstants:
+    """Constants for test configuration"""
+    DEFAULT_TIMEOUT = 120
+    DEFAULT_CATALOG = "openshift-redhat-operators"
+    DEFAULT_PACKAGE = "quay-operator"
+    DEFAULT_CHANNEL = "stable-3.10"
+    DEFAULT_VERSION = "3.10.0"
+    EXAMPLE_URL = "https://api.example.com:6443"
+    MASKED_TOKEN = "***MASKED***"
+    TEMP_DIR_PLACEHOLDER = "/tmp/placeholder-output-dir"
+
+
+class TestResult(NamedTuple):
+    """Structured test result"""
+    test_name: str
+    success: bool
+    details: Dict[str, Any]
+
+
+class CommandBuilder:
+    """Builder for test commands to eliminate duplication"""
+    
+    def __init__(self, base_args: List[str]):
+        self.base_args = base_args.copy()
+    
+    def add_auth(self, url: str, token: str, skip_tls: bool = False) -> 'CommandBuilder':
+        """Add authentication arguments"""
+        self.base_args.extend(["--openshift-url", url, "--openshift-token", token])
+        if skip_tls:
+            self.base_args.append("--skip-tls")
+        return self
+    
+    def add_catalog(self, catalog: str) -> 'CommandBuilder':
+        """Add catalog name argument"""
+        self.base_args.extend(["--catalog-name", catalog])
+        return self
+    
+    def add_package(self, package: str) -> 'CommandBuilder':
+        """Add package argument"""
+        self.base_args.extend(["--package", package])
+        return self
+    
+    def add_channel(self, channel: str) -> 'CommandBuilder':
+        """Add channel argument"""
+        self.base_args.extend(["--channel", channel])
+        return self
+    
+    def add_version(self, version: str) -> 'CommandBuilder':
+        """Add version argument"""
+        self.base_args.extend(["--version", version])
+        return self
+    
+    def add_output(self, output_path: str) -> 'CommandBuilder':
+        """Add output directory argument"""
+        self.base_args.extend(["--output", output_path])
+        return self
+    
+    def add_flag(self, flag: str) -> 'CommandBuilder':
+        """Add a flag argument"""
+        self.base_args.append(flag)
+        return self
+    
+    def build(self) -> List[str]:
+        """Build the final command"""
+        return self.base_args.copy()
 
 class CatalogdTestSuite:
     """Test suite for catalogd functionality"""
@@ -37,32 +106,25 @@ class CatalogdTestSuite:
         self.openshift_url = openshift_url
         self.openshift_token = openshift_token
         self.skip_tls = skip_tls
-        self.base_cmd = [
-            "python3", "rbac-manager.py", "catalogd",
-            "--openshift-url", self.openshift_url,
-            "--openshift-token", self.openshift_token
-        ]
-        if self.skip_tls:
-            self.base_cmd.append("--skip-tls")
         
-        # Base command for list-catalogs
-        self.list_catalogs_cmd = [
-            "python3", "rbac-manager.py", "list-catalogs",
-            "--openshift-url", self.openshift_url,
-            "--openshift-token", self.openshift_token
-        ]
-        if self.skip_tls:
-            self.list_catalogs_cmd.append("--skip-tls")
+        # Build commands using CommandBuilder to eliminate duplication
+        self.base_cmd = (CommandBuilder(["python3", "rbac-manager.py", "catalogd"])
+                        .add_auth(openshift_url, openshift_token, skip_tls)
+                        .build())
+        
+        self.list_catalogs_cmd = (CommandBuilder(["python3", "rbac-manager.py", "list-catalogs"])
+                                 .add_auth(openshift_url, openshift_token, skip_tls)
+                                 .build())
         
         self.test_results = []
-        self.test_catalog = "openshift-redhat-operators"
-        self.test_package = "quay-operator"
-        self.test_channel = "stable-3.10"
-        self.test_version = "3.10.0"
+        # Use constants instead of magic strings
+        self.test_catalog = TestConstants.DEFAULT_CATALOG
+        self.test_package = TestConstants.DEFAULT_PACKAGE
+        self.test_channel = TestConstants.DEFAULT_CHANNEL
+        self.test_version = TestConstants.DEFAULT_VERSION
     
     def _mask_token_in_command(self, command: str) -> str:
         """Mask the authentication token, OpenShift URL, and temp directories in command strings"""
-        import re
         masked_command = command
         
         # Mask the authentication token
@@ -70,23 +132,51 @@ class CatalogdTestSuite:
             # Extract the token prefix (e.g., "sha256~") and mask the rest
             if '~' in self.openshift_token:
                 prefix = self.openshift_token.split('~')[0] + '~'
-                masked_token = prefix + "***MASKED***"
+                masked_token = prefix + TestConstants.MASKED_TOKEN
             else:
-                masked_token = "***MASKED***"
+                masked_token = TestConstants.MASKED_TOKEN
             masked_command = masked_command.replace(self.openshift_token, masked_token)
         
         # Mask the OpenShift URL
         if self.openshift_url and self.openshift_url in masked_command:
-            masked_command = masked_command.replace(self.openshift_url, "https://api.example.com:6443")
+            masked_command = masked_command.replace(self.openshift_url, TestConstants.EXAMPLE_URL)
         
         # Mask temporary directories with placeholders
-        masked_command = re.sub(r'/var/folders/[a-zA-Z0-9_/]+/tmp[a-zA-Z0-9_]+', '/tmp/placeholder-output-dir', masked_command)
-        masked_command = re.sub(r'/tmp/tmp[a-zA-Z0-9_]+', '/tmp/placeholder-output-dir', masked_command)
+        temp_patterns = [
+            r'/var/folders/[a-zA-Z0-9_/]+/tmp[a-zA-Z0-9_]+',
+            r'/tmp/tmp[a-zA-Z0-9_]+'
+        ]
+        for pattern in temp_patterns:
+            masked_command = re.sub(pattern, TestConstants.TEMP_DIR_PLACEHOLDER, masked_command)
         
         return masked_command
     
+    def _create_test_result(self, test_name: str, success: bool, details: Dict[str, Any]) -> None:
+        """Create and append a test result"""
+        self.test_results.append({
+            "test": test_name,
+            "success": success,
+            "details": details
+        })
+    
+    def _print_test_status(self, test_name: str, success: bool, message: str = "") -> None:
+        """Print test status with consistent formatting"""
+        status = "✅" if success else "❌"
+        print(f"   {status} {test_name}: {message}")
+    
+    def _run_catalogd_test(self, test_name: str, description: str, args: List[str], 
+                          success_condition, input_data: str = None) -> bool:
+        """Generic method for running catalogd tests to eliminate duplication"""
+        print(f"🧪 Testing {description}...")
+        
+        result = self.run_command(args, input_data)
+        success = success_condition(result)
+        
+        self._create_test_result(test_name, success, result)
+        return success
+    
     def run_command(self, additional_args: List[str], input_data: str = None, 
-                   timeout: int = 120) -> Dict[str, Any]:
+                   timeout: int = TestConstants.DEFAULT_TIMEOUT) -> Dict[str, Any]:
         """
         Run a catalogd command and capture results
         
@@ -188,48 +278,42 @@ class CatalogdTestSuite:
     
     def test_basic_catalogd_help(self) -> bool:
         """Test basic catalogd command without arguments"""
-        print("🧪 Testing basic catalogd help...")
+        def success_condition(result):
+            return (result["exit_code"] == 0 and 
+                   "No catalogd operation specified" in result["stdout"])
         
-        result = self.run_command([])
-        
-        success = (
-            result["exit_code"] == 0 and
-            "No catalogd operation specified" in result["stdout"]
+        success = self._run_catalogd_test(
+            "basic_catalogd_help",
+            "basic catalogd help",
+            [],
+            success_condition
         )
         
-        self.test_results.append({
-            "test": "basic_catalogd_help",
-            "success": success,
-            "details": result
-        })
-        
-        print(f"   {'✅' if success else '❌'} Basic help: {result['exit_code']}")
+        # Get the result for status message
+        result = self.test_results[-1]["details"]
+        self._print_test_status("Basic help", success, str(result["exit_code"]))
         return success
     
     def test_list_packages(self) -> bool:
         """Test listing packages in a catalog"""
-        print("🧪 Testing package listing...")
+        def success_condition(result):
+            return (result["exit_code"] == 0 and
+                   result["json_data"] is not None and
+                   result["json_data"].get("type") == "packages" and
+                   isinstance(result["json_data"].get("data"), list) and
+                   len(result["json_data"]["data"]) > 0)
         
-        result = self.run_command([
-            "--catalog-name", self.test_catalog
-        ])
-        
-        success = (
-            result["exit_code"] == 0 and
-            result["json_data"] is not None and
-            result["json_data"].get("type") == "packages" and
-            isinstance(result["json_data"].get("data"), list) and
-            len(result["json_data"]["data"]) > 0
+        success = self._run_catalogd_test(
+            "list_packages",
+            "package listing",
+            ["--catalog-name", self.test_catalog],
+            success_condition
         )
         
-        self.test_results.append({
-            "test": "list_packages",
-            "success": success,
-            "details": result
-        })
-        
+        # Get package count for status message
+        result = self.test_results[-1]["details"]
         package_count = len(result["json_data"]["data"]) if result["json_data"] else 0
-        print(f"   {'✅' if success else '❌'} Package listing: {package_count} packages found")
+        self._print_test_status("Package listing", success, f"{package_count} packages found")
         return success
     
     def test_list_channels(self) -> bool:
@@ -752,27 +836,37 @@ class CatalogdTestSuite:
         print(f"📄 Test results saved to: {results_file}")
 
 
-def main():
-    """Main test runner"""
-    import argparse
-    
-    # Parse command line arguments
+def _parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments"""
     parser = argparse.ArgumentParser(description="Catalogd Test Suite")
     parser.add_argument("--skip-tls", action="store_true", help="Skip TLS verification")
     parser.add_argument("--openshift-url", help="OpenShift cluster URL")
     parser.add_argument("--openshift-token", help="OpenShift authentication token")
-    args = parser.parse_args()
-    
-    # Get configuration from environment or command line
+    return parser.parse_args()
+
+
+def _validate_environment(args: argparse.Namespace) -> tuple[str, str]:
+    """Validate and get environment configuration"""
     openshift_url = args.openshift_url or os.getenv("OPENSHIFT_URL")
     openshift_token = args.openshift_token or os.getenv("OPENSHIFT_TOKEN") or os.getenv("TOKEN")
     
     if not openshift_token or not openshift_url:
-        print("❌ Error: OPENSHIFT_TOKEN or TOKEN, and an OPENSHIFT_URL environment variable required")
-        print("   Set with: export TOKEN='your-openshift-token'")
-        print("   Set with: export OPENSHIFT_URL='https://api.example.com:6443'")
-        print("   Or use: python3 test_catalogd.py --openshift-token 'your-token' --openshift-url 'https://api.example.com:6443'    ")
+        error_messages = [
+            "❌ Error: OPENSHIFT_TOKEN or TOKEN, and an OPENSHIFT_URL environment variable required",
+            "   Set with: export TOKEN='your-openshift-token'",
+            f"   Set with: export OPENSHIFT_URL='{TestConstants.EXAMPLE_URL}'",
+            "   Or use: python3 test_catalogd.py --openshift-token 'your-token' --openshift-url 'https://api.example.com:6443'"
+        ]
+        print('\n'.join(error_messages))
         sys.exit(1)
+    
+    return openshift_url, openshift_token
+
+
+def main():
+    """Main test runner"""
+    args = _parse_arguments()
+    openshift_url, openshift_token = _validate_environment(args)
     
     # Initialize and run test suite
     test_suite = CatalogdTestSuite(
