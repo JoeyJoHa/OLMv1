@@ -1,7 +1,7 @@
 Configuration Management
 
 USAGE:
-    rbac-manager --generate-config [--output DIR]
+    rbac-manager generate-config [--output DIR]
     rbac-manager --config FILE [COMMAND] [FLAGS]
 
 DESCRIPTION:
@@ -30,10 +30,10 @@ CONFIGURATION FILE STRUCTURE:
 
 EXAMPLES:
     # Generate configuration template
-    rbac-manager --generate-config
+    rbac-manager generate-config
 
     # Generate configuration in specific directory
-    rbac-manager --generate-config --output ./configs/
+    rbac-manager generate-config --output ./configs/
 
     # Use configuration file with OPM command
     rbac-manager --config ~/.rbac-manager.yaml opm --image quay.io/redhat/quay-operator-bundle:v3.10.13

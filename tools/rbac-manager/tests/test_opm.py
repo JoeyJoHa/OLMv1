@@ -37,7 +37,7 @@ class OPMTestSuite:
         """
         self.skip_tls = skip_tls
         self.debug = debug
-        self.base_cmd = ["python3", "rbac-manager.py", "--opm"]
+        self.base_cmd = ["python3", "rbac-manager.py", "opm"]
         if self.skip_tls:
             self.base_cmd.append("--skip-tls")
         if self.debug:
@@ -288,8 +288,8 @@ class OPMTestSuite:
         
         # Import the RBAC manager modules for direct testing
         try:
-            from libs.opm.processor import BundleProcessor
-            from libs.opm.helm_generator import HelmValuesGenerator
+            from libs.opm.processor import BundleProcessor  # pyright: ignore[reportMissingImports]
+            from libs.opm.helm_generator import HelmValuesGenerator  # pyright: ignore[reportMissingImports]
             
             processor = BundleProcessor()
             generator = HelmValuesGenerator()

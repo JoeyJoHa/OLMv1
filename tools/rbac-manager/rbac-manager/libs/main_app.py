@@ -438,7 +438,7 @@ def create_rbac_manager(skip_tls: bool = False, debug: bool = False) -> RBACMana
 
 # Command-line interface functions (keeping existing structure)
 def create_argument_parser():
-    """Create and configure argument parser"""
+    """Create and configure argument parser with subcommands"""
     import argparse
     
     parser = argparse.ArgumentParser(
@@ -446,45 +446,70 @@ def create_argument_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  rbac-manager --list-catalogs
-  rbac-manager --catalogd --catalog-name operatorhubio-catalog
-  rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.0
+  rbac-manager list-catalogs --skip-tls
+  rbac-manager catalogd --catalog-name operatorhubio-catalog --skip-tls
+  rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.0 --skip-tls
   
 Use --help with specific commands for detailed help.
         """
     )
     
-    # Global flags
-    parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
-    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    # Global flags (only config and examples at top level)
+    parser.add_argument('--config', help='Configuration file path')
     parser.add_argument('--examples', action='store_true', help='Show usage examples')
     
-    # Commands
-    parser.add_argument('--list-catalogs', action='store_true', help='List all ClusterCatalogs')
-    parser.add_argument('--catalogd', action='store_true', help='Query catalogd service')
-    parser.add_argument('--opm', action='store_true', help='Extract RBAC from bundle using OPM')
-    parser.add_argument('--generate-config', action='store_true', help='Generate configuration template')
+    # Create subparsers for commands
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
-    # Authentication flags
-    parser.add_argument('--openshift-url', help='OpenShift cluster URL')
-    parser.add_argument('--openshift-token', help='OpenShift authentication token')
+    # list-catalogs subcommand
+    list_parser = subparsers.add_parser(
+        'list-catalogs', 
+        help='List all ClusterCatalogs',
+        description='List all available ClusterCatalogs in the cluster'
+    )
+    list_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
+    list_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    list_parser.add_argument('--openshift-url', help='OpenShift cluster URL')
+    list_parser.add_argument('--openshift-token', help='OpenShift authentication token')
     
-    # Catalogd flags
-    parser.add_argument('--catalog-name', help='Catalog name')
-    parser.add_argument('--package', help='Package name')
-    parser.add_argument('--channel', help='Channel name')
-    parser.add_argument('--version', help='Version')
+    # catalogd subcommand
+    catalogd_parser = subparsers.add_parser(
+        'catalogd',
+        help='Query catalogd service',
+        description='Query catalogd service for package information'
+    )
+    catalogd_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
+    catalogd_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    catalogd_parser.add_argument('--openshift-url', help='OpenShift cluster URL')
+    catalogd_parser.add_argument('--openshift-token', help='OpenShift authentication token')
+    catalogd_parser.add_argument('--catalog-name', help='Catalog name')
+    catalogd_parser.add_argument('--package', help='Package name')
+    catalogd_parser.add_argument('--channel', help='Channel name')
+    catalogd_parser.add_argument('--version', help='Version')
     
-    # OPM flags
-    parser.add_argument('--image', help='Container image URL')
-    parser.add_argument('--namespace', default=KubernetesConstants.DEFAULT_NAMESPACE, help='Target namespace')
-    parser.add_argument('--openshift-namespace', help='Alias for --namespace')
-    parser.add_argument('--registry-token', help='Registry authentication token')
-    parser.add_argument('--helm', action='store_true', help='Generate Helm values')
-    parser.add_argument('--output', help='Output directory')
+    # opm subcommand
+    opm_parser = subparsers.add_parser(
+        'opm',
+        help='Extract RBAC from bundle using OPM',
+        description='Extract RBAC permissions from operator bundle images using OPM'
+    )
+    opm_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
+    opm_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    opm_parser.add_argument('--image', required=True, help='Container image URL')
+    opm_parser.add_argument('--namespace', default=KubernetesConstants.DEFAULT_NAMESPACE, help='Target namespace')
+    opm_parser.add_argument('--openshift-namespace', help='Alias for --namespace')
+    opm_parser.add_argument('--registry-token', help='Registry authentication token')
+    opm_parser.add_argument('--helm', action='store_true', help='Generate Helm values')
+    opm_parser.add_argument('--output', help='Output directory')
     
-    # Configuration
-    parser.add_argument('--config', help='Configuration file path')
+    # generate-config subcommand
+    config_parser = subparsers.add_parser(
+        'generate-config',
+        help='Generate configuration template',
+        description='Generate a configuration template file'
+    )
+    config_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    config_parser.add_argument('--output', help='Output directory for configuration file')
     
     return parser
 
@@ -501,8 +526,8 @@ def main():
         parser = create_argument_parser()
         args = parser.parse_args()
         
-        # Handle openshift-namespace (alias for namespace)
-        if args.openshift_namespace:
+        # Handle openshift-namespace (alias for namespace) if available
+        if hasattr(args, 'openshift_namespace') and args.openshift_namespace:
             args.namespace = args.openshift_namespace
         
         # Load configuration if provided
@@ -511,37 +536,26 @@ def main():
             rbac_manager_temp = create_rbac_manager()
             config = rbac_manager_temp.load_config(args.config)
         
-        # Determine which command was requested
-        command_count = sum([args.list_catalogs, args.catalogd, args.opm, args.generate_config])
-        
-        # Handle help and examples
-        if command_count == 0 and not args.examples:
-            help_manager = HelpManager()
-            help_manager.show_help()
-            return
-        
+        # Handle examples flag
         if args.examples:
             help_manager = HelpManager()
             # Show command-specific examples if a command is specified
-            if args.catalogd:
+            if args.command == 'catalogd':
                 help_manager.show_help("catalogd_examples")
-            elif args.opm:
+            elif args.command == 'opm':
                 help_manager.show_help("opm_examples")
-            elif args.list_catalogs:
+            elif args.command == 'list-catalogs':
                 help_manager.show_help("list_catalogs_examples")
-            elif args.generate_config:
+            elif args.command == 'generate-config':
                 help_manager.show_help("generate_config_examples")
             else:
                 # Show general examples if no specific command
                 help_manager.show_examples()
             return
         
-        if command_count == 0:
+        # Check if a command was specified
+        if not args.command:
             print("Error: No command specified. Use --help for usage information.")
-            sys.exit(1)
-        
-        if command_count > 1:
-            print("Error: Multiple commands specified. Please use only one command at a time.")
             sys.exit(1)
         
         # Apply configuration overrides
@@ -556,8 +570,8 @@ def main():
         rbac_manager = create_rbac_manager(skip_tls=skip_tls, debug=debug)
         
         try:
-            # Execute commands based on flags
-            if args.list_catalogs:
+            # Execute commands based on subcommand
+            if args.command == 'list-catalogs':
                 # Configure authentication if URL and token are provided
                 if args.openshift_url and args.openshift_token:
                     if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
@@ -570,10 +584,10 @@ def main():
                 exit_code = rbac_manager.list_catalogs()
                 sys.exit(exit_code)
             
-            elif args.catalogd:
-                # If user passed only --catalogd (no operational flags), show help for catalogd
+            elif args.command == 'catalogd':
+                # If user passed only catalogd (no operational flags), show help for catalogd
                 if not any([args.catalog_name, args.package, args.channel, args.version]):
-                    print("No catalogd operation specified. Use --help to see available options for --catalogd.\n")
+                    print("No catalogd operation specified. Use 'rbac-manager catalogd --help' to see available options.\n")
                     return
                 
                 # Apply config overrides for catalogd
@@ -605,7 +619,7 @@ def main():
                     version=version
                 )
             
-            elif args.opm:
+            elif args.command == 'opm':
                 # Apply config overrides for opm
                 image = args.image
                 namespace = args.namespace
@@ -621,6 +635,7 @@ def main():
                     helm = helm or opm_config.get('helm', False)
                     output = output or opm_config.get('output')
                 
+                # image is required and enforced by argparse, but double-check
                 if not image:
                     print("Error: --image is required for OPM operations")
                     sys.exit(1)
@@ -634,7 +649,7 @@ def main():
                     stdout=not output
                 )
             
-            elif args.generate_config:
+            elif args.command == 'generate-config':
                 config_file = rbac_manager.generate_config(args.output)
                 print(f"Configuration template generated: {config_file}")
         

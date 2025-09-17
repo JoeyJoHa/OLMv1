@@ -7,83 +7,83 @@ to work with operator bundles and OpenShift catalogs.
    ========================
 
    # List all available catalogs with serving status and age (requires --skip-tls for self-signed certs)
-   rbac-manager --list-catalogs --skip-tls
+   rbac-manager list-catalogs --skip-tls
 
    # List catalogs with debug output
-   rbac-manager --list-catalogs --skip-tls --debug
+   rbac-manager list-catalogs --skip-tls --debug
 
 2. CATALOGD QUERY EXAMPLES
    =======================
 
    # Interactive catalog selection (uses port-forwarding)
-   rbac-manager --catalogd
+   rbac-manager catalogd
 
    # Query specific catalog
-   rbac-manager --catalogd --catalog-name operatorhubio-catalog
+   rbac-manager catalogd --catalog-name operatorhubio-catalog
 
    # Query with direct OpenShift API
-   rbac-manager --catalogd --catalog-name operatorhubio-catalog \
+   rbac-manager catalogd --catalog-name operatorhubio-catalog \
      --openshift-url https://api.cluster.example.com:6443 \
      --openshift-token sha256~your-token-here
 
    # Show all packages in a catalog
-   rbac-manager --catalogd --catalog-name operatorhubio-catalog
+   rbac-manager catalogd --catalog-name operatorhubio-catalog
 
    # Show channels for a specific package
-   rbac-manager --catalogd --catalog-name operatorhubio-catalog \
+   rbac-manager catalogd --catalog-name operatorhubio-catalog \
      --package quay-operator
 
    # Show versions for a specific channel
-   rbac-manager --catalogd --catalog-name operatorhubio-catalog \
+   rbac-manager catalogd --catalog-name operatorhubio-catalog \
      --package quay-operator --channel stable-3.10
 
    # Get detailed metadata for a specific version
-   rbac-manager --catalogd --catalog-name operatorhubio-catalog \
+   rbac-manager catalogd --catalog-name operatorhubio-catalog \
      --package quay-operator --channel stable-3.10 --version 3.10.13
 
 3. BUNDLE EXTRACTION EXAMPLES
    ===========================
 
    # Extract from public bundle image
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
 
    # Extract with custom namespace
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
      --namespace quay-operator
 
    # Extract from private registry
-   rbac-manager --opm --image private-registry.com/operator-bundle:v1.0.0 \
+   rbac-manager opm --image private-registry.com/operator-bundle:v1.0.0 \
      --namespace my-operator --registry-token your-registry-token
 
    # Extract with debug output
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
      --namespace quay-operator --debug
 
    # Generate Helm values files
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --helm
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --helm
 
    # Generate RBAC with deduplication
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
 
    # Custom output directory
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --output ./my-operator
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --output ./my-operator
 
    # Combined flags
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
      --helm --output ./quay-operator
 
    # Output to stdout for piping to kubectl
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
      --openshift-namespace production | kubectl apply -f -
 
 4. CONFIGURATION MANAGEMENT
    ========================
 
    # Generate configuration template
-   rbac-manager --generate-config
+   rbac-manager generate-config
 
    # Generate configuration in specific directory
-   rbac-manager --generate-config --output ./configs/
+   rbac-manager generate-config --output ./configs/
 
    # Use configuration file with OPM command
    rbac-manager --config ~/.rbac-manager.yaml --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
@@ -98,32 +98,32 @@ to work with operator bundles and OpenShift catalogs.
    =============================
 
    # Enable debug logging for any command
-   rbac-manager --list-catalogs --skip-tls --debug
-   rbac-manager --catalogd --catalog-name test-catalog --debug
-   rbac-manager --opm --image your-bundle --debug
+   rbac-manager list-catalogs --skip-tls --debug
+   rbac-manager catalogd --catalog-name test-catalog --debug
+   rbac-manager opm --image your-bundle --debug
 
    # Skip TLS verification for development environments
-   rbac-manager --list-catalogs --skip-tls
-   rbac-manager --catalogd --catalog-name test-catalog --skip-tls
-   rbac-manager --opm --image registry.local/bundle --skip-tls
+   rbac-manager list-catalogs --skip-tls
+   rbac-manager catalogd --catalog-name test-catalog --skip-tls
+   rbac-manager opm --image registry.local/bundle --skip-tls
 
 6. COMPLETE WORKFLOW EXAMPLES
    ===========================
 
    # Workflow 1: Discover and extract operator
-   rbac-manager --list-catalogs --skip-tls
-   rbac-manager --catalogd --catalog-name operatorhubio-catalog
-   rbac-manager --catalogd --catalog-name operatorhubio-catalog --package quay-operator
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
+   rbac-manager list-catalogs --skip-tls
+   rbac-manager catalogd --catalog-name operatorhubio-catalog
+   rbac-manager catalogd --catalog-name operatorhubio-catalog --package quay-operator
+   rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
 
    # Workflow 2: Private registry workflow
-   rbac-manager --opm --image private-registry.com/my-operator:v1.0.0 \
+   rbac-manager opm --image private-registry.com/my-operator:v1.0.0 \
      --namespace my-operator --registry-token $(cat ~/.registry-token)
 
    # Workflow 3: Development environment
-   rbac-manager --list-catalogs --skip-tls --debug
-   rbac-manager --catalogd --catalog-name dev-catalog --skip-tls --debug
-   rbac-manager --opm --image registry.local/operator-bundle:latest --skip-tls
+   rbac-manager list-catalogs --skip-tls --debug
+   rbac-manager catalogd --catalog-name dev-catalog --skip-tls --debug
+   rbac-manager opm --image registry.local/operator-bundle:latest --skip-tls
 
 6. HELM INTEGRATION EXAMPLES
    =========================
