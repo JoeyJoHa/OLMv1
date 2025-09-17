@@ -10,6 +10,11 @@ from .base_generator import BaseGenerator, PermissionStructure, HelmValueTemplat
 from ..core.constants import OPMConstants
 
 
+class FlowStyleList(list):
+    """Custom list type to indicate that this list should be formatted in YAML flow style"""
+    pass
+
+
 class HelmValuesGenerator(BaseGenerator):
     """Generates Helm values.yaml content from bundle metadata"""
     
@@ -104,24 +109,24 @@ class HelmValuesGenerator(BaseGenerator):
         for rule in rules:
             formatted_rule = {}
             
-            # API groups
+            # API groups - use FlowStyleList for compact formatting
             if 'apiGroups' in rule:
-                formatted_rule['apiGroups'] = rule['apiGroups']
+                formatted_rule['apiGroups'] = FlowStyleList(rule['apiGroups'])
             
-            # Resources
+            # Resources - use FlowStyleList for compact formatting
             if 'resources' in rule:
-                formatted_rule['resources'] = rule['resources']
+                formatted_rule['resources'] = FlowStyleList(rule['resources'])
             
-            # Verbs
+            # Verbs - use FlowStyleList for compact formatting
             if 'verbs' in rule:
-                formatted_rule['verbs'] = rule['verbs']
+                formatted_rule['verbs'] = FlowStyleList(rule['verbs'])
             
             # Resource names (if present or needs hardening)
             if 'resourceNames' in rule:
-                formatted_rule['resourceNames'] = rule['resourceNames']
+                formatted_rule['resourceNames'] = FlowStyleList(rule['resourceNames'])
             elif self._needs_resource_names_hardening(rule):
-                # Add empty resourceNames array for rules that need hardening
-                formatted_rule['resourceNames'] = []
+                # Add descriptive placeholder for resource names that need to be filled in
+                formatted_rule['resourceNames'] = FlowStyleList(["#<ADD_CREATED_RESOURCE_NAMES_HERE>"])
             
             formatted_rules.append(formatted_rule)
         
@@ -163,51 +168,14 @@ class HelmValuesGenerator(BaseGenerator):
             pass
         
         def represent_list(dumper, data):
-            # Check if we're in a context where we want flow style
-            # Only use flow style for arrays that contain only strings (not mixed types)
-            if data and all(isinstance(item, str) for item in data):
-                # Check if this looks like an RBAC array by examining patterns
-                sample_str = ' '.join(data).lower()
-                
-                # Generic patterns that indicate RBAC arrays (not operator-specific)
-                is_rbac_array = (
-                    # Standard Kubernetes API groups
-                    any(group in sample_str for group in [
-                        'apiextensions.k8s.io', 'rbac.authorization.k8s.io', 'apps', 'batch',
-                        'autoscaling', 'networking.k8s.io', 'policy', 'storage.k8s.io'
-                    ]) or
-                    # OLM-related API groups
-                    'olm.operatorframework.io' in sample_str or
-                    # Common monitoring/observability groups
-                    'monitoring.coreos.com' in sample_str or
-                    # OpenShift-specific groups
-                    any(group in sample_str for group in [
-                        'route.openshift.io', 'security.openshift.io', 'config.openshift.io'
-                    ]) or
-                    # Generic patterns for custom API groups (contains dots)
-                    any('.' in item for item in data if isinstance(item, str)) or
-                    # Standard Kubernetes resources
-                    any(resource in sample_str for resource in [
-                        'clusterroles', 'clusterrolebindings', 'customresourcedefinitions',
-                        'deployments', 'pods', 'services', 'secrets', 'configmaps',
-                        'serviceaccounts', 'namespaces', 'roles', 'rolebindings',
-                        'persistentvolumeclaims', 'events', 'finalizers'
-                    ]) or
-                    # Standard Kubernetes verbs
-                    any(verb in sample_str for verb in [
-                        'create', 'get', 'list', 'watch', 'update', 'patch', 'delete', '*'
-                    ]) or
-                    # Short arrays (likely RBAC-related)
-                    len(data) <= 3
-                )
-                
-                if is_rbac_array:
-                    return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
-            
-            # Default to block style for other arrays (including mixed types)
-            return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+            # Use flow style for FlowStyleList instances, block style for regular lists
+            if isinstance(data, FlowStyleList):
+                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+            else:
+                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
         
         FlowArrayDumper.add_representer(list, represent_list)
+        FlowArrayDumper.add_representer(FlowStyleList, represent_list)
         
         # Generate YAML and add comments
         yaml_content = yaml.dump(data, Dumper=FlowArrayDumper, default_flow_style=False, sort_keys=False)

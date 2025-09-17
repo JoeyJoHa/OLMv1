@@ -1686,7 +1686,7 @@ class HelmValueTemplates:
                 # IMPORTANT: Verify correct channel with catalogd before deployment!
                 # Many operators use 'alpha', 'beta', or 'candidate' instead of 'stable'
                 # Run: kubectl get package <package-name> -o jsonpath='{.status.channels[*].name}'
-                'channel': channel or KubernetesConstants.DEFAULT_CHANNEL,  # Use provided channel or default
+                'channel': channel or "#<VERIFY_WITH_CATALOGD_AND_SET_CHANNEL>",  # Use provided channel or placeholder
                 'packageName': package_name
             },
             'serviceAccount': {
