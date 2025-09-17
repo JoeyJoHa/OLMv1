@@ -25,14 +25,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "rbac-manager"))
 class CatalogdTestSuite:
     """Test suite for catalogd functionality"""
     
-    def __init__(self, openshift_url: str, openshift_token: str, skip_tls: bool = True):
+    def __init__(self, openshift_url: str, openshift_token: str, skip_tls: bool = False):
         """
         Initialize test suite
         
         Args:
             openshift_url: OpenShift cluster URL
             openshift_token: Authentication token
-            skip_tls: Whether to skip TLS verification
+            skip_tls: Whether to skip TLS verification (default: False)
         """
         self.openshift_url = openshift_url
         self.openshift_token = openshift_token
@@ -61,7 +61,8 @@ class CatalogdTestSuite:
         self.test_version = "3.10.0"
     
     def _mask_token_in_command(self, command: str) -> str:
-        """Mask the authentication token and OpenShift URL in command strings for security"""
+        """Mask the authentication token, OpenShift URL, and temp directories in command strings"""
+        import re
         masked_command = command
         
         # Mask the authentication token
@@ -77,6 +78,10 @@ class CatalogdTestSuite:
         # Mask the OpenShift URL
         if self.openshift_url and self.openshift_url in masked_command:
             masked_command = masked_command.replace(self.openshift_url, "https://api.example.com:6443")
+        
+        # Mask temporary directories with placeholders
+        masked_command = re.sub(r'/var/folders/[a-zA-Z0-9_/]+/tmp[a-zA-Z0-9_]+', '/tmp/placeholder-output-dir', masked_command)
+        masked_command = re.sub(r'/tmp/tmp[a-zA-Z0-9_]+', '/tmp/placeholder-output-dir', masked_command)
         
         return masked_command
     
@@ -499,7 +504,7 @@ class CatalogdTestSuite:
         """Test generating config template without parameters"""
         print("🧪 Testing config template generation...")
         
-        result = self.run_command(["catalogd", "--generate-config"])
+        result = self.run_command(["--generate-config"])
         
         # Check if YAML config is generated to stdout
         success = (
@@ -730,20 +735,30 @@ class CatalogdTestSuite:
 
 def main():
     """Main test runner"""
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Catalogd Test Suite")
+    parser.add_argument("--skip-tls", action="store_true", help="Skip TLS verification")
+    parser.add_argument("--openshift-url", help="OpenShift cluster URL")
+    parser.add_argument("--openshift-token", help="OpenShift authentication token")
+    args = parser.parse_args()
+    
     # Get configuration from environment or command line
-    openshift_url = os.getenv("OPENSHIFT_URL", "https://api.example.com:6443")
-    openshift_token = os.getenv("OPENSHIFT_TOKEN") or os.getenv("TOKEN")
+    openshift_url = args.openshift_url or os.getenv("OPENSHIFT_URL", "https://api.example.com:6443")
+    openshift_token = args.openshift_token or os.getenv("OPENSHIFT_TOKEN") or os.getenv("TOKEN")
     
     if not openshift_token:
         print("❌ Error: OPENSHIFT_TOKEN or TOKEN environment variable required")
         print("   Set with: export TOKEN='your-openshift-token'")
+        print("   Or use: python3 test_catalogd.py --openshift-token 'your-token'")
         sys.exit(1)
     
     # Initialize and run test suite
     test_suite = CatalogdTestSuite(
         openshift_url=openshift_url,
         openshift_token=openshift_token,
-        skip_tls=True
+        skip_tls=args.skip_tls
     )
     
     # Run tests
