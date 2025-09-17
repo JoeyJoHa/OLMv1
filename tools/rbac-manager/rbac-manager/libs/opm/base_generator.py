@@ -1236,13 +1236,19 @@ e        Generate installer service account Role permissions - ONLY installer-sp
 # use different channels (alpha, beta, candidate, etc.).
 #
 # 🔍 FIND THE CORRECT CHANNEL:
-# Use catalogd to discover available channels for this operator:
+# Use the RBAC Manager tool to discover available channels for this operator:
 #
-#   # List available channels for {package_name}:
-#   kubectl get package {package_name} -o jsonpath='{{.status.channels[*].name}}'
+#   # Step 1: List available catalogs
+#   python3 rbac-manager.py list-catalogs --skip-tls
 #
-#   # Get detailed channel information:
-#   kubectl get package {package_name} -o yaml
+#   # Step 2: Show channels for {package_name} (use catalog from step 1)
+#   python3 rbac-manager.py catalogd --catalog-name operatorhubio-catalog \\
+#     --package {package_name}
+#
+#   # Alternative: Direct OpenShift API access
+#   python3 rbac-manager.py catalogd --catalog-name operatorhubio-catalog \\
+#     --package {package_name} --openshift-url https://api.cluster.example.com:6443 \\
+#     --openshift-token sha256~your-token
 #
 #   # Example: ArgoCD operator uses 'alpha' channel, not 'stable':
 #   operator:
@@ -1263,8 +1269,8 @@ e        Generate installer service account Role permissions - ONLY installer-sp
 # Step 1: Inspect Created Resources
 # ---------------------------------
 # Run these commands to see what OLMv1 actually created:
-#   kubectl get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
-#   kubectl get clusterextensions
+#   oc get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#   oc get clusterextensions
 #
 # Step 2: Update Installer Permissions  
 # ------------------------------------
@@ -1274,12 +1280,12 @@ e        Generate installer service account Role permissions - ONLY installer-sp
 # For ClusterRole/ClusterRoleBinding management rules:
 #   resourceNames: [] # After install, add: ["<packageName>.<hash1>", "<packageName>.<hash2>"]
 #   Example: ['{package_name}.a1b2c3d4', '{package_name}.e5f6g7h8']
-#   Command: (oc or kubectl) get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
+#   Command: oc get clusterroles,clusterrolebindings -l app.kubernetes.io/managed-by=olm
 #
 # For ClusterExtension finalizer rules:
 #   resourceNames: [] # After install, add: ["<your-chosen-clusterextension-name>"]
 #   Example: ['my-argocd-operator'] or ['company-gitops']
-#   Command: (oc or kubectl) get clusterextensions
+#   Command: oc get clusterextensions
 #
 # Step 3: Redeploy with Hardened Permissions
 # ------------------------------------------
