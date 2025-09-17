@@ -62,9 +62,17 @@ class HelmValuesGenerator(BaseGenerator):
             # ClusterRoles: operator (management) + grantor (clusterPermissions from CSV)
             # Roles: grantor only (permissions from CSV) - NO operator Role for namespace scope
             
-            # Generate operator ClusterRole (management permissions)
+            # Generate operator ClusterRole (management permissions + bundled cluster resources)
             operator_rules = self._generate_operator_rules(bundle_metadata)
-            formatted_operator_rules = self._format_rules_for_helm(operator_rules)
+            
+            # Add bundled cluster-scoped resource permissions (including specific ClusterRole rules)
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            combined_operator_rules = operator_rules + bundled_cluster_rules
+            
+            # Apply DRY deduplication to combined operator rules
+            deduplicated_operator_rules = self._process_and_deduplicate_rules(combined_operator_rules)
+            
+            formatted_operator_rules = self._format_rules_for_helm(deduplicated_operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
             )
@@ -120,9 +128,17 @@ class HelmValuesGenerator(BaseGenerator):
             # ClusterRoles: operator (management) + grantor (clusterPermissions from CSV)
             # Roles: none (empty roles array)
             
-            # Generate operator ClusterRole
+            # Generate operator ClusterRole (management permissions + bundled cluster resources)
             operator_rules = self._generate_operator_rules(bundle_metadata)
-            formatted_operator_rules = self._format_rules_for_helm(operator_rules)
+            
+            # Add bundled cluster-scoped resource permissions (including specific ClusterRole rules)
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            combined_operator_rules = operator_rules + bundled_cluster_rules
+            
+            # Apply DRY deduplication to combined operator rules
+            deduplicated_operator_rules = self._process_and_deduplicate_rules(combined_operator_rules)
+            
+            formatted_operator_rules = self._format_rules_for_helm(deduplicated_operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
             )
@@ -153,9 +169,17 @@ class HelmValuesGenerator(BaseGenerator):
             # ClusterRoles: operator (management) + grantor (permissions treated as cluster-scoped)
             # Roles: none (empty roles array)
             
-            # Generate operator ClusterRole (management permissions)
+            # Generate operator ClusterRole (management permissions + bundled cluster resources)
             operator_rules = self._generate_operator_rules(bundle_metadata)
-            formatted_operator_rules = self._format_rules_for_helm(operator_rules)
+            
+            # Add bundled cluster-scoped resource permissions (including specific ClusterRole rules)
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            combined_operator_rules = operator_rules + bundled_cluster_rules
+            
+            # Apply DRY deduplication to combined operator rules
+            deduplicated_operator_rules = self._process_and_deduplicate_rules(combined_operator_rules)
+            
+            formatted_operator_rules = self._format_rules_for_helm(deduplicated_operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
             )
@@ -177,9 +201,17 @@ class HelmValuesGenerator(BaseGenerator):
             # No Roles needed - leave roles array empty
         else:
             # Operator has no permissions defined (unusual case)
-            # Generate minimal operator ClusterRole
+            # Generate minimal operator ClusterRole (management permissions + bundled cluster resources)
             operator_rules = self._generate_operator_rules(bundle_metadata)
-            formatted_operator_rules = self._format_rules_for_helm(operator_rules)
+            
+            # Add bundled cluster-scoped resource permissions (including specific ClusterRole rules)
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            combined_operator_rules = operator_rules + bundled_cluster_rules
+            
+            # Apply DRY deduplication to combined operator rules
+            deduplicated_operator_rules = self._process_and_deduplicate_rules(combined_operator_rules)
+            
+            formatted_operator_rules = self._format_rules_for_helm(deduplicated_operator_rules)
             operator_cluster_role = PermissionStructure.create_cluster_role_structure(
                 '', 'operator', formatted_operator_rules, True
             )

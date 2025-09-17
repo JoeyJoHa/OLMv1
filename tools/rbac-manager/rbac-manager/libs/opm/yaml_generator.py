@@ -88,12 +88,20 @@ class YAMLManifestGenerator(BaseGenerator):
         
         manifests = []
         
-        # Operator ClusterRole
+        # Operator ClusterRole (installer management permissions + bundled cluster resources)
         operator_rules = self._generate_operator_rules(bundle_metadata)
+        
+        # Add bundled cluster-scoped resource permissions (including specific ClusterRole rules)
+        bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+        combined_operator_rules = operator_rules + bundled_cluster_rules
+        
+        # Apply DRY deduplication to combined operator rules
+        deduplicated_operator_rules = self._process_and_deduplicate_rules(combined_operator_rules)
+        
         operator_cr_name = f"{operator_name}-installer-clusterrole"
         
         operator_cr = ManifestTemplates.cluster_role_template(
-            operator_cr_name, operator_name, operator_rules
+            operator_cr_name, operator_name, deduplicated_operator_rules
         )
         manifests.append(operator_cr)
         
