@@ -11,7 +11,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from ..core.exceptions import OPMError, BundleProcessingError
 from ..core.utils import validate_image_url
@@ -277,13 +277,17 @@ class OPMClient:
                 OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY: [],
                 'csv_metadata': {},
                 'csv_crds': [],
-                'api_groups': []
+                'api_groups': [],
+                '_raw_bundle_data': []
             }
             
-            # Parse the single JSON object from opm render output
+                # Parse the single JSON object from opm render output
             try:
                 obj = json.loads(output.strip())
                 logger.debug(f"Successfully parsed JSON object from opm render output")
+                
+                # Store raw bundle data for bundle object extraction
+                bundle_metadata['_raw_bundle_data'] = [obj]
                 
                 schema = obj.get('schema')
                 
@@ -376,8 +380,17 @@ class OPMClient:
                 'install_modes': spec.get('installModes', [])
             }
             
+            # Extract install section data
+            install_section = spec.get(OPMConstants.CSV_INSTALL_SECTION, {})
+            install_spec = install_section.get(OPMConstants.CSV_SPEC_SECTION, {})
+            
+            # Extract deployment information for installer permissions
+            deployments = install_spec.get(OPMConstants.CSV_DEPLOYMENTS_SECTION, [])
+            bundle_metadata[OPMConstants.CSV_DEPLOYMENTS_SECTION] = deployments
+            
+            # Bundle objects will be processed by the processor layer
+            
             # Extract RBAC permissions
-            install_spec = spec.get(OPMConstants.CSV_INSTALL_SECTION, {}).get(OPMConstants.CSV_SPEC_SECTION, {})
             
             # Namespace-scoped permissions
             permissions = install_spec.get(OPMConstants.CSV_PERMISSIONS_SECTION, [])

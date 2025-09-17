@@ -70,24 +70,50 @@ class HelmValuesGenerator(BaseGenerator):
             )
             permissions['clusterRoles'].append(operator_cluster_role)
             
-            # Generate grantor ClusterRole (clusterPermissions from CSV)
+            # Generate grantor ClusterRole (ONLY clusterPermissions from CSV + bundled cluster resources)
             cluster_grantor_rules = []
             for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
-            if cluster_grantor_rules:
+            # Add bundled cluster-scoped resource permissions
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            cluster_grantor_rules.extend(bundled_cluster_rules)
+            
+            # Apply DRY deduplication to cluster rules
+            deduplicated_cluster_rules = self._process_and_deduplicate_rules(cluster_grantor_rules)
+            
+            if deduplicated_cluster_rules:
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
-                    '', 'grantor', self._format_rules_for_helm(cluster_grantor_rules), True
+                    '', 'grantor', self._format_rules_for_helm(deduplicated_cluster_rules), True
                 )
                 permissions['clusterRoles'].append(grantor_cluster_role)
             
-            # Generate grantor Role ONLY (permissions from CSV) - no operator Role
-            namespace_rules = self._generate_namespace_rules(bundle_metadata)
-            if namespace_rules:
-                grantor_role = PermissionStructure.create_role_structure(
-                    '', 'grantor', self._format_rules_for_helm(namespace_rules), True
-                )
-                permissions['roles'].append(grantor_role)
+            # Generate Role with CSV namespace permissions + installer-specific permissions
+            # Import CSV namespace permissions as-is
+            csv_namespace_rules = self._generate_namespace_rules(bundle_metadata)
+            
+            # Filter out any namespace rules that overlap with cluster rules
+            # Use deduplicated cluster rules or empty list if no cluster rules
+            cluster_rules_for_filtering = deduplicated_cluster_rules if deduplicated_cluster_rules else []
+            unique_namespace_rules = self._filter_unique_role_rules(csv_namespace_rules, cluster_rules_for_filtering)
+            
+            # Add installer-specific permissions
+            installer_rules = self._generate_installer_service_account_rules(bundle_metadata)
+            
+            # Combine unique namespace rules with installer rules
+            combined_role_rules = unique_namespace_rules + installer_rules
+            
+            # Apply DRY deduplication to combined role rules
+            if combined_role_rules:
+                deduplicated_role_rules = self._process_and_deduplicate_rules(combined_role_rules)
+                # Filter again against cluster rules to remove any remaining overlaps
+                final_role_rules = self._filter_unique_role_rules(deduplicated_role_rules, cluster_rules_for_filtering)
+                
+                if final_role_rules:
+                    installer_role = PermissionStructure.create_role_structure(
+                        '', 'grantor', self._format_rules_for_helm(final_role_rules), True
+                    )
+                    permissions['roles'].append(installer_role)
                 
         elif has_cluster_permissions:
             # Only clusterPermissions exist
@@ -102,14 +128,21 @@ class HelmValuesGenerator(BaseGenerator):
             )
             permissions['clusterRoles'].append(operator_cluster_role)
             
-            # Generate grantor ClusterRole (clusterPermissions from CSV)
+            # Generate grantor ClusterRole (clusterPermissions from CSV + bundled cluster resources)
             cluster_grantor_rules = []
             for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
-            if cluster_grantor_rules:
+            # Add bundled cluster-scoped resource permissions
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            cluster_grantor_rules.extend(bundled_cluster_rules)
+            
+            # Apply DRY deduplication to cluster rules
+            deduplicated_cluster_rules = self._process_and_deduplicate_rules(cluster_grantor_rules)
+            
+            if deduplicated_cluster_rules:
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
-                    '', 'grantor', self._format_rules_for_helm(cluster_grantor_rules), True
+                    '', 'grantor', self._format_rules_for_helm(deduplicated_cluster_rules), True
                 )
                 permissions['clusterRoles'].append(grantor_cluster_role)
             
@@ -128,11 +161,16 @@ class HelmValuesGenerator(BaseGenerator):
             )
             permissions['clusterRoles'].append(operator_cluster_role)
             
-            # Generate grantor ClusterRole (treat permissions as cluster-scoped)
+            # Generate grantor ClusterRole (treat permissions as cluster-scoped + bundled cluster resources)
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
-            if namespace_rules:
+            
+            # Add bundled cluster-scoped resource permissions
+            bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
+            combined_rules = namespace_rules + bundled_cluster_rules
+            
+            if combined_rules:
                 grantor_cluster_role = PermissionStructure.create_cluster_role_structure(
-                    '', 'grantor', self._format_rules_for_helm(namespace_rules), True
+                    '', 'grantor', self._format_rules_for_helm(combined_rules), True
                 )
                 permissions['clusterRoles'].append(grantor_cluster_role)
             

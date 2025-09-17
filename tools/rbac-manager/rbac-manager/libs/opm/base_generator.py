@@ -14,7 +14,6 @@ from enum import Enum
 from ..core.constants import (
     KubernetesConstants, 
     OPMConstants, 
-    RoleConstants,
     FileConstants
 )
 
@@ -125,6 +124,542 @@ class BaseGenerator(ABC):
         
         return crd_names
     
+    def _generate_installer_service_account_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+e        Generate installer service account Role permissions - ONLY installer-specific permissions
+        
+        The installer service account needs ONLY these specific permissions:
+        1. Create and manage Deployments for extension controllers (from CSV spec.install.deployments)  
+        2. Create and manage ServiceAccounts for extension controllers (from deployment templates)
+        3. Create and manage bundled namespace-scoped resources (ConfigMaps, Services)
+        
+        Note: All CSV permissions (.spec.install.permissions) go to ClusterRole to avoid duplication
+        
+        Args:
+            bundle_metadata: Bundle metadata containing deployment info
+            
+        Returns:
+            List of RBAC rules for installer service account Role (minimal, no overlaps)
+        """
+        from ..core.constants import KubernetesConstants, OPMConstants
+        
+        rules = []
+        deployments = bundle_metadata.get(OPMConstants.CSV_DEPLOYMENTS_SECTION, [])
+        
+        if deployments:
+            # Extract deployment names and service account names from CSV
+            deployment_names = []
+            service_account_names = set()
+            
+            for deployment in deployments:
+                # Get deployment name
+                deployment_name = deployment.get('name')
+                if deployment_name:
+                    deployment_names.append(deployment_name)
+                
+                # Get service account name from deployment spec
+                deployment_spec = deployment.get('spec', {})
+                template = deployment_spec.get('template', {})
+                template_spec = template.get('spec', {})
+                service_account_name = template_spec.get('serviceAccountName')
+                if service_account_name:
+                    service_account_names.add(service_account_name)
+            
+            # Step 1: Deployment permissions (installer-specific)
+            if deployment_names:
+                # Broad permissions (create, list, watch)
+                deployment_broad_rule = {
+                    'apiGroups': [KubernetesConstants.APPS_API_GROUP],
+                    'resources': [KubernetesConstants.DEPLOYMENTS_RESOURCE],
+                    'verbs': [
+                        KubernetesConstants.CREATE_VERB,
+                        KubernetesConstants.LIST_VERB,
+                        KubernetesConstants.WATCH_VERB
+                    ]
+                }
+                rules.append(deployment_broad_rule)
+                
+                # Scoped permissions (get, update, patch, delete)
+                deployment_scoped_rule = {
+                    'apiGroups': [KubernetesConstants.APPS_API_GROUP],
+                    'resources': [KubernetesConstants.DEPLOYMENTS_RESOURCE],
+                    'verbs': [
+                        KubernetesConstants.GET_VERB,
+                        KubernetesConstants.UPDATE_VERB,
+                        KubernetesConstants.PATCH_VERB,
+                        KubernetesConstants.DELETE_VERB
+                    ],
+                    'resourceNames': deployment_names
+                }
+                rules.append(deployment_scoped_rule)
+            
+            # Step 2: ServiceAccount permissions (installer-specific)
+            if service_account_names:
+                service_account_names_list = list(service_account_names)
+                
+                # Broad permissions (create, list, watch)
+                sa_broad_rule = {
+                    'apiGroups': [KubernetesConstants.CORE_API_GROUP],
+                    'resources': [KubernetesConstants.SERVICE_ACCOUNTS_RESOURCE],
+                    'verbs': [
+                        KubernetesConstants.CREATE_VERB,
+                        KubernetesConstants.LIST_VERB,
+                        KubernetesConstants.WATCH_VERB
+                    ]
+                }
+                rules.append(sa_broad_rule)
+                
+                # Scoped permissions (get, update, patch, delete)
+                sa_scoped_rule = {
+                    'apiGroups': [KubernetesConstants.CORE_API_GROUP],
+                    'resources': [KubernetesConstants.SERVICE_ACCOUNTS_RESOURCE],
+                    'verbs': [
+                        KubernetesConstants.GET_VERB,
+                        KubernetesConstants.UPDATE_VERB,
+                        KubernetesConstants.PATCH_VERB,
+                        KubernetesConstants.DELETE_VERB
+                    ],
+                    'resourceNames': service_account_names_list
+                }
+                rules.append(sa_scoped_rule)
+        
+        # Step 3: Bundled namespace-scoped resource permissions (installer-specific)
+        namespace_resources = bundle_metadata.get('namespace_scoped_resources', [])
+        if namespace_resources:
+            # Group resources by API group and resource type for efficient rules
+            resource_groups = {}
+            
+            for resource in namespace_resources:
+                kind = resource.get('kind', '')
+                name = resource.get('name', '')
+                api_version = resource.get('apiVersion', '')
+                
+                # Extract API group and resource type from kind and apiVersion
+                api_group, resource_type = self._get_api_group_and_resource(kind, api_version)
+                
+                if api_group is not None and resource_type:
+                    group_key = (api_group, resource_type)
+                    if group_key not in resource_groups:
+                        resource_groups[group_key] = []
+                    
+                    if name:
+                        resource_groups[group_key].append(name)
+            
+            # Create rules for each resource group
+            for (api_group, resource_type), resource_names in resource_groups.items():
+                # Broad permissions (create, list, watch)
+                broad_rule = {
+                    'apiGroups': [api_group],
+                    'resources': [resource_type],
+                    'verbs': [
+                        KubernetesConstants.CREATE_VERB,
+                        KubernetesConstants.LIST_VERB,
+                        KubernetesConstants.WATCH_VERB
+                    ]
+                }
+                rules.append(broad_rule)
+                
+                # Scoped permissions (get, update, patch, delete) - if we have names
+                if resource_names:
+                    scoped_rule = {
+                        'apiGroups': [api_group],
+                        'resources': [resource_type],
+                        'verbs': [
+                            KubernetesConstants.GET_VERB,
+                            KubernetesConstants.UPDATE_VERB,
+                            KubernetesConstants.PATCH_VERB,
+                            KubernetesConstants.DELETE_VERB
+                        ],
+                        'resourceNames': resource_names
+                    }
+                    rules.append(scoped_rule)
+        
+        return rules
+    
+    def _process_and_deduplicate_rules(self, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Process and deduplicate RBAC rules using DRY principle
+        
+        This method implements comprehensive deduplication logic:
+        1. Removes exact duplicates
+        2. Handles wildcard permissions (broader permissions supersede narrower ones)
+        3. Preserves resourceNames-specific rules even if broader rules exist
+        4. Groups similar rules to reduce redundancy
+        
+        Args:
+            rules: List of RBAC rules to deduplicate
+            
+        Returns:
+            Deduplicated list of RBAC rules
+        """
+        if not rules:
+            return []
+        
+        # Step 1: Remove exact duplicates
+        unique_rules = []
+        seen_rules = set()
+        
+        for rule in rules:
+            # Create a hashable representation of the rule
+            rule_key = self._create_rule_key(rule)
+            if rule_key not in seen_rules:
+                seen_rules.add(rule_key)
+                unique_rules.append(rule.copy())
+        
+        # Step 2: Group rules by (apiGroups, resources) for deduplication analysis
+        rule_groups = {}
+        for rule in unique_rules:
+            api_groups = tuple(sorted(rule.get('apiGroups', [])))
+            resources = tuple(sorted(rule.get('resources', [])))
+            group_key = (api_groups, resources)
+            
+            if group_key not in rule_groups:
+                rule_groups[group_key] = []
+            rule_groups[group_key].append(rule)
+        
+        # Step 3: Deduplicate within each group
+        deduplicated_rules = []
+        for group_key, group_rules in rule_groups.items():
+            deduplicated_group = self._deduplicate_rule_group(group_rules)
+            deduplicated_rules.extend(deduplicated_group)
+        
+        return deduplicated_rules
+    
+    def _create_rule_key(self, rule: Dict[str, Any]) -> tuple:
+        """Create a hashable key for rule comparison"""
+        api_groups = tuple(sorted(rule.get('apiGroups', [])))
+        resources = tuple(sorted(rule.get('resources', [])))
+        verbs = tuple(sorted(rule.get('verbs', [])))
+        resource_names = tuple(sorted(rule.get('resourceNames', [])))
+        return (api_groups, resources, verbs, resource_names)
+    
+    def _deduplicate_rule_group(self, group_rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Deduplicate rules within a group (same apiGroups and resources)
+        
+        Args:
+            group_rules: List of rules with same apiGroups and resources
+            
+        Returns:
+            Deduplicated rules from the group
+        """
+        if len(group_rules) <= 1:
+            return group_rules
+        
+        # Separate rules with resourceNames from those without
+        broad_rules = []  # Rules without resourceNames
+        specific_rules = []  # Rules with resourceNames
+        
+        for rule in group_rules:
+            if rule.get('resourceNames'):
+                specific_rules.append(rule)
+            else:
+                broad_rules.append(rule)
+        
+        # Deduplicate broad rules (merge verbs)
+        deduplicated_broad = self._merge_broad_rules(broad_rules)
+        
+        # Keep specific rules as-is (they don't conflict with broad rules)
+        # But deduplicate among themselves if needed
+        deduplicated_specific = self._deduplicate_specific_rules(specific_rules)
+        
+        return deduplicated_broad + deduplicated_specific
+    
+    def _merge_broad_rules(self, broad_rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Merge broad rules (without resourceNames) by combining verbs
+        
+        Args:
+            broad_rules: Rules without resourceNames
+            
+        Returns:
+            Merged rules with combined verbs
+        """
+        if not broad_rules:
+            return []
+        
+        if len(broad_rules) == 1:
+            return broad_rules
+        
+        # Collect all verbs from broad rules
+        all_verbs = set()
+        for rule in broad_rules:
+            verbs = rule.get('verbs', [])
+            # If any rule has wildcard, use wildcard
+            if '*' in verbs:
+                all_verbs = {'*'}
+                break
+            all_verbs.update(verbs)
+        
+        # Create merged rule using the first rule as template
+        merged_rule = broad_rules[0].copy()
+        merged_rule['verbs'] = sorted(list(all_verbs))
+        
+        return [merged_rule]
+    
+    def _deduplicate_specific_rules(self, specific_rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Deduplicate rules with resourceNames
+        
+        Args:
+            specific_rules: Rules with resourceNames
+            
+        Returns:
+            Deduplicated specific rules
+        """
+        if not specific_rules:
+            return []
+        
+        # Group by verbs
+        verb_groups = {}
+        for rule in specific_rules:
+            verbs = tuple(sorted(rule.get('verbs', [])))
+            if verbs not in verb_groups:
+                verb_groups[verbs] = []
+            verb_groups[verbs].append(rule)
+        
+        deduplicated = []
+        for verbs, rules in verb_groups.items():
+            # Merge resourceNames for rules with same verbs
+            all_resource_names = set()
+            for rule in rules:
+                all_resource_names.update(rule.get('resourceNames', []))
+            
+            # Create merged rule
+            merged_rule = rules[0].copy()
+            merged_rule['resourceNames'] = sorted(list(all_resource_names))
+            deduplicated.append(merged_rule)
+        
+        return deduplicated
+    
+    def _filter_unique_role_rules(self, role_rules: List[Dict[str, Any]], 
+                                  cluster_rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter Role rules to exclude those already covered by ClusterRole rules
+        Uses advanced logic to detect when cluster rules cover namespace rules
+        
+        Args:
+            role_rules: Namespace-scoped rules for Role
+            cluster_rules: Cluster-scoped rules from ClusterRole
+            
+        Returns:
+            Filtered Role rules with no overlap with ClusterRole
+        """
+        if not role_rules:
+            return []
+        
+        if not cluster_rules:
+            return role_rules
+        
+        # Process cluster rules to understand what they cover
+        cluster_coverage = self._analyze_cluster_rule_coverage(cluster_rules)
+        
+        # Filter role rules based on cluster coverage
+        unique_role_rules = []
+        for role_rule in role_rules:
+            if not self._is_rule_covered_by_cluster(role_rule, cluster_coverage):
+                unique_role_rules.append(role_rule)
+        
+        return unique_role_rules
+    
+    def _analyze_cluster_rule_coverage(self, cluster_rules: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Analyze what permissions are covered by cluster rules
+        
+        Args:
+            cluster_rules: List of cluster-scoped RBAC rules
+            
+        Returns:
+            Dictionary describing the coverage of cluster rules
+        """
+        coverage = {
+            'wildcard_permissions': set(),  # (apiGroups, resources) with wildcard verbs
+            'specific_permissions': {},     # (apiGroups, resources) -> set of verbs
+            'resource_specific': {}         # (apiGroups, resources) -> {resourceNames -> verbs}
+        }
+        
+        for rule in cluster_rules:
+            api_groups = tuple(sorted(rule.get('apiGroups', [])))
+            resources = tuple(sorted(rule.get('resources', [])))
+            verbs = rule.get('verbs', [])
+            resource_names = rule.get('resourceNames', [])
+            
+            permission_key = (api_groups, resources)
+            
+            # Handle wildcard verbs
+            if '*' in verbs:
+                if not resource_names:
+                    # Broad wildcard permission
+                    coverage['wildcard_permissions'].add(permission_key)
+                else:
+                    # Resource-specific wildcard
+                    if permission_key not in coverage['resource_specific']:
+                        coverage['resource_specific'][permission_key] = {}
+                    for resource_name in resource_names:
+                        coverage['resource_specific'][permission_key][resource_name] = set(['*'])
+            else:
+                if not resource_names:
+                    # Broad specific permissions
+                    if permission_key not in coverage['specific_permissions']:
+                        coverage['specific_permissions'][permission_key] = set()
+                    coverage['specific_permissions'][permission_key].update(verbs)
+                else:
+                    # Resource-specific permissions
+                    if permission_key not in coverage['resource_specific']:
+                        coverage['resource_specific'][permission_key] = {}
+                    for resource_name in resource_names:
+                        if resource_name not in coverage['resource_specific'][permission_key]:
+                            coverage['resource_specific'][permission_key][resource_name] = set()
+                        coverage['resource_specific'][permission_key][resource_name].update(verbs)
+        
+        return coverage
+    
+    def _is_rule_covered_by_cluster(self, role_rule: Dict[str, Any], cluster_coverage: Dict[str, Any]) -> bool:
+        """
+        Check if a role rule is already covered by cluster rules
+        
+        Args:
+            role_rule: The role rule to check
+            cluster_coverage: Coverage analysis from cluster rules
+            
+        Returns:
+            True if the role rule is covered by cluster rules
+        """
+        api_groups = tuple(sorted(role_rule.get('apiGroups', [])))
+        resources = tuple(sorted(role_rule.get('resources', [])))
+        verbs = set(role_rule.get('verbs', []))
+        resource_names = role_rule.get('resourceNames', [])
+        
+        permission_key = (api_groups, resources)
+        
+        # Check for exact wildcard match
+        if permission_key in cluster_coverage['wildcard_permissions'] and not resource_names:
+            return True
+        
+        # Check for wildcard resources (e.g., ['*'] in resources) or if cluster rule covers this resource
+        for covered_key in cluster_coverage['wildcard_permissions']:
+            covered_api_groups, covered_resources = covered_key
+            if covered_api_groups == api_groups and not resource_names:
+                # Check if cluster rule has wildcard resources
+                if '*' in covered_resources:
+                    return True
+                # Check if cluster rule explicitly contains our resources
+                if any(resource in covered_resources for resource in resources):
+                    return True
+        
+        # Check specific permissions coverage
+        if permission_key in cluster_coverage['specific_permissions']:
+            cluster_verbs = cluster_coverage['specific_permissions'][permission_key]
+            if not resource_names and verbs.issubset(cluster_verbs):
+                return True
+        
+        # Check if any cluster rule covers this resource with broader permissions
+        for covered_key, cluster_verbs in cluster_coverage['specific_permissions'].items():
+            covered_api_groups, covered_resources = covered_key
+            if (covered_api_groups == api_groups and not resource_names and
+                any(resource in covered_resources for resource in resources)):
+                # Check if cluster verbs cover our verbs
+                if '*' in cluster_verbs or verbs.issubset(cluster_verbs):
+                    return True
+        
+        # Check resource-specific coverage
+        if resource_names and permission_key in cluster_coverage['resource_specific']:
+            resource_coverage = cluster_coverage['resource_specific'][permission_key]
+            for resource_name in resource_names:
+                if resource_name in resource_coverage:
+                    covered_verbs = resource_coverage[resource_name]
+                    if '*' in covered_verbs or verbs.issubset(covered_verbs):
+                        # This specific resource is covered
+                        continue
+                    else:
+                        # This resource is not fully covered
+                        return False
+                else:
+                    # This resource is not covered at all
+                    return False
+            # All resources are covered
+            return True
+        
+        return False
+    
+    def _get_api_group_and_resource(self, kind: str, api_version: str) -> tuple[str, str]:
+        """
+        Extract API group and resource type from kind and apiVersion
+        
+        Args:
+            kind: Kubernetes resource kind (e.g., 'Service', 'ClusterRole')
+            api_version: API version (e.g., 'v1', 'rbac.authorization.k8s.io/v1')
+            
+        Returns:
+            Tuple of (api_group, resource_type) or (None, '') if cannot determine
+        """
+        if not kind:
+            return None, ''
+        
+        # Extract API group from apiVersion
+        if '/' in api_version:
+            api_group = api_version.split('/')[0]
+        else:
+            # Core API group (v1, etc.) uses empty string
+            api_group = KubernetesConstants.CORE_API_GROUP
+        
+        # Convert kind to resource type (pluralize and lowercase)
+        resource_type = self._kind_to_resource_type(kind)
+        
+        return api_group, resource_type
+    
+    def _kind_to_resource_type(self, kind: str) -> str:
+        """
+        Convert Kubernetes kind to resource type
+        
+        Args:
+            kind: Kubernetes resource kind
+            
+        Returns:
+            Resource type (pluralized, lowercase)
+        """
+        # Handle special cases first
+        special_cases = {
+            'Service': 'services',
+            'ConfigMap': 'configmaps',
+            'ServiceAccount': 'serviceaccounts',
+            'ClusterRole': 'clusterroles',
+            'ClusterRoleBinding': 'clusterrolebindings',
+            'RoleBinding': 'rolebindings',
+            'CustomResourceDefinition': 'customresourcedefinitions',
+            'HorizontalPodAutoscaler': 'horizontalpodautoscalers',
+            'NetworkPolicy': 'networkpolicies',
+            'PodSecurityPolicy': 'podsecuritypolicies',
+            'PersistentVolumeClaim': 'persistentvolumeclaims',
+            'StorageClass': 'storageclasses',
+            'IngressClass': 'ingressclasses',
+            'PriorityClass': 'priorityclasses',
+            'RuntimeClass': 'runtimeclasses',
+            'VolumeAttachment': 'volumeattachments',
+            'CSIDriver': 'csidrivers',
+            'CSINode': 'csinodes',
+            'PrometheusRule': 'prometheusrules',
+            'ServiceMonitor': 'servicemonitors'
+        }
+        
+        if kind in special_cases:
+            return special_cases[kind]
+        
+        # General pluralization rules
+        kind_lower = kind.lower()
+        
+        # Handle common patterns
+        if kind_lower.endswith('y'):
+            return kind_lower[:-1] + 'ies'  # Policy -> policies
+        elif kind_lower.endswith(('s', 'sh', 'ch', 'x', 'z')):
+            return kind_lower + 'es'  # Process -> processes
+        elif kind_lower.endswith('f'):
+            return kind_lower[:-1] + 'ves'  # Leaf -> leaves
+        elif kind_lower.endswith('fe'):
+            return kind_lower[:-2] + 'ves'  # Life -> lives
+        else:
+            return kind_lower + 's'  # Most cases: Pod -> pods
+
     def _generate_operator_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Generate operator management rules following OLMv1 security practices
@@ -221,28 +756,74 @@ class BaseGenerator(ABC):
         
         return rules
     
-    def _generate_grantor_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _generate_bundled_cluster_resource_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Generate grantor rules from extracted CSV permissions
+        Generate rules for bundled cluster-scoped resources (ClusterRoles, CRDs, etc.)
         
         Args:
             bundle_metadata: Bundle metadata from OPM
             
         Returns:
-            List of RBAC rules extracted from the CSV
+            List of RBAC rules for managing cluster-scoped resources from bundle
         """
-        # Get permissions directly from bundle metadata (raw extracted permissions)
-        permissions = bundle_metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, [])
+        rules = []
+        cluster_resources = bundle_metadata.get('cluster_scoped_resources', [])
+        
+        if cluster_resources:
+            # Group cluster-scoped resources by API group and resource type
+            cluster_resource_groups = {}
+            
+            for resource in cluster_resources:
+                kind = resource.get('kind', '')
+                name = resource.get('name', '')
+                api_version = resource.get('apiVersion', '')
+                
+                # Extract API group and resource type from kind and apiVersion
+                api_group, resource_type = self._get_api_group_and_resource(kind, api_version)
+                
+                if api_group is not None and resource_type:
+                    group_key = (api_group, resource_type)
+                    if group_key not in cluster_resource_groups:
+                        cluster_resource_groups[group_key] = []
+                    
+                    if name:
+                        cluster_resource_groups[group_key].append(name)
+            
+            # Create rules for each cluster resource group
+            for (api_group, resource_type), resource_names in cluster_resource_groups.items():
+                # For cluster-scoped resources, add scoped permissions
+                if resource_names:
+                    cluster_manage_rule = {
+                        'apiGroups': [api_group],
+                        'resources': [resource_type],
+                        'verbs': [
+                            KubernetesConstants.GET_VERB,
+                            KubernetesConstants.UPDATE_VERB,
+                            KubernetesConstants.PATCH_VERB,
+                            KubernetesConstants.DELETE_VERB
+                        ],
+                        'resourceNames': resource_names
+                    }
+                    rules.append(cluster_manage_rule)
+        
+        return rules
+    
+    def _generate_grantor_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Generate grantor ClusterRole rules from ONLY cluster permissions (spec.install.clusterPermissions)
+        
+        Args:
+            bundle_metadata: Bundle metadata from OPM
+            
+        Returns:
+            List of RBAC rules from CSV cluster permissions ONLY
+        """
+        # Get ONLY cluster permissions (namespace permissions go to Role)
         cluster_permissions = bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, [])
         
         rules = []
         
-        # Extract rules from permissions (namespace-scoped)
-        for permission in permissions:
-            permission_rules = permission.get('rules', [])
-            rules.extend(permission_rules)
-        
-        # Extract rules from cluster permissions (cluster-scoped)
+        # Extract rules from cluster permissions (cluster-scoped) ONLY
         for cluster_permission in cluster_permissions:
             cluster_rules = cluster_permission.get('rules', [])
             rules.extend(cluster_rules)

@@ -27,13 +27,9 @@ class KubernetesConstants:
     RBAC_MANAGER_COMPONENT = "rbac-manager"
     OLM_COMPONENT = "olm"
     
-    # Ports
-    HTTPS_PORT = 443
-    CATALOGD_TARGET_PORT = 8443
     
     # Channels and Versions
     DEFAULT_CHANNEL = "stable"
-    LATEST_VERSION = "latest"
     
     # Resource Names
     CLUSTER_EXTENSIONS_RESOURCE = "clusterextensions"
@@ -41,8 +37,6 @@ class KubernetesConstants:
     CLUSTER_ROLE_BINDINGS_RESOURCE = "clusterrolebindings"
     CUSTOM_RESOURCE_DEFINITIONS_RESOURCE = "customresourcedefinitions"
     ROLES_RESOURCE = "roles"
-    ROLE_BINDINGS_RESOURCE = "rolebindings"
-    SERVICE_ACCOUNTS_RESOURCE = "serviceaccounts"
     
     # RBAC Verbs
     CREATE_VERB = "create"
@@ -53,6 +47,14 @@ class KubernetesConstants:
     PATCH_VERB = "patch"
     DELETE_VERB = "delete"
     WILDCARD_VERB = "*"
+    
+    # Additional API Groups (beyond the ones defined above)
+    APPS_API_GROUP = "apps"
+    
+    # Additional Resources (beyond the ones defined above)
+    DEPLOYMENTS_RESOURCE = "deployments"
+    SERVICE_ACCOUNTS_RESOURCE = "serviceaccounts"
+    ROLE_BINDINGS_RESOURCE = "rolebindings"
 
 
 class OPMConstants:
@@ -71,10 +73,6 @@ class OPMConstants:
     # Manifest kinds
     CLUSTER_SERVICE_VERSION_KIND = "ClusterServiceVersion"
     CUSTOM_RESOURCE_DEFINITION_KIND = "CustomResourceDefinition"
-    DEPLOYMENT_KIND = "Deployment"
-    SERVICE_KIND = "Service"
-    CONFIG_MAP_KIND = "ConfigMap"
-    SECRET_KIND = "Secret"
     
     # CSV Sections
     CSV_SPEC_SECTION = "spec"
@@ -84,6 +82,7 @@ class OPMConstants:
     CSV_CLUSTER_PERMISSIONS_SECTION = "clusterPermissions"
     CSV_CRD_SECTION = "customresourcedefinitions"
     CSV_OWNED_CRDS_SECTION = "owned"
+    CSV_DEPLOYMENTS_SECTION = "deployments"
     
     # Bundle metadata keys (internal storage)
     BUNDLE_PERMISSIONS_KEY = "permissions"
@@ -101,8 +100,6 @@ class NetworkConstants:
     
     # Buffer sizes
     DEFAULT_BUFFER_SIZE = 8192
-    LARGE_BUFFER_SIZE = 65536
-    LARGE_RESPONSE_THRESHOLD = 1000000  # 1MB
     
     # HTTP Status Codes
     HTTP_OK = 200
@@ -224,36 +221,3 @@ class FileConstants:
     HELM_VALUES_FILE = "values.yaml"
 
 
-class RoleConstants:
-    """RBAC role related constants"""
-    
-    # Role types
-    OPERATOR_ROLE_TYPE = "operator"
-    GRANTOR_ROLE_TYPE = "grantor"
-    
-    # Role name suffixes
-    INSTALLER_SUFFIX = "-installer"
-    CLUSTERROLE_SUFFIX = "-clusterrole"
-    RBAC_CLUSTERROLE_SUFFIX = "-rbac-clusterrole"
-    CLUSTERROLEBINDING_SUFFIX = "-clusterrolebinding"
-    RBAC_CLUSTERROLEBINDING_SUFFIX = "-rbac-clusterrolebinding"
-    ROLE_SUFFIX = "-role"
-    ROLEBINDING_SUFFIX = "-rolebinding"
-    
-    # Service account naming
-    SERVICE_ACCOUNT_SUFFIX = "-installer"
-
-
-class LoggingConstants:
-    """Logging related constants"""
-    
-    # Log levels
-    DEBUG_LEVEL = "DEBUG"
-    INFO_LEVEL = "INFO"
-    WARNING_LEVEL = "WARNING"
-    ERROR_LEVEL = "ERROR"
-    
-    # Log formats
-    DEFAULT_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
-    DEBUG_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    DATE_FORMAT = "%Y-%m-%d %H:%M:%S"

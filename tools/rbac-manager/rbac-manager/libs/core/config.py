@@ -127,7 +127,7 @@ class ConfigManager:
                     raise ConfigurationError(f"opm.{field} must be a string")
         
         # Optional boolean fields
-        boolean_fields = ['helm', 'least_privileges']
+        boolean_fields = ['helm']
         for field in boolean_fields:
             if field in opm_config and opm_config[field] is not None:
                 if not isinstance(opm_config[field], bool):
@@ -214,7 +214,6 @@ class ConfigManager:
                     "registry_token": "",
                     "helm": False,
                     "output": "./output",
-                    "least_privileges": False
                 }
             }
             

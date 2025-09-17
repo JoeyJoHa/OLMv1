@@ -17,9 +17,9 @@ HELM VALUES GENERATION:
     python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
       --helm
 
-    # Generate with least privileges
+    # Generate with Helm values
     python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
-      --helm --least-privileges
+      --helm
 
     # Custom output directory
     python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
@@ -32,7 +32,7 @@ ADVANCED OPTIONS:
 
     # Generate all outputs
     python3 rbac-manager.py --opm --image registry.redhat.io/quay/quay-operator-bundle:v3.10.0 \
-      --helm --least-privileges --output ./complete-output
+      --helm --output ./complete-output
 
 REGISTRY AUTHENTICATION:
     # Using Docker config

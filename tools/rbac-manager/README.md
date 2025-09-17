@@ -7,13 +7,18 @@ A comprehensive Python tool for extracting and managing RBAC permissions from op
 - **🔍 Catalog Discovery**: List and query OpenShift ClusterCatalogs for available operators
 - **📡 Catalogd Integration**: Port-forward to catalogd service and fetch real-time package information
 - **📦 Bundle Analysis**: Extract comprehensive metadata from operator bundle images using `opm render`
-- **🔐 Smart RBAC Generation**: Auto-generate secure RBAC resources with proper permissions logic:
+- **🔐 Smart RBAC Generation**: Auto-generate secure RBAC resources with intelligent permissions logic:
   - **Both `clusterPermissions` + `permissions`**: ClusterRoles + grantor Roles (e.g., ArgoCD)
   - **Only `permissions`**: Treat as ClusterRoles (e.g., Quay operator)
   - **Only `clusterPermissions`**: ClusterRoles only
+- **🧹 DRY Deduplication**: Advanced permission deduplication eliminates redundant rules:
+  - Removes duplicate permissions between ClusterRoles and Roles
+  - Preserves resource-specific rules with `resourceNames`
+  - Handles wildcard permissions intelligently
+  - Reduces RBAC complexity and improves security posture
 - **⚙️ Helm Integration**: Generate Helm values with mixed block/flow YAML style and security notices
 - **🏗️ Microservice Architecture**: Clean separation with BundleProcessor orchestrator
-- **🛡️ Security Best Practices**: Implements OLMv1 security patterns with least-privilege principles
+- **🛡️ Security Best Practices**: Implements OLMv1 security patterns with comprehensive RBAC optimization
 - **📋 Comprehensive Output**: ServiceAccount, ClusterRole, ClusterRoleBinding, Role, RoleBinding manifests
 - **🔧 Interactive Mode**: User-friendly prompts for catalog and package selection
 - **📊 Debug Logging**: Detailed logging for troubleshooting and analysis
@@ -207,6 +212,56 @@ python3 rbac-manager.py --opm \
 - `--namespace NAMESPACE`: Target namespace for generated manifests (default: default)
 - `--output DIR`: Save output files to directory (default: stdout)
 - `--registry-token TOKEN`: Authentication token for private registries
+
+## DRY Deduplication
+
+The RBAC Manager implements advanced **DRY (Don't Repeat Yourself)** deduplication logic to eliminate redundant permissions between ClusterRoles and Roles, resulting in cleaner, more secure RBAC configurations.
+
+### How It Works
+
+1. **Duplicate Detection**: Identifies when Role permissions are already covered by broader ClusterRole permissions
+2. **Wildcard Handling**: Recognizes when ClusterRole wildcard permissions (`verbs: ['*']`) supersede specific Role permissions
+3. **Resource-Specific Preservation**: Keeps Role rules with `resourceNames` even when broader ClusterRole permissions exist
+4. **Multi-Stage Filtering**: Applies deduplication at multiple stages for comprehensive cleanup
+
+### Example
+
+**Before Deduplication** (redundant):
+```yaml
+# ClusterRole
+- apiGroups: ['']
+  resources: [configmaps, serviceaccounts, services]
+  verbs: ['*']
+
+# Role (DUPLICATES!)
+- apiGroups: ['']
+  resources: [configmaps]
+  verbs: [create, delete, get, list, patch, update, watch]
+- apiGroups: ['']  
+  resources: [serviceaccounts]
+  verbs: [create, list, watch]
+```
+
+**After Deduplication** (optimized):
+```yaml
+# ClusterRole (unchanged)
+- apiGroups: ['']
+  resources: [configmaps, serviceaccounts, services]
+  verbs: ['*']
+
+# Role (only resource-specific permissions remain)
+- apiGroups: ['']
+  resources: [serviceaccounts]
+  verbs: [delete, get, patch, update]
+  resourceNames: [operator-controller-manager]
+```
+
+### Benefits
+
+- **🔒 Enhanced Security**: Eliminates permission redundancy and potential conflicts
+- **📉 Reduced Complexity**: Fewer RBAC rules to manage and audit
+- **🎯 Precise Permissions**: Preserves granular resource-specific access controls
+- **🚀 Automatic**: No manual intervention required - works out of the box
 
 ## Output
 

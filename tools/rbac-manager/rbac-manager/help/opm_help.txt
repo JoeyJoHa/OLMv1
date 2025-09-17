@@ -16,7 +16,6 @@ OPTIONAL FLAGS:
     --registry-token TOKEN Authentication token for private registries
     --helm                Generate Helm values files
     --output DIR          Output directory for generated files
-    --least-privileges    Apply least-privilege principles to RBAC
     --skip-tls            Skip TLS verification for insecure requests
     --debug               Enable debug logging
 
@@ -56,15 +55,15 @@ EXAMPLES:
     # Generate Helm values files
     rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --helm
 
-    # Apply least-privilege principles
-    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --least-privileges
+    # Generate RBAC with deduplication
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
 
     # Custom output directory
     rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --output ./my-operator
 
     # Combined flags
     rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
-      --helm --least-privileges --output ./quay-operator
+      --helm --output ./quay-operator
 
 IMAGE TYPES:
     - Bundle Image: Contains operator bundle metadata and manifests

@@ -19,7 +19,6 @@ CONFIGURATION FILE STRUCTURE:
         namespace: default
         skip_tls: false
         debug: false
-        least_privileges: false
         helm: false
       catalogd:
         openshift_url: null

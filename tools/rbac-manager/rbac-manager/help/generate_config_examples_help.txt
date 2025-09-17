@@ -39,7 +39,6 @@ EXAMPLE CONFIGURATION:
       registry_token: ""
       helm: false
       output: "./output"
-      least_privileges: false
 
 WORKFLOW EXAMPLES:
     # 1. Generate config template

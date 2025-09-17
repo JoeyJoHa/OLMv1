@@ -62,15 +62,15 @@ to work with operator bundles and OpenShift catalogs.
    # Generate Helm values files
    rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --helm
 
-   # Apply least-privilege principles
-   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --least-privileges
+   # Generate RBAC with deduplication
+   rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
 
    # Custom output directory
    rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 --output ./my-operator
 
    # Combined flags
    rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \
-     --helm --least-privileges --output ./quay-operator
+     --helm --output ./quay-operator
 
    # Output to stdout for piping to kubectl
    rbac-manager --opm --image quay.io/redhat/quay-operator-bundle:v3.10.13 \

@@ -68,7 +68,7 @@ oc project quay-operator
 # Deploy service account
 oc apply -f examples/yamls/01-serviceaccount.yaml
 
-# Deploy cluster role with least privilege
+# Deploy cluster role with optimized permissions
 oc apply -f examples/yamls/02-clusterrole.yaml
 
 # Create cluster role binding

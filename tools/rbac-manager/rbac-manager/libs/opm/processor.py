@@ -91,6 +91,9 @@ class BundleProcessor:
         processed.setdefault('install_modes', {})
         processed.setdefault('has_webhooks', False)
         
+        # Process all bundle objects systematically
+        self._process_bundle_objects(processed)
+        
         # Process permissions for easier consumption
         processed['rbac_rules'] = self._extract_rbac_rules(processed)
         
@@ -98,6 +101,139 @@ class BundleProcessor:
         processed['summary'] = self._create_summary(processed)
         
         return processed
+    
+    def _process_bundle_objects(self, metadata: Dict[str, Any]) -> None:
+        """
+        Process all bundle objects systematically based on their Kind
+        
+        Args:
+            metadata: Bundle metadata dictionary to update
+        """
+        try:
+            # Initialize resource collections
+            cluster_scoped_resources = []
+            namespace_scoped_resources = []
+            
+            # Get raw bundle data
+            bundle_data = metadata.get('_raw_bundle_data', [])
+            
+            for item in bundle_data:
+                properties = item.get('properties', [])
+                
+                for prop in properties:
+                    if prop.get('type') == OPMConstants.OLM_BUNDLE_OBJECT_PROPERTY:
+                        try:
+                            # Decode base64 data
+                            import base64
+                            import json
+                            
+                            data = prop.get('value', {}).get('data', '')
+                            if data:
+                                decoded_data = base64.b64decode(data).decode('utf-8')
+                                resource = json.loads(decoded_data)
+                                
+                                # Process resource based on its kind
+                                kind = resource.get('kind', '')
+                                if kind:
+                                    resource_info = self._create_resource_info(resource)
+                                    
+                                    # Categorize by scope
+                                    if self._is_cluster_scoped_resource(kind):
+                                        cluster_scoped_resources.append(resource_info)
+                                    elif self._is_namespace_scoped_resource(kind):
+                                        namespace_scoped_resources.append(resource_info)
+                                    
+                        except Exception as e:
+                            logger.debug(f"Failed to decode bundle object: {e}")
+                            continue
+            
+            # Store processed resources
+            metadata['cluster_scoped_resources'] = cluster_scoped_resources
+            metadata['namespace_scoped_resources'] = namespace_scoped_resources
+            
+            logger.debug(f"Processed bundle objects: {len(cluster_scoped_resources)} cluster-scoped, "
+                        f"{len(namespace_scoped_resources)} namespace-scoped")
+            
+        except Exception as e:
+            logger.warning(f"Failed to process bundle objects: {e}")
+            metadata['cluster_scoped_resources'] = []
+            metadata['namespace_scoped_resources'] = []
+    
+    def _create_resource_info(self, resource: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create standardized resource information
+        
+        Args:
+            resource: Kubernetes resource manifest
+            
+        Returns:
+            Standardized resource info dictionary
+        """
+        metadata = resource.get('metadata', {})
+        return {
+            'kind': resource.get('kind', ''),
+            'name': metadata.get('name', ''),
+            'apiVersion': resource.get('apiVersion', ''),
+            'namespace': metadata.get('namespace'),  # Will be None for cluster-scoped
+            'labels': metadata.get('labels', {}),
+            'annotations': metadata.get('annotations', {})
+        }
+    
+    def _is_cluster_scoped_resource(self, kind: str) -> bool:
+        """
+        Determine if a resource kind is cluster-scoped
+        
+        Args:
+            kind: Kubernetes resource kind
+            
+        Returns:
+            True if cluster-scoped, False otherwise
+        """
+        # Standard Kubernetes cluster-scoped resources
+        cluster_scoped_kinds = {
+            'ClusterRole', 'ClusterRoleBinding', 'CustomResourceDefinition',
+            'PersistentVolume', 'StorageClass', 'VolumeAttachment',
+            'CSIDriver', 'CSINode', 'CSIStorageCapacity',
+            'IngressClass', 'RuntimeClass', 'PriorityClass',
+            'PodSecurityPolicy', 'NetworkPolicy', 'MutatingWebhookConfiguration',
+            'ValidatingWebhookConfiguration', 'APIService', 'TokenReview',
+            'CertificateSigningRequest', 'FlowSchema', 'PriorityLevelConfiguration'
+        }
+        
+        # OpenShift-specific cluster-scoped resources
+        openshift_cluster_scoped = {
+            'ClusterOperator', 'DNS', 'Infrastructure', 'Network', 'OAuth',
+            'Project', 'Security', 'Scheduler', 'Image', 'ClusterVersion',
+            'OperatorHub', 'Proxy', 'Build', 'ImageStream', 'Template',
+            'Route', 'SecurityContextConstraints'
+        }
+        
+        return kind in cluster_scoped_kinds or kind in openshift_cluster_scoped
+    
+    def _is_namespace_scoped_resource(self, kind: str) -> bool:
+        """
+        Determine if a resource kind is namespace-scoped
+        
+        Args:
+            kind: Kubernetes resource kind
+            
+        Returns:
+            True if namespace-scoped, False otherwise
+        """
+        # Standard Kubernetes namespace-scoped resources
+        namespace_scoped_kinds = {
+            'Pod', 'Service', 'ServiceAccount', 'Secret', 'ConfigMap',
+            'Deployment', 'ReplicaSet', 'StatefulSet', 'DaemonSet', 'Job',
+            'CronJob', 'Ingress', 'PersistentVolumeClaim', 'Role', 'RoleBinding',
+            'NetworkPolicy', 'PodDisruptionBudget', 'HorizontalPodAutoscaler',
+            'VerticalPodAutoscaler', 'Event', 'Endpoints', 'EndpointSlice',
+            'LimitRange', 'ResourceQuota', 'ServiceMonitor', 'PrometheusRule'
+        }
+        
+        # If not explicitly cluster-scoped and looks like a standard resource, assume namespace-scoped
+        return (kind in namespace_scoped_kinds or 
+                (not self._is_cluster_scoped_resource(kind) and 
+                 kind not in {'ClusterServiceVersion'}))  # CSV is special case
     
     def _extract_rbac_rules(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
