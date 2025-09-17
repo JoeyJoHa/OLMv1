@@ -320,7 +320,7 @@ class CatalogdClient:
                     f"  • The catalog is not in 'Serving' state\n\n"
                     f"Available catalogs: {available_catalogs}\n\n"
                     f"To list all available catalogs, run:\n"
-                    f"  python3 rbac-manager.py --list-catalogs"
+                    f"  python3 rbac-manager.py list-catalogs"
                 )
             elif "timeout" in error_str.lower() or "connection" in error_str.lower():
                 raise CatalogdError(
@@ -382,12 +382,12 @@ class CatalogdClient:
                 # Try to get a quick list of common catalog names
                 services = self.core_api.list_namespaced_service(namespace=KubernetesConstants.OPENSHIFT_CATALOGD_NAMESPACE)
                 if services.items:
-                    return "Use --list-catalogs to see all available catalogs"
+                    return "Use list-catalogs to see all available catalogs"
                 else:
                     return "No catalogd services found (catalogd may not be installed)"
         except Exception:
             pass
-        return "Use --list-catalogs to see available catalogs"
+        return "Use list-catalogs to see available catalogs"
     
     def get_performance_stats(self) -> Dict[str, Any]:
         """

@@ -155,7 +155,7 @@ class ErrorMessages:
         "  • The catalog is not in 'Serving' state\n\n"
         "Available catalogs: {available_catalogs}\n\n"
         "To list all available catalogs, run:\n"
-        "  python3 rbac-manager.py --list-catalogs"
+        "  python3 rbac-manager.py list-catalogs"
     )
     
     # OPM errors

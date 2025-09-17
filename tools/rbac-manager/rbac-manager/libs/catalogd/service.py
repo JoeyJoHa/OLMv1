@@ -179,7 +179,7 @@ class CatalogdService:
                 f"Catalog name '{catalog_name}' appears to be misspelled.\n"
                 f"Did you mean: {', '.join(suggestions)}?\n\n"
                 f"To see all available catalogs, run:\n"
-                f"  python3 rbac-manager.py --list-catalogs"
+                f"  python3 rbac-manager.py list-catalogs"
             )
         
         # Check for obviously invalid characters
@@ -188,7 +188,7 @@ class CatalogdService:
                 f"Catalog name '{catalog_name}' contains invalid characters.\n"
                 f"Catalog names should only contain lowercase letters, numbers, and hyphens.\n\n"
                 f"To see all available catalogs, run:\n"
-                f"  python3 rbac-manager.py --list-catalogs"
+                f"  python3 rbac-manager.py list-catalogs"
             )
         
         return True
