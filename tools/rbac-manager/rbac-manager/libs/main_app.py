@@ -528,7 +528,7 @@ def configure_authentication(rbac_manager, args):
 
 def generate_config_file(args, extracted_data=None, output_path=None):
     """
-    Generate configuration file with extracted values or default template.
+    Generate configuration file using ConfigManager (DRY principle).
     
     Args:
         args: Parsed command-line arguments
@@ -538,68 +538,28 @@ def generate_config_file(args, extracted_data=None, output_path=None):
     Returns:
         str: Path to generated config file
     """
-    import yaml
-    from pathlib import Path
+    config_manager = ConfigManager()
     
     # Determine output directory
     if output_path:
-        output_dir = Path(output_path)
+        output_dir = output_path
     elif hasattr(args, 'output') and args.output:
-        output_dir = Path(args.output)
+        output_dir = args.output
     else:
-        output_dir = Path('./config')
+        output_dir = './config'
     
-    output_dir.mkdir(exist_ok=True)
-    config_file = output_dir / 'rbac-manager-config.yaml'
-    
-    # Build configuration structure
-    config_data = {
-        'operator': {
-            'image': extracted_data.get('bundle_image', 'image-url') if extracted_data else 'image-url',
-            'namespace': getattr(args, 'namespace', 'default'),
-            'channel': extracted_data.get('channel', 'channel-name') if extracted_data else 'channel-name',
-            'packageName': extracted_data.get('package', 'package-name') if extracted_data else 'package-name',
-            'version': extracted_data.get('version', 'version') if extracted_data else 'version'
-        },
-        'output': {
-            'mode': 'file' if (hasattr(args, 'output') and args.output) else 'stdout',
-            'type': 'helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
-            'path': getattr(args, 'output', './output') or './output'
-        },
-        'global': {
-            'skip_tls': getattr(args, 'skip_tls', False),
-            'debug': getattr(args, 'debug', False),
-            'registry_token': getattr(args, 'registry_token', '') or ''
-        }
-    }
-    
-    # Add comments to the YAML
-    yaml_content = f"""# RBAC Manager Configuration File
-# Generated from {'extracted values' if extracted_data else 'template'}
-
-operator:
-  image: "{config_data['operator']['image']}" # Bundle image URL
-  namespace: "{config_data['operator']['namespace']}" # Target namespace for generated RBAC Manifests
-  channel: "{config_data['operator']['channel']}" # Channel name (extracted from catalogd)
-  packageName: "{config_data['operator']['packageName']}" # Package name (extracted from catalogd or opm)
-  version: "{config_data['operator']['version']}" # Version (extracted from catalogd or opm)
-
-output:
-  mode: {config_data['output']['mode']} # stdout or file
-  type: {config_data['output']['type']} # yaml or helm
-  path: "{config_data['output']['path']}" # Output directory if mode is file
-
-global:
-  skip_tls: {str(config_data['global']['skip_tls']).lower()} # Skip TLS verification for insecure requests True or False
-  debug: {str(config_data['global']['debug']).lower()} # Enable debug logging True or False
-  registry_token: "{config_data['global']['registry_token']}" # Registry token for private registry
-"""
-    
-    # Write the config file
-    with open(config_file, 'w') as f:
-        f.write(yaml_content)
-    
-    return str(config_file)
+    if extracted_data:
+        # Generate config with extracted values
+        return config_manager.generate_config_with_values(
+            extracted_data=extracted_data,
+            output_dir=output_dir,
+            output_mode='file' if (hasattr(args, 'output') and args.output) else 'stdout',
+            output_type='helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
+            namespace=getattr(args, 'namespace', 'default')
+        )
+    else:
+        # Generate template config
+        return config_manager.generate_config_template(output_dir=output_dir)
 
 
 def merge_config_with_args(args, config, command_name: str):

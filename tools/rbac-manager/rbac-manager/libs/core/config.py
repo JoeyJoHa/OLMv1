@@ -78,11 +78,21 @@ class ConfigManager:
         if 'debug' in self.config_data and not isinstance(self.config_data['debug'], bool):
             raise ConfigurationError("debug must be a boolean value")
         
-        # Validate catalogd section
+        # Validate new config structure
+        if 'operator' in self.config_data:
+            self._validate_operator_config(self.config_data['operator'])
+        
+        if 'output' in self.config_data:
+            self._validate_output_config(self.config_data['output'])
+            
+        if 'global' in self.config_data:
+            self._validate_global_config(self.config_data['global'])
+        
+        # Validate legacy catalogd section (for backward compatibility)
         if 'catalogd' in self.config_data:
             self._validate_catalogd_config(self.config_data['catalogd'])
         
-        # Validate opm section
+        # Validate legacy opm section (for backward compatibility)
         if 'opm' in self.config_data:
             self._validate_opm_config(self.config_data['opm'])
     
@@ -132,6 +142,79 @@ class ConfigManager:
             if field in opm_config and opm_config[field] is not None:
                 if not isinstance(opm_config[field], bool):
                     raise ConfigurationError(f"opm.{field} must be a boolean")
+    
+    def _validate_operator_config(self, operator_config: Dict[str, Any]) -> None:
+        """
+        Validate operator configuration section
+        
+        Args:
+            operator_config: Operator configuration dictionary
+            
+        Raises:
+            ConfigurationError: If operator configuration is invalid
+        """
+        if not isinstance(operator_config, dict):
+            raise ConfigurationError("operator configuration must be a dictionary")
+        
+        # Optional string fields
+        string_fields = ['image', 'namespace', 'channel', 'packageName', 'version']
+        for field in string_fields:
+            if field in operator_config and operator_config[field] is not None:
+                if not isinstance(operator_config[field], str):
+                    raise ConfigurationError(f"operator.{field} must be a string")
+    
+    def _validate_output_config(self, output_config: Dict[str, Any]) -> None:
+        """
+        Validate output configuration section
+        
+        Args:
+            output_config: Output configuration dictionary
+            
+        Raises:
+            ConfigurationError: If output configuration is invalid
+        """
+        if not isinstance(output_config, dict):
+            raise ConfigurationError("output configuration must be a dictionary")
+        
+        # Validate mode
+        if 'mode' in output_config:
+            if output_config['mode'] not in ['stdout', 'file']:
+                raise ConfigurationError("output.mode must be 'stdout' or 'file'")
+        
+        # Validate type
+        if 'type' in output_config:
+            if output_config['type'] not in ['yaml', 'helm']:
+                raise ConfigurationError("output.type must be 'yaml' or 'helm'")
+        
+        # Validate path (string)
+        if 'path' in output_config and output_config['path'] is not None:
+            if not isinstance(output_config['path'], str):
+                raise ConfigurationError("output.path must be a string")
+    
+    def _validate_global_config(self, global_config: Dict[str, Any]) -> None:
+        """
+        Validate global configuration section
+        
+        Args:
+            global_config: Global configuration dictionary
+            
+        Raises:
+            ConfigurationError: If global configuration is invalid
+        """
+        if not isinstance(global_config, dict):
+            raise ConfigurationError("global configuration must be a dictionary")
+        
+        # Boolean fields
+        boolean_fields = ['skip_tls', 'debug']
+        for field in boolean_fields:
+            if field in global_config and global_config[field] is not None:
+                if not isinstance(global_config[field], bool):
+                    raise ConfigurationError(f"global.{field} must be a boolean")
+        
+        # String fields
+        if 'registry_token' in global_config and global_config['registry_token'] is not None:
+            if not isinstance(global_config['registry_token'], str):
+                raise ConfigurationError("global.registry_token must be a string")
     
     def get_config(self) -> Dict[str, Any]:
         """
@@ -190,30 +273,27 @@ class ConfigManager:
         """
         try:
             template = {
-                "# RBAC Manager Configuration": None,
-                "# This file contains default values for RBAC Manager commands": None,
+                "# RBAC Manager Configuration File": None,
+                "# Generated from template": None,
                 "": None,
-                "# Global settings": None,
-                "skip_tls": False,
-                "debug": False,
-                "": None,
-                "# Catalogd settings": None,
-                "catalogd": {
-                    "catalog_name": "",
-                    "openshift_url": "",
-                    "openshift_token": "",
-                    "package": "",
-                    "channel": "",
-                    "version": ""
+                "operator": {
+                    "image": "image-url",
+                    "namespace": KubernetesConstants.DEFAULT_NAMESPACE,
+                    "channel": "channel-name",
+                    "packageName": "package-name",
+                    "version": "version"
                 },
                 "": None,
-                "# OPM settings": None,
-                "opm": {
-                    "image": "",
-                    "namespace": KubernetesConstants.DEFAULT_NAMESPACE,
-                    "registry_token": "",
-                    "helm": False,
-                    "output": "./output",
+                "output": {
+                    "mode": "stdout",
+                    "type": "yaml",
+                    "path": "./output"
+                },
+                "": None,
+                "global": {
+                    "skip_tls": False,
+                    "debug": False,
+                    "registry_token": ""
                 }
             }
             
@@ -270,3 +350,69 @@ class ConfigManager:
                 yaml_lines.append(f"{indent_str}{key}: {value}")
         
         return "\n".join(yaml_lines)
+    
+    def generate_config_with_values(self, extracted_data: Dict[str, Any], output_dir: str = None, 
+                                  output_mode: str = "stdout", output_type: str = "yaml", 
+                                  namespace: str = None) -> str:
+        """
+        Generate configuration file with extracted values
+        
+        Args:
+            extracted_data: Dictionary with extracted values (bundle_image, channel, package, version)
+            output_dir: Directory to save config (optional)
+            output_mode: Output mode (stdout or file)
+            output_type: Output type (yaml or helm)
+            namespace: Target namespace
+            
+        Returns:
+            str: Path to generated config file
+            
+        Raises:
+            ConfigurationError: If config generation fails
+        """
+        try:
+            template = {
+                "# RBAC Manager Configuration File": None,
+                "# Generated from extracted values": None,
+                "": None,
+                "operator": {
+                    "image": extracted_data.get('bundle_image', 'image-url'),
+                    "namespace": namespace or KubernetesConstants.DEFAULT_NAMESPACE,
+                    "channel": extracted_data.get('channel', 'channel-name'),
+                    "packageName": extracted_data.get('package', 'package-name'),
+                    "version": extracted_data.get('version', 'version')
+                },
+                "": None,
+                "output": {
+                    "mode": output_mode,
+                    "type": output_type,
+                    "path": output_dir or "./output"
+                },
+                "": None,
+                "global": {
+                    "skip_tls": False,
+                    "debug": False,
+                    "registry_token": ""
+                }
+            }
+            
+            # Determine output path
+            if output_dir:
+                output_path = Path(output_dir)
+                output_path.mkdir(parents=True, exist_ok=True)
+                config_file = output_path / FileConstants.DEFAULT_CONFIG_FILE
+            else:
+                config_file = Path('./config') / FileConstants.DEFAULT_CONFIG_FILE
+                config_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Generate YAML content manually to preserve comments
+            yaml_content = self._dict_to_yaml_with_comments(template)
+            
+            with open(config_file, 'w') as f:
+                f.write(yaml_content)
+            
+            logger.info(f"Configuration file generated: {config_file}")
+            return str(config_file)
+            
+        except Exception as e:
+            raise ConfigurationError(f"Failed to generate configuration file: {e}")
