@@ -278,30 +278,21 @@ class CatalogdClient:
         if "404" in error_str or "not found" in error_str:
             available_catalogs = self._get_available_catalogs_hint()
             return CatalogdError(
-                f"Catalog '{catalog_name}' not found on the cluster.\n"
-                f"This could mean:\n"
-                f"  • The catalog name is misspelled\n"
-                f"  • The catalog is not installed on this cluster\n"
-                f"  • The catalog is not in 'Serving' state\n\n"
-                f"Available catalogs: {available_catalogs}\n\n"
-                f"To list all available catalogs, run:\n"
-                f"  python3 rbac-manager.py list-catalogs"
+                str(ErrorMessages.CatalogdError.CATALOG_NOT_FOUND).format(
+                    catalog_name=catalog_name,
+                    available_catalogs=available_catalogs
+                )
             )
+        
+        # Handle connection refused errors (check this before generic connection errors)
+        elif "connection refused" in error_str:
+            return CatalogdError(str(ErrorMessages.NetworkError.CONNECTION_REFUSED))
         
         # Handle connection timeout and network errors
         elif "timeout" in error_str or "connection" in error_str:
-            return CatalogdError(
-                f"Connection timeout or network error occurred.\n"
-                f"This could mean:\n"
-                f"  • The catalogd service is not responding\n"
-                f"  • Network connectivity issues to the cluster\n"
-                f"  • The port-forward connection was interrupted\n\n"
-                f"Try:\n"
-                f"  • Checking cluster connectivity: kubectl get pods -n openshift-catalogd\n"
-                f"  • Retrying the command\n"
-                f"  • Using --debug flag for more detailed logs\n\n"
-                f"Original error: {error}"
-            )
+            # Append original error to the template
+            timeout_message = str(ErrorMessages.NetworkError.CONNECTION_TIMEOUT)
+            return CatalogdError(f"{timeout_message}\n\nOriginal error: {error}")
         
         # Handle authentication/authorization errors
         elif "unauthorized" in error_str or "403" in error_str:
@@ -318,26 +309,10 @@ class CatalogdClient:
                 f"Original error: {error}"
             )
         
-        # Handle connection refused errors
-        elif "connection refused" in error_str:
-            return CatalogdError(
-                f"Connection refused to catalogd service.\n"
-                f"This usually means:\n"
-                f"  • The catalogd service is not running\n"
-                f"  • Port-forward failed to establish\n"
-                f"  • Firewall or network policy blocking connection\n\n"
-                f"Try:\n"
-                f"  • Checking catalogd status: kubectl get pods -n openshift-catalogd\n"
-                f"  • Verifying service: kubectl get svc -n openshift-catalogd\n"
-                f"  • Retrying with --debug for detailed logs"
-            )
-        
         # Handle SSL certificate errors
         elif "ssl" in error_str and "certificate" in error_str:
             return CatalogdError(
-                f"SSL certificate error occurred.\n"
-                f"If using self-signed certificates, add --skip-tls flag.\n"
-                f"Original error: {error}"
+                str(ErrorMessages.SSLError.CONNECTION_ERROR).format(error=error)
             )
         
         # Handle all other network errors
