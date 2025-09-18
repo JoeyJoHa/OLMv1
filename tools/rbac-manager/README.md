@@ -346,6 +346,7 @@ The RBAC Manager implements comprehensive **DRY (Don't Repeat Yourself)** princi
 The entire codebase has been refactored following DRY principles:
 
 #### **Eliminated Code Duplication Across:**
+
 - **Generator Classes**: Shared formatting logic in `BaseGenerator` eliminates 67+ lines of duplication
 - **Error Handling**: Decorator patterns and centralized error handling across 15+ classes
 - **Network Operations**: Shared HTTP client logic and response handling patterns
@@ -355,6 +356,7 @@ The entire codebase has been refactored following DRY principles:
 - **Constants**: Enum-based constants replace scattered magic numbers and strings
 
 #### **Architectural Patterns Applied:**
+
 - **Single Responsibility Principle**: Classes focused on single concerns
 - **Dependency Injection**: Protocol-based interfaces for better testability
 - **Template Method Pattern**: Base classes with shared logic and customizable behavior
@@ -398,12 +400,14 @@ The entire codebase has been refactored following DRY principles:
 ### Benefits
 
 #### **RBAC Security Benefits:**
+
 - **🔒 Enhanced Security**: Eliminates permission redundancy and potential conflicts
 - **📉 Reduced Complexity**: Fewer RBAC rules to manage and audit
 - **🎯 Precise Permissions**: Preserves granular resource-specific access controls
 - **🚀 Automatic**: No manual intervention required - works out of the box
 
 #### **Code Quality Benefits:**
+
 - **🧹 Maintainability**: Single source of truth for common functionality
 - **🐛 Reduced Bugs**: Less code duplication means fewer places for bugs to hide
 - **⚡ Faster Development**: Shared components accelerate feature development
