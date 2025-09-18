@@ -687,7 +687,7 @@ class CatalogdTestSuite:
             ])
             
             # Check if config file was created
-            config_files = list(Path(temp_dir).glob("rbac-manager-config.yaml"))
+            config_files = list(Path(temp_dir).glob("*-rbac-config.yaml"))
             success = (
                 result["exit_code"] == 0 and
                 len(config_files) == 1 and

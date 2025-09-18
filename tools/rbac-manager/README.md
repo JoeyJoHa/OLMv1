@@ -247,13 +247,13 @@ Extract metadata from operator bundle images and generate RBAC resources:
 **Using configuration file (YAML manifests):**
 
 ```bash
-python3 rbac-manager.py opm --config rbac-manager-config.yaml
+python3 rbac-manager.py opm --config operatorname-rbac-config.yaml
 ```
 
 **Using configuration file (Helm values) - modify config file to set `output.type: helm`:**
 
 ```bash
-python3 rbac-manager.py opm --config rbac-manager-config.yaml
+python3 rbac-manager.py opm --config operatorname-rbac-config.yaml
 ```
 
 **Direct bundle extraction (YAML manifests):**
@@ -295,10 +295,10 @@ python3 rbac-manager.py catalogd --generate-config \
   --output ./config
 
 # Step 3: Extract RBAC using configuration
-python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+python3 rbac-manager.py opm --config ./config/operatorname-rbac-config.yaml
 
 # Step 4: For Helm values, modify config file to set output.type: helm, then:
-python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+python3 rbac-manager.py opm --config ./config/operatorname-rbac-config.yaml
 ```
 
 ### Command-Specific Flags

@@ -339,7 +339,7 @@ class FileConstants:
     """File and directory related constants with improved enum-based structure"""
     
     # Configuration file constants - simple attributes for configurable values
-    DEFAULT_CONFIG_FILE = "rbac-manager-config.yaml"
+    DEFAULT_CONFIG_FILE = "operatorname-rbac-config.yaml"
     AUTH_FILE_NAME = "auth.json"
     HELM_VALUES_FILE = "values.yaml"
     

@@ -85,7 +85,7 @@ python3 rbac-manager.py catalogd --generate-config \
 
 ```bash
 # Using configuration file (recommended)
-python3 rbac-manager.py opm --config rbac-manager-config.yaml
+python3 rbac-manager.py opm --config operatorname-rbac-config.yaml
 
 # Direct bundle extraction
 python3 rbac-manager.py opm \
@@ -94,7 +94,7 @@ python3 rbac-manager.py opm \
 
 # Save RBAC to files
 python3 rbac-manager.py opm \
-  --config rbac-manager-config.yaml \
+  --config operatorname-rbac-config.yaml \
   --output ./rbac-files
 ```
 
@@ -115,7 +115,7 @@ python3 rbac-manager.py catalogd --generate-config \
   --output ./config
 
 # Step 3: Extract RBAC
-python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+python3 rbac-manager.py opm --config ./config/operatorname-rbac-config.yaml
 
 # Step 4: Deploy RBAC resources
 kubectl apply -f argocd-operator-serviceaccount-*.yaml

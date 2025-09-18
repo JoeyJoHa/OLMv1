@@ -366,6 +366,24 @@ class ConfigManager:
         
         return self._dict_to_yaml_with_comments(template)
     
+    def _generate_config_filename(self, package_name: str = None) -> str:
+        """
+        Generate configuration filename based on operator name (DRY helper)
+        
+        Args:
+            package_name: Name of the operator package
+            
+        Returns:
+            str: Generated configuration filename
+        """
+        if package_name:
+            # Sanitize the package name for filename use
+            from .utils import sanitize_filename
+            sanitized_name = sanitize_filename(package_name)
+            return f"{sanitized_name}-rbac-config.yaml"
+        else:
+            return FileConstants.DEFAULT_CONFIG_FILE
+    
     def generate_config_with_values(self, extracted_data: Dict[str, Any], output_dir: str = None, 
                                   output_mode: str = "stdout", output_type: str = "yaml", 
                                   namespace: str = None) -> str:
@@ -393,5 +411,10 @@ class ConfigManager:
             namespace=namespace
         )
         
-        # Use helper method with custom default path for config with values
-        return self._write_config_file(yaml_content, output_dir, './config/rbac-manager-config.yaml')
+        # Generate filename based on package name (DRY approach)
+        package_name = extracted_data.get('package', None)
+        config_filename = self._generate_config_filename(package_name)
+        default_path = f'./config/{config_filename}'
+        
+        # Use helper method with dynamically generated default path
+        return self._write_config_file(yaml_content, output_dir, default_path)

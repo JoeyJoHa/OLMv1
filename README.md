@@ -157,7 +157,7 @@ python3 rbac-manager.py catalogd --generate-config \
   --openshift-token sha256~token
 
 # Extract RBAC using generated configuration
-python3 rbac-manager.py opm --config rbac-manager-config.yaml
+python3 rbac-manager.py opm --config nginx-ingress-operator-rbac-config.yaml
 
 # Direct RBAC extraction with bundle image
 python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --helm
@@ -220,11 +220,11 @@ python3 rbac-manager.py catalogd --generate-config \
   --output ./config
 
 # Step 3: Extract RBAC using configuration (YAML manifests)
-python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+python3 rbac-manager.py opm --config ./config/nginx-ingress-operator-rbac-config.yaml
 
 # Step 4: Extract RBAC using configuration (Helm values)
 # First, modify config file to set output.type: helm
-python3 rbac-manager.py opm --config ./config/rbac-manager-config.yaml
+python3 rbac-manager.py opm --config ./config/nginx-ingress-operator-rbac-config.yaml
 
 # Alternative: Generate template config for reuse
 python3 rbac-manager.py catalogd --generate-config --output ./templates

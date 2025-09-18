@@ -408,7 +408,7 @@ class WorkflowTestSuite:
                 return test_result
             
             # Check if config file was created
-            config_files = list(Path(temp_dir).glob("rbac-manager-config.yaml"))
+            config_files = list(Path(temp_dir).glob("*-rbac-config.yaml"))
             if not config_files:
                 test_result["success"] = False
                 test_result["details"]["step1_generate_config"]["error"] = "Config file not created"
@@ -499,7 +499,7 @@ class WorkflowTestSuite:
                 return test_result
             
             # Modify config file to use Helm output
-            config_files = list(Path(temp_dir).glob("rbac-manager-config.yaml"))
+            config_files = list(Path(temp_dir).glob("*-rbac-config.yaml"))
             if not config_files:
                 test_result["success"] = False
                 test_result["details"]["step1_generate_config"]["error"] = "Config file not created"
