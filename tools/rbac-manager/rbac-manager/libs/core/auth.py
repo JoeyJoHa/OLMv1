@@ -68,6 +68,69 @@ class OpenShiftAuth:
         except Exception as e:
             raise AuthenticationError(f"Failed to configure authentication: {e}")
     
+    def _initialize_api_clients(self, configuration: Optional[client.Configuration] = None) -> bool:
+        """
+        Initialize Kubernetes API clients and apply TLS settings
+        
+        Args:
+            configuration: Optional Kubernetes configuration object
+            
+        Returns:
+            bool: True if initialization successful
+            
+        Raises:
+            AuthenticationError: If client initialization fails
+        """
+        try:
+            # Apply TLS settings before initializing clients
+            if configuration:
+                # Apply TLS settings to provided configuration
+                if self.skip_tls:
+                    configuration.verify_ssl = False
+                    configuration.ssl_ca_cert = None
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                
+                client.Configuration.set_default(configuration)
+                api_client = client.ApiClient(configuration)
+            else:
+                api_client = client.ApiClient()
+                configuration = api_client.configuration
+                
+                # Apply TLS settings to discovered configuration
+                if self.skip_tls:
+                    configuration.verify_ssl = False
+                    configuration.ssl_ca_cert = None
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
+            # Initialize API clients
+            self.k8s_client = api_client
+            self.custom_api = client.CustomObjectsApi(self.k8s_client)
+            self.core_api = client.CoreV1Api(self.k8s_client)
+            
+            # Extract cluster info from active configuration
+            if hasattr(configuration, 'host') and configuration.host:
+                self.openshift_url = configuration.host
+            
+            # Extract token from configuration if available
+            if hasattr(configuration, 'api_key') and configuration.api_key:
+                auth_header = configuration.api_key.get('authorization', '')
+                if auth_header.startswith('Bearer '):
+                    self.openshift_token = auth_header[7:]  # Remove 'Bearer ' prefix
+                elif auth_header:
+                    self.openshift_token = auth_header
+            
+            # Mask sensitive information in URL for logging
+            if self.openshift_url:
+                from .utils import mask_sensitive_info
+                masked_url = mask_sensitive_info(self.openshift_url, self.openshift_url)
+                logger.info(f"Successfully configured Kubernetes client for {masked_url}")
+            
+            return True
+            
+        except Exception as e:
+            # Use centralized SSL error handler
+            handle_ssl_error(e, AuthenticationError)
+    
     def _configure_kubernetes_client_with_token(self) -> bool:
         """
         Configure Kubernetes client using URL and token
@@ -85,25 +148,8 @@ class OpenShiftAuth:
             configuration.api_key = {"authorization": self.openshift_token}
             configuration.api_key_prefix = {"authorization": "Bearer"}
             
-            if self.skip_tls:
-                configuration.verify_ssl = False
-                configuration.ssl_ca_cert = None
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            
-            # Set the configuration as default
-            client.Configuration.set_default(configuration)
-            
-            # Initialize API clients
-            self.k8s_client = client.ApiClient(configuration)
-            self.custom_api = client.CustomObjectsApi(self.k8s_client)
-            self.core_api = client.CoreV1Api(self.k8s_client)
-            
-            # Mask sensitive information in URL for logging
-            from .utils import mask_sensitive_info
-            masked_url = mask_sensitive_info(self.openshift_url, self.openshift_url)
-            
-            logger.info(f"Successfully configured Kubernetes client for {masked_url}")
-            return True
+            # Use shared helper to initialize API clients and apply TLS settings
+            return self._initialize_api_clients(configuration)
             
         except Exception as e:
             # Use centralized SSL error handler
@@ -125,32 +171,6 @@ class OpenShiftAuth:
                 config.load_kube_config()
                 logger.info("Successfully loaded kubeconfig")
                 
-                # Extract current context info
-                contexts, active_context = config.list_kube_config_contexts()
-                if active_context:
-                    cluster_info = active_context.get('context', {}).get('cluster')
-                    if cluster_info:
-                        # Load the full config to get cluster URL
-                        kube_config = config.kube_config.KUBE_CONFIG_DEFAULT_LOCATION
-                        if os.path.exists(os.path.expanduser(kube_config)):
-                            with open(os.path.expanduser(kube_config), 'r') as f:
-                                config_data = yaml.safe_load(f)
-                                
-                            # Find cluster URL
-                            for cluster in config_data.get('clusters', []):
-                                if cluster.get('name') == cluster_info:
-                                    self.openshift_url = cluster.get('cluster', {}).get('server')
-                                    break
-                        
-                        # Extract token if available
-                        user_info = active_context.get('context', {}).get('user')
-                        if user_info:
-                            for user in config_data.get('users', []):
-                                if user.get('name') == user_info:
-                                    user_data = user.get('user', {})
-                                    self.openshift_token = user_data.get('token')
-                                    break
-                
             except Exception as kubeconfig_error:
                 logger.warning(f"Failed to load kubeconfig: {kubeconfig_error}")
                 
@@ -159,33 +179,18 @@ class OpenShiftAuth:
                     config.load_incluster_config()
                     logger.info("Successfully loaded in-cluster config")
                     
-                    # For in-cluster, we can get the API server URL from environment
-                    self.openshift_url = f"https://{os.getenv('KUBERNETES_SERVICE_HOST')}:{os.getenv('KUBERNETES_SERVICE_PORT', '443')}"
-                    
-                    # Token is automatically handled by in-cluster config
-                    token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
-                    if os.path.exists(token_path):
-                        with open(token_path, 'r') as f:
-                            self.openshift_token = f.read().strip()
-                            
                 except Exception as incluster_error:
                     logger.warning(f"Failed to load in-cluster config: {incluster_error}")
                     return False
             
-            # Initialize API clients
-            self.k8s_client = client.ApiClient()
-            self.custom_api = client.CustomObjectsApi(self.k8s_client)
-            self.core_api = client.CoreV1Api(self.k8s_client)
+            # Use shared helper to initialize API clients and extract configuration
+            # The kubernetes client library automatically handles URL and token extraction
+            success = self._initialize_api_clients()
             
-            if self.skip_tls:
-                # Configure SSL settings for discovered config
-                configuration = self.k8s_client.configuration
-                configuration.verify_ssl = False
-                configuration.ssl_ca_cert = None
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            if success:
+                logger.info("Successfully discovered authentication from context")
             
-            logger.info("Successfully discovered authentication from context")
-            return True
+            return success
             
         except Exception as e:
             # Use centralized SSL error handler
