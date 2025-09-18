@@ -302,9 +302,9 @@ def handle_ssl_error(error: Exception, exception_class: Type[RBACManagerError] =
     error_str = str(error)
     
     if "certificate verify failed" in error_str or "CERTIFICATE_VERIFY_FAILED" in error_str:
-        raise exception_class(ErrorMessages.SSL_CERT_VERIFICATION_FAILED)
+        raise exception_class(str(ErrorMessages.SSLError.CERT_VERIFICATION_FAILED))
     elif "SSLError" in error_str or "SSL:" in error_str:
-        raise exception_class(ErrorMessages.SSL_CONNECTION_ERROR.format(error=error))
+        raise exception_class(str(ErrorMessages.SSLError.CONNECTION_ERROR).format(error=error))
     else:
         # Re-raise original error if not SSL-related
         raise exception_class(f"Connection error: {error}")
@@ -325,9 +325,9 @@ def handle_network_error(error: Exception, context: str = "", exception_class: T
     error_str = str(error).lower()
     
     if "timeout" in error_str or "connection" in error_str:
-        raise exception_class(f"{context}\n{ErrorMessages.CONNECTION_TIMEOUT}")
+        raise exception_class(f"{context}\n{str(ErrorMessages.NetworkError.CONNECTION_TIMEOUT)}")
     elif "connection refused" in error_str:
-        raise exception_class(f"{context}\n{ErrorMessages.CONNECTION_REFUSED}")
+        raise exception_class(f"{context}\n{str(ErrorMessages.NetworkError.CONNECTION_REFUSED)}")
     elif "ssl" in error_str and "certificate" in error_str:
         handle_ssl_error(error, exception_class)
     else:

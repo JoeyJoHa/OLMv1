@@ -561,7 +561,7 @@ class OPMClient:
                 
                 schema = obj.get('schema')
                 
-                if schema == OPMConstants.OLM_BUNDLE_SCHEMA:
+                if schema == str(OPMConstants.BundleSchema.BUNDLE):
                     # Extract basic bundle information
                     bundle_metadata['name'] = obj.get('name')
                     bundle_metadata['package'] = obj.get('package')
@@ -570,14 +570,14 @@ class OPMClient:
                     # Process properties to extract manifests and API groups
                     properties = obj.get('properties', [])
                     for prop in properties:
-                        if prop.get('type') == OPMConstants.OLM_GVK_PROPERTY:
+                        if prop.get('type') == str(OPMConstants.PropertyType.GVK):
                             # Extract API group information
                             gvk_data = prop.get('value', {})
                             api_group = gvk_data.get('group')
                             if api_group and api_group not in bundle_metadata['api_groups']:
                                 bundle_metadata['api_groups'].append(api_group)
                         
-                        elif prop.get('type') == OPMConstants.OLM_BUNDLE_OBJECT_PROPERTY:
+                        elif prop.get('type') == str(OPMConstants.PropertyType.BUNDLE_OBJECT):
                             # Decode base64 data to get the actual Kubernetes manifest
                             encoded_data = prop.get('value', {}).get('data', '')
                             if encoded_data:
@@ -591,9 +591,9 @@ class OPMClient:
                                         bundle_metadata['manifests'][kind] = manifest
                                         
                                         # Extract specific data based on manifest type
-                                        if kind == OPMConstants.CLUSTER_SERVICE_VERSION_KIND:
+                                        if kind == str(OPMConstants.ManifestKind.CLUSTER_SERVICE_VERSION):
                                             self._extract_csv_data(manifest, bundle_metadata)
-                                        elif kind == OPMConstants.CUSTOM_RESOURCE_DEFINITION_KIND:
+                                        elif kind == str(OPMConstants.ManifestKind.CUSTOM_RESOURCE_DEFINITION):
                                             # CRD manifests are now handled via CSV spec.customresourcedefinitions.owned
                                             pass
                                             
@@ -601,7 +601,7 @@ class OPMClient:
                                     logger.warning(f"Failed to decode manifest data: {e}")
                                     continue
                         
-                        elif prop.get('type') == OPMConstants.OLM_PACKAGE_PROPERTY:
+                        elif prop.get('type') == str(OPMConstants.PropertyType.PACKAGE):
                             # Extract package metadata
                             package_data = prop.get('value', {})
                             bundle_metadata['package'] = package_data.get('packageName')
@@ -633,8 +633,8 @@ class OPMClient:
             bundle_metadata: Bundle metadata dictionary to update
         """
         try:
-            spec = csv_manifest.get(OPMConstants.CSV_SPEC_SECTION, {})
-            metadata = csv_manifest.get(OPMConstants.CSV_METADATA_SECTION, {})
+            spec = csv_manifest.get(str(OPMConstants.CSVSection.SPEC), {})
+            metadata = csv_manifest.get(str(OPMConstants.CSVSection.METADATA), {})
             
             # Extract CSV metadata
             bundle_metadata['csv_metadata'] = {
@@ -651,19 +651,19 @@ class OPMClient:
             }
             
             # Extract install section data
-            install_section = spec.get(OPMConstants.CSV_INSTALL_SECTION, {})
-            install_spec = install_section.get(OPMConstants.CSV_SPEC_SECTION, {})
+            install_section = spec.get(str(OPMConstants.CSVSection.INSTALL), {})
+            install_spec = install_section.get(str(OPMConstants.CSVSection.SPEC), {})
             
             # Extract deployment information for installer permissions
-            deployments = install_spec.get(OPMConstants.CSV_DEPLOYMENTS_SECTION, [])
-            bundle_metadata[OPMConstants.CSV_DEPLOYMENTS_SECTION] = deployments
+            deployments = install_spec.get(str(OPMConstants.CSVSection.DEPLOYMENTS), [])
+            bundle_metadata[str(OPMConstants.CSVSection.DEPLOYMENTS)] = deployments
             
             # Bundle objects will be processed by the processor layer
             
             # Extract RBAC permissions
             
             # Namespace-scoped permissions
-            permissions = install_spec.get(OPMConstants.CSV_PERMISSIONS_SECTION, [])
+            permissions = install_spec.get(str(OPMConstants.CSVSection.PERMISSIONS), [])
             for perm in permissions:
                 bundle_metadata[OPMConstants.BUNDLE_PERMISSIONS_KEY].append({
                     'service_account': perm.get('serviceAccountName', KubernetesConstants.DEFAULT_NAMESPACE),
@@ -671,7 +671,7 @@ class OPMClient:
                 })
             
             # Cluster-scoped permissions
-            cluster_permissions = install_spec.get(OPMConstants.CSV_CLUSTER_PERMISSIONS_SECTION, [])
+            cluster_permissions = install_spec.get(str(OPMConstants.CSVSection.CLUSTER_PERMISSIONS), [])
             for perm in cluster_permissions:
                 bundle_metadata[OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY].append({
                     'service_account': perm.get('serviceAccountName', KubernetesConstants.DEFAULT_NAMESPACE),
@@ -679,8 +679,8 @@ class OPMClient:
                 })
             
             # Extract CRDs from CSV spec
-            crd_definitions = spec.get(OPMConstants.CSV_CRD_SECTION, {})
-            owned_crds = crd_definitions.get(OPMConstants.CSV_OWNED_CRDS_SECTION, [])
+            crd_definitions = spec.get(str(OPMConstants.CSVSection.CRD), {})
+            owned_crds = crd_definitions.get(str(OPMConstants.CSVSection.OWNED_CRDS), [])
             for crd in owned_crds:
                 crd_name = crd.get('name')
                 if crd_name:

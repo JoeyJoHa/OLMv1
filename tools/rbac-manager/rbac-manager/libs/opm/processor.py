@@ -132,7 +132,7 @@ class BundleProcessor:
                 properties = item.get('properties', [])
                 
                 for prop in properties:
-                    if prop.get('type') == OPMConstants.OLM_BUNDLE_OBJECT_PROPERTY:
+                    if prop.get('type') == str(OPMConstants.PropertyType.BUNDLE_OBJECT):
                         try:
                             # Decode base64 data
                             data = prop.get('value', {}).get('data', '')

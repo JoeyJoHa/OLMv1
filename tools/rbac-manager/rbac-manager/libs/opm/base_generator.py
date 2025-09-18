@@ -143,7 +143,7 @@ e        Generate installer service account Role permissions - ONLY installer-sp
             List of RBAC rules for installer service account Role (minimal, no overlaps)
         """
         rules = []
-        deployments = bundle_metadata.get(OPMConstants.CSV_DEPLOYMENTS_SECTION, [])
+        deployments = bundle_metadata.get(str(OPMConstants.CSVSection.DEPLOYMENTS), [])
         
         if deployments:
             # Extract deployment names and service account names from CSV
@@ -169,11 +169,11 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                 # Broad permissions (create, list, watch)
                 deployment_broad_rule = {
                     'apiGroups': [KubernetesConstants.APPS_API_GROUP],
-                    'resources': [KubernetesConstants.DEPLOYMENTS_RESOURCE],
+                    'resources': [str(KubernetesConstants.ResourceName.DEPLOYMENTS)],
                     'verbs': [
-                        KubernetesConstants.CREATE_VERB,
-                        KubernetesConstants.LIST_VERB,
-                        KubernetesConstants.WATCH_VERB
+                        str(KubernetesConstants.RBACVerb.CREATE),
+                        str(KubernetesConstants.RBACVerb.LIST),
+                        str(KubernetesConstants.RBACVerb.WATCH)
                     ]
                 }
                 rules.append(deployment_broad_rule)
@@ -181,12 +181,12 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                 # Scoped permissions (get, update, patch, delete)
                 deployment_scoped_rule = {
                     'apiGroups': [KubernetesConstants.APPS_API_GROUP],
-                    'resources': [KubernetesConstants.DEPLOYMENTS_RESOURCE],
+                    'resources': [str(KubernetesConstants.ResourceName.DEPLOYMENTS)],
                     'verbs': [
-                        KubernetesConstants.GET_VERB,
-                        KubernetesConstants.UPDATE_VERB,
-                        KubernetesConstants.PATCH_VERB,
-                        KubernetesConstants.DELETE_VERB
+                        str(KubernetesConstants.RBACVerb.GET),
+                        str(KubernetesConstants.RBACVerb.UPDATE),
+                        str(KubernetesConstants.RBACVerb.PATCH),
+                        str(KubernetesConstants.RBACVerb.DELETE)
                     ],
                     'resourceNames': deployment_names
                 }
@@ -199,11 +199,11 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                 # Broad permissions (create, list, watch)
                 sa_broad_rule = {
                     'apiGroups': [KubernetesConstants.CORE_API_GROUP],
-                    'resources': [KubernetesConstants.SERVICE_ACCOUNTS_RESOURCE],
+                    'resources': [str(KubernetesConstants.ResourceName.SERVICE_ACCOUNTS)],
                     'verbs': [
-                        KubernetesConstants.CREATE_VERB,
-                        KubernetesConstants.LIST_VERB,
-                        KubernetesConstants.WATCH_VERB
+                        str(KubernetesConstants.RBACVerb.CREATE),
+                        str(KubernetesConstants.RBACVerb.LIST),
+                        str(KubernetesConstants.RBACVerb.WATCH)
                     ]
                 }
                 rules.append(sa_broad_rule)
@@ -211,12 +211,12 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                 # Scoped permissions (get, update, patch, delete)
                 sa_scoped_rule = {
                     'apiGroups': [KubernetesConstants.CORE_API_GROUP],
-                    'resources': [KubernetesConstants.SERVICE_ACCOUNTS_RESOURCE],
+                    'resources': [str(KubernetesConstants.ResourceName.SERVICE_ACCOUNTS)],
                     'verbs': [
-                        KubernetesConstants.GET_VERB,
-                        KubernetesConstants.UPDATE_VERB,
-                        KubernetesConstants.PATCH_VERB,
-                        KubernetesConstants.DELETE_VERB
+                        str(KubernetesConstants.RBACVerb.GET),
+                        str(KubernetesConstants.RBACVerb.UPDATE),
+                        str(KubernetesConstants.RBACVerb.PATCH),
+                        str(KubernetesConstants.RBACVerb.DELETE)
                     ],
                     'resourceNames': service_account_names_list
                 }
@@ -251,9 +251,9 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                     'apiGroups': [api_group],
                     'resources': [resource_type],
                     'verbs': [
-                        KubernetesConstants.CREATE_VERB,
-                        KubernetesConstants.LIST_VERB,
-                        KubernetesConstants.WATCH_VERB
+                        str(KubernetesConstants.RBACVerb.CREATE),
+                        str(KubernetesConstants.RBACVerb.LIST),
+                        str(KubernetesConstants.RBACVerb.WATCH)
                     ]
                 }
                 rules.append(broad_rule)
@@ -264,10 +264,10 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                         'apiGroups': [api_group],
                         'resources': [resource_type],
                         'verbs': [
-                            KubernetesConstants.GET_VERB,
-                            KubernetesConstants.UPDATE_VERB,
-                            KubernetesConstants.PATCH_VERB,
-                            KubernetesConstants.DELETE_VERB
+                            str(KubernetesConstants.RBACVerb.GET),
+                            str(KubernetesConstants.RBACVerb.UPDATE),
+                            str(KubernetesConstants.RBACVerb.PATCH),
+                            str(KubernetesConstants.RBACVerb.DELETE)
                         ],
                         'resourceNames': resource_names
                     }
@@ -824,8 +824,8 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         # ClusterExtension finalizer management (scoped to this operator)
         rules.append({
             'apiGroups': [KubernetesConstants.OLM_API_GROUP],
-            'resources': [f'{KubernetesConstants.CLUSTER_EXTENSIONS_RESOURCE}/finalizers'],
-            'verbs': [KubernetesConstants.UPDATE_VERB]
+            'resources': [f'{str(KubernetesConstants.ResourceName.CLUSTER_EXTENSIONS)}/finalizers'],
+            'verbs': [str(KubernetesConstants.RBACVerb.UPDATE)]
             # Note: resourceNames should be added post-installation with chosen ClusterExtension name
         })
         
@@ -833,11 +833,11 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         # Unscoped permissions for CRD lifecycle
         rules.append({
             'apiGroups': [KubernetesConstants.APIEXTENSIONS_API_GROUP],
-            'resources': [KubernetesConstants.CUSTOM_RESOURCE_DEFINITIONS_RESOURCE],
+            'resources': [str(KubernetesConstants.ResourceName.CUSTOM_RESOURCE_DEFINITIONS)],
             'verbs': [
-                KubernetesConstants.CREATE_VERB, 
-                KubernetesConstants.LIST_VERB, 
-                KubernetesConstants.WATCH_VERB
+                str(KubernetesConstants.RBACVerb.CREATE), 
+                str(KubernetesConstants.RBACVerb.LIST), 
+                str(KubernetesConstants.RBACVerb.WATCH)
             ]
         })
         
@@ -845,12 +845,12 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         if crd_names:
             rules.append({
                 'apiGroups': [KubernetesConstants.APIEXTENSIONS_API_GROUP],
-                'resources': [KubernetesConstants.CUSTOM_RESOURCE_DEFINITIONS_RESOURCE],
+                'resources': [str(KubernetesConstants.ResourceName.CUSTOM_RESOURCE_DEFINITIONS)],
                 'verbs': [
-                    KubernetesConstants.GET_VERB, 
-                    KubernetesConstants.UPDATE_VERB, 
-                    KubernetesConstants.PATCH_VERB, 
-                    KubernetesConstants.DELETE_VERB
+                    str(KubernetesConstants.RBACVerb.GET), 
+                    str(KubernetesConstants.RBACVerb.UPDATE), 
+                    str(KubernetesConstants.RBACVerb.PATCH), 
+                    str(KubernetesConstants.RBACVerb.DELETE)
                 ],
                 'resourceNames': crd_names
             })
@@ -859,22 +859,22 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         rbac_management_config = {
             'api_group': KubernetesConstants.RBAC_API_GROUP,
             'lifecycle_verbs': [
-                KubernetesConstants.CREATE_VERB, 
-                KubernetesConstants.LIST_VERB, 
-                KubernetesConstants.WATCH_VERB
+                str(KubernetesConstants.RBACVerb.CREATE), 
+                str(KubernetesConstants.RBACVerb.LIST), 
+                str(KubernetesConstants.RBACVerb.WATCH)
             ],
             'management_verbs': [
-                KubernetesConstants.GET_VERB, 
-                KubernetesConstants.UPDATE_VERB, 
-                KubernetesConstants.PATCH_VERB, 
-                KubernetesConstants.DELETE_VERB
+                str(KubernetesConstants.RBACVerb.GET), 
+                str(KubernetesConstants.RBACVerb.UPDATE), 
+                str(KubernetesConstants.RBACVerb.PATCH), 
+                str(KubernetesConstants.RBACVerb.DELETE)
             ],
             'resources': [
-                KubernetesConstants.CLUSTER_ROLES_RESOURCE,
-                KubernetesConstants.CLUSTER_ROLE_BINDINGS_RESOURCE
+                str(KubernetesConstants.ResourceName.CLUSTER_ROLES),
+                str(KubernetesConstants.ResourceName.CLUSTER_ROLE_BINDINGS)
                 # Future: Add ServiceAccounts, RoleBindings, etc. as needed
-                # KubernetesConstants.SERVICE_ACCOUNTS_RESOURCE,
-                # KubernetesConstants.ROLE_BINDINGS_RESOURCE
+                # str(KubernetesConstants.ResourceName.SERVICE_ACCOUNTS),
+                # str(KubernetesConstants.ResourceName.ROLE_BINDINGS)
             ]
         }
         
@@ -932,10 +932,10 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                             'apiGroups': ['rbac.authorization.k8s.io'],
                             'resources': ['clusterroles'],
                             'verbs': [
-                                KubernetesConstants.GET_VERB,
-                                KubernetesConstants.UPDATE_VERB,
-                                KubernetesConstants.PATCH_VERB,
-                                KubernetesConstants.DELETE_VERB
+                                str(KubernetesConstants.RBACVerb.GET),
+                                str(KubernetesConstants.RBACVerb.UPDATE),
+                                str(KubernetesConstants.RBACVerb.PATCH),
+                                str(KubernetesConstants.RBACVerb.DELETE)
                             ],
                             'resourceNames': [name]
                         }
@@ -970,10 +970,10 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                             'apiGroups': [api_group],
                             'resources': [resource_type],
                             'verbs': [
-                                KubernetesConstants.GET_VERB,
-                                KubernetesConstants.UPDATE_VERB,
-                                KubernetesConstants.PATCH_VERB,
-                                KubernetesConstants.DELETE_VERB
+                                str(KubernetesConstants.RBACVerb.GET),
+                                str(KubernetesConstants.RBACVerb.UPDATE),
+                                str(KubernetesConstants.RBACVerb.PATCH),
+                                str(KubernetesConstants.RBACVerb.DELETE)
                             ],
                             'resourceNames': resource_names
                         }
@@ -1033,10 +1033,10 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                             'apiGroups': [api_group],
                             'resources': [resource_type],
                             'verbs': [
-                                KubernetesConstants.GET_VERB,
-                                KubernetesConstants.UPDATE_VERB,
-                                KubernetesConstants.PATCH_VERB,
-                                KubernetesConstants.DELETE_VERB
+                                str(KubernetesConstants.RBACVerb.GET),
+                                str(KubernetesConstants.RBACVerb.UPDATE),
+                                str(KubernetesConstants.RBACVerb.PATCH),
+                                str(KubernetesConstants.RBACVerb.DELETE)
                             ],
                             'resourceNames': resource_names
                         }
@@ -1115,13 +1115,13 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                 
                 # 1. Standard Kubernetes RBAC verbs pattern
                 k8s_verbs = {
-                    KubernetesConstants.GET_VERB,
-                    KubernetesConstants.LIST_VERB, 
-                    KubernetesConstants.WATCH_VERB,
-                    KubernetesConstants.CREATE_VERB,
-                    KubernetesConstants.UPDATE_VERB,
-                    KubernetesConstants.PATCH_VERB,
-                    KubernetesConstants.DELETE_VERB
+                    str(KubernetesConstants.RBACVerb.GET),
+                    str(KubernetesConstants.RBACVerb.LIST), 
+                    str(KubernetesConstants.RBACVerb.WATCH),
+                    str(KubernetesConstants.RBACVerb.CREATE),
+                    str(KubernetesConstants.RBACVerb.UPDATE),
+                    str(KubernetesConstants.RBACVerb.PATCH),
+                    str(KubernetesConstants.RBACVerb.DELETE)
                 }
                 if any(verb in sample_text for verb in k8s_verbs):
                     return True
@@ -1178,7 +1178,7 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                     return True
                 
                 # 4. Single wildcard permission
-                if items == [KubernetesConstants.WILDCARD_VERB]:
+                if items == [str(KubernetesConstants.RBACVerb.WILDCARD)]:
                     return True
                 
                 # 5. Pattern-based core resource detection
