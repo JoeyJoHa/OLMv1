@@ -73,7 +73,7 @@ class YAMLManifestGenerator(BaseGenerator):
             sa_name, namespace, operator_name
         )
         
-        return self._dump_yaml_with_flow_arrays(sa_manifest)
+        return self._dump_yaml_with_flowstyle_lists(sa_manifest)
     
     def _join_manifests_to_yaml(self, manifests: list) -> str:
         """
@@ -87,7 +87,7 @@ class YAMLManifestGenerator(BaseGenerator):
         """
         yaml_parts = []
         for manifest in manifests:
-            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
+            yaml_parts.append(self._dump_yaml_with_flowstyle_lists(manifest))
         
         return '\n---\n'.join(yaml_parts)
     
