@@ -96,10 +96,10 @@ OLMv1/
 ├── examples/                          # Example configurations and use cases
 ├── helm/                             # Helm chart for OLMv1 deployment
 ├── templates/                        # Kubernetes resource templates
+├── tests/                            # Test files and test results
 ├── tools/                            # Development and management tools
 ├── config/                           # Configuration files (future use)
 ├── scripts/                          # Utility scripts (future use)
-├── tests/                            # Test files (future use)
 ├── workflows/                        # Workflow definitions (future use)
 └── README.md                         # This documentation
 ```

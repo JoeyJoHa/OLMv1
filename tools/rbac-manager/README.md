@@ -102,12 +102,6 @@ tools/rbac-manager/
 │       ├── __init__.py               # Comprehensive library exports
 │       ├── help_manager.py           # Help system manager
 │       └── main_app.py               # Parent parsers to eliminate redundancy
-├── tests/                            # Comprehensive test suite (DRY refactored)
-│   ├── test_catalogd.py              # Helper patterns, eliminated duplication
-│   ├── test_constants.py             # Shared test utilities
-│   ├── test_opm.py                   # Loop-based test execution, DRY patterns
-│   ├── test_workflow.py              # End-to-end workflow tests
-│   └── README.md                     # Test suite documentation
 ├── rbac-manager.py                   # CLI entry point
 ├── requirements.txt                  # Python dependencies
 └── README.md                         # This documentation

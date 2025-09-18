@@ -188,4 +188,4 @@ bundle-cache/
 opm-cache/
 
 # Test results
-tools/rbac-manager/tests/results/
+tests/results/
