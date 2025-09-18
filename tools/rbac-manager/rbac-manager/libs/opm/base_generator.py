@@ -1090,6 +1090,9 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         FlowArrayDumper.add_representer(list, represent_list)
         FlowArrayDumper.add_representer(FlowStyleList, represent_list)
         
+        # Configure dumper to disable anchors/aliases for cleaner YAML
+        FlowArrayDumper.ignore_aliases = lambda self, data: True
+        
         # Generate YAML
         return yaml.dump(data, Dumper=FlowArrayDumper, default_flow_style=False, sort_keys=False)
     
@@ -1216,6 +1219,9 @@ e        Generate installer service account Role permissions - ONLY installer-sp
             return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
         
         FlowArrayDumper.add_representer(list, represent_list)
+        
+        # Configure dumper to disable anchors/aliases for cleaner YAML
+        FlowArrayDumper.ignore_aliases = lambda self, data: True
         
         # Dump with custom representer
         yaml_output = yaml.dump(data, Dumper=FlowArrayDumper, default_flow_style=False, sort_keys=False)
