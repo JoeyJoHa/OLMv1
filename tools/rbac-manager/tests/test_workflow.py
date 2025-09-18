@@ -634,7 +634,7 @@ global:
                     "success": False,
                     "details": {
                         "error": "Failed to discover test parameters from cluster",
-                        "cluster_url": self.openshift_url,
+                        "cluster_url": TestUtilities.mask_sensitive_data(self.openshift_url, self.openshift_url, self.openshift_token),
                         "suggestions": [
                             "Check if cluster has serving catalogs",
                             "Verify authentication credentials",
@@ -709,7 +709,7 @@ global:
             "test_suite": "complete_workflow",
             "timestamp": time.time(),
             "configuration": {
-                "openshift_url": self.openshift_url,
+                "openshift_url": TestUtilities.mask_sensitive_data(self.openshift_url, self.openshift_url, self.openshift_token),
                 "skip_tls": self.skip_tls,
                 "test_catalog": self.test_catalog,
                 "test_package": self.test_package,
