@@ -347,6 +347,28 @@ class BundleProcessor:
         
         return summary
     
+    def _generate_output(self, generator_func, error_context: str, *args, **kwargs):
+        """
+        Generic wrapper for generator methods with consistent error handling
+        
+        Args:
+            generator_func: The generator function to call
+            error_context: Context string for error messages (e.g., "Helm values generation")
+            *args: Positional arguments to pass to the generator function
+            **kwargs: Keyword arguments to pass to the generator function
+            
+        Returns:
+            The result from the generator function
+            
+        Raises:
+            BundleProcessingError: When generation fails
+        """
+        try:
+            return generator_func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Failed to generate {error_context.lower()}: {e}")
+            raise BundleProcessingError(f"{error_context} failed: {e}") from e
+    
     def generate_helm_values(self, bundle_metadata: Dict[str, Any], operator_name: Optional[str] = None, channel: Optional[str] = None) -> str:
         """
         Generate Helm values from processed bundle metadata
@@ -362,11 +384,7 @@ class BundleProcessor:
         Raises:
             BundleProcessingError: When Helm values generation fails
         """
-        try:
-            return self.helm_generator.generate(bundle_metadata, operator_name, channel=channel)
-        except Exception as e:
-            logger.error(f"Failed to generate Helm values: {e}")
-            raise BundleProcessingError(f"Helm values generation failed: {e}") from e
+        return self._generate_output(self.helm_generator.generate, "Helm values generation", bundle_metadata, operator_name, channel=channel)
     
     def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = KubernetesConstants.DEFAULT_NAMESPACE, 
                               operator_name: Optional[str] = None) -> Dict[str, str]:
@@ -384,8 +402,4 @@ class BundleProcessor:
         Raises:
             BundleProcessingError: When YAML manifest generation fails
         """
-        try:
-            return self.yaml_generator.generate(bundle_metadata, namespace, operator_name)
-        except Exception as e:
-            logger.error(f"Failed to generate YAML manifests: {e}")
-            raise BundleProcessingError(f"YAML manifest generation failed: {e}") from e
+        return self._generate_output(self.yaml_generator.generate, "YAML manifest generation", bundle_metadata, namespace, operator_name)
