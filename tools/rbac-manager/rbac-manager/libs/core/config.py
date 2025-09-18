@@ -193,6 +193,41 @@ class ConfigManager:
         except (KeyError, TypeError):
             return default
     
+    def _write_config_file(self, content: str, output_dir: str = None, default_path: str = None) -> str:
+        """
+        Helper method to write configuration content to file
+        
+        Args:
+            content: YAML content to write
+            output_dir: Directory to save file (optional)
+            default_path: Default path when output_dir is not provided
+            
+        Returns:
+            str: Path to written file
+            
+        Raises:
+            ConfigurationError: If file writing fails
+        """
+        try:
+            # Determine output path
+            if output_dir:
+                output_path = Path(output_dir)
+                output_path.mkdir(parents=True, exist_ok=True)
+                config_file = output_path / FileConstants.DEFAULT_CONFIG_FILE
+            else:
+                config_file = Path(default_path or FileConstants.DEFAULT_CONFIG_FILE)
+                config_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write content to file
+            with open(config_file, 'w') as f:
+                f.write(content)
+            
+            logger.info(f"Configuration file written: {config_file}")
+            return str(config_file)
+            
+        except Exception as e:
+            raise ConfigurationError(f"Failed to write configuration file: {e}")
+    
     def generate_config_template(self, output_dir: str = None) -> str:
         """
         Generate configuration template file
@@ -206,27 +241,9 @@ class ConfigManager:
         Raises:
             ConfigurationError: If template generation fails
         """
-        try:
-            # Use the existing method to generate content (DRY principle)
-            yaml_content = self.get_config_template_content()
-            
-            # Determine output path
-            if output_dir:
-                output_path = Path(output_dir)
-                output_path.mkdir(parents=True, exist_ok=True)
-                config_file = output_path / FileConstants.DEFAULT_CONFIG_FILE
-            else:
-                config_file = Path(FileConstants.DEFAULT_CONFIG_FILE)
-            
-            # Write content to file
-            with open(config_file, 'w') as f:
-                f.write(yaml_content)
-            
-            logger.info(f"Configuration template generated: {config_file}")
-            return str(config_file)
-            
-        except Exception as e:
-            raise ConfigurationError(f"Failed to generate configuration template: {e}")
+        # Generate content and delegate file writing to helper method
+        yaml_content = self.get_config_template_content()
+        return self._write_config_file(yaml_content, output_dir)
     
     def _dict_to_yaml_with_comments(self, data: Dict[str, Any], indent: int = 0) -> str:
         """
@@ -368,30 +385,13 @@ class ConfigManager:
         Raises:
             ConfigurationError: If config generation fails
         """
-        try:
-            # Use the existing method to generate content (DRY principle)
-            yaml_content = self.get_config_with_values_content(
-                extracted_data=extracted_data,
-                output_mode=output_mode,
-                output_type=output_type,
-                namespace=namespace
-            )
-            
-            # Determine output path
-            if output_dir:
-                output_path = Path(output_dir)
-                output_path.mkdir(parents=True, exist_ok=True)
-                config_file = output_path / FileConstants.DEFAULT_CONFIG_FILE
-            else:
-                config_file = Path('./config') / FileConstants.DEFAULT_CONFIG_FILE
-                config_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Write content to file
-            with open(config_file, 'w') as f:
-                f.write(yaml_content)
-            
-            logger.info(f"Configuration file generated: {config_file}")
-            return str(config_file)
-            
-        except Exception as e:
-            raise ConfigurationError(f"Failed to generate configuration file: {e}")
+        # Generate content and delegate file writing to helper method
+        yaml_content = self.get_config_with_values_content(
+            extracted_data=extracted_data,
+            output_mode=output_mode,
+            output_type=output_type,
+            namespace=namespace
+        )
+        
+        # Use helper method with custom default path for config with values
+        return self._write_config_file(yaml_content, output_dir, './config/rbac-manager-config.yaml')
