@@ -18,6 +18,39 @@ logger = logging.getLogger(__name__)
 class ConfigManager:
     """Manages configuration loading and validation"""
     
+    # Configuration schema - defines expected structure and types
+    CONFIG_SCHEMA = {
+        'operator': {
+            'type': dict,
+            'required': False,
+            'fields': {
+                'image': {'type': str, 'required': False},
+                'namespace': {'type': str, 'required': False},
+                'channel': {'type': str, 'required': False},
+                'packageName': {'type': str, 'required': False},
+                'version': {'type': str, 'required': False}
+            }
+        },
+        'output': {
+            'type': dict,
+            'required': False,
+            'fields': {
+                'mode': {'type': str, 'required': False, 'choices': ['stdout', 'file']},
+                'type': {'type': str, 'required': False, 'choices': ['yaml', 'helm']},
+                'path': {'type': str, 'required': False}
+            }
+        },
+        'global': {
+            'type': dict,
+            'required': False,
+            'fields': {
+                'skip_tls': {'type': bool, 'required': False},
+                'debug': {'type': bool, 'required': False},
+                'registry_token': {'type': str, 'required': False}
+            }
+        },
+    }
+    
     def __init__(self):
         """Initialize configuration manager"""
         self.config_data = {}
@@ -71,150 +104,52 @@ class ConfigManager:
         if not isinstance(self.config_data, dict):
             raise ConfigurationError("Configuration must be a dictionary")
         
-        # Validate global settings
-        if 'skip_tls' in self.config_data and not isinstance(self.config_data['skip_tls'], bool):
-            raise ConfigurationError("skip_tls must be a boolean value")
         
-        if 'debug' in self.config_data and not isinstance(self.config_data['debug'], bool):
-            raise ConfigurationError("debug must be a boolean value")
-        
-        # Validate new config structure
-        if 'operator' in self.config_data:
-            self._validate_operator_config(self.config_data['operator'])
-        
-        if 'output' in self.config_data:
-            self._validate_output_config(self.config_data['output'])
-            
-        if 'global' in self.config_data:
-            self._validate_global_config(self.config_data['global'])
-        
-        # Validate legacy catalogd section (for backward compatibility)
-        if 'catalogd' in self.config_data:
-            self._validate_catalogd_config(self.config_data['catalogd'])
-        
-        # Validate legacy opm section (for backward compatibility)
-        if 'opm' in self.config_data:
-            self._validate_opm_config(self.config_data['opm'])
+        # Validate using schema-based approach
+        self._validate_against_schema(self.config_data, self.CONFIG_SCHEMA, "config")
     
-    def _validate_catalogd_config(self, catalogd_config: Dict[str, Any]) -> None:
+    def _validate_against_schema(self, data: Dict[str, Any], schema: Dict[str, Any], path: str = "") -> None:
         """
-        Validate catalogd configuration section
+        Validate data against schema definition
         
         Args:
-            catalogd_config: Catalogd configuration dictionary
+            data: Data to validate
+            schema: Schema definition
+            path: Current path for error reporting
             
         Raises:
-            ConfigurationError: If catalogd configuration is invalid
+            ConfigurationError: If data doesn't match schema
         """
-        if not isinstance(catalogd_config, dict):
-            raise ConfigurationError("catalogd configuration must be a dictionary")
-        
-        # Optional string fields
-        string_fields = ['catalog_name', 'openshift_url', 'openshift_token', 'package', 'channel', 'version']
-        for field in string_fields:
-            if field in catalogd_config and catalogd_config[field] is not None:
-                if not isinstance(catalogd_config[field], str):
-                    raise ConfigurationError(f"catalogd.{field} must be a string")
-    
-    def _validate_opm_config(self, opm_config: Dict[str, Any]) -> None:
-        """
-        Validate opm configuration section
-        
-        Args:
-            opm_config: OPM configuration dictionary
+        for key, field_schema in schema.items():
+            current_path = f"{path}.{key}" if path else key
             
-        Raises:
-            ConfigurationError: If opm configuration is invalid
-        """
-        if not isinstance(opm_config, dict):
-            raise ConfigurationError("opm configuration must be a dictionary")
-        
-        # Optional string fields
-        string_fields = ['image', 'namespace', 'registry_token', 'output']
-        for field in string_fields:
-            if field in opm_config and opm_config[field] is not None:
-                if not isinstance(opm_config[field], str):
-                    raise ConfigurationError(f"opm.{field} must be a string")
-        
-        # Optional boolean fields
-        boolean_fields = ['helm']
-        for field in boolean_fields:
-            if field in opm_config and opm_config[field] is not None:
-                if not isinstance(opm_config[field], bool):
-                    raise ConfigurationError(f"opm.{field} must be a boolean")
-    
-    def _validate_operator_config(self, operator_config: Dict[str, Any]) -> None:
-        """
-        Validate operator configuration section
-        
-        Args:
-            operator_config: Operator configuration dictionary
+            # Check if field exists in data
+            if key in data:
+                value = data[key]
+                
+                # Skip None values for optional fields
+                if value is None and not field_schema.get('required', False):
+                    continue
+                
+                # Validate type
+                expected_type = field_schema['type']
+                if not isinstance(value, expected_type):
+                    type_name = expected_type.__name__
+                    raise ConfigurationError(f"{current_path} must be a {type_name}")
+                
+                # Validate choices if specified
+                if 'choices' in field_schema:
+                    if value not in field_schema['choices']:
+                        choices_str = ', '.join(f"'{c}'" for c in field_schema['choices'])
+                        raise ConfigurationError(f"{current_path} must be one of: {choices_str}")
+                
+                # Recursively validate nested dictionaries
+                if expected_type == dict and 'fields' in field_schema:
+                    self._validate_against_schema(value, field_schema['fields'], current_path)
             
-        Raises:
-            ConfigurationError: If operator configuration is invalid
-        """
-        if not isinstance(operator_config, dict):
-            raise ConfigurationError("operator configuration must be a dictionary")
-        
-        # Optional string fields
-        string_fields = ['image', 'namespace', 'channel', 'packageName', 'version']
-        for field in string_fields:
-            if field in operator_config and operator_config[field] is not None:
-                if not isinstance(operator_config[field], str):
-                    raise ConfigurationError(f"operator.{field} must be a string")
-    
-    def _validate_output_config(self, output_config: Dict[str, Any]) -> None:
-        """
-        Validate output configuration section
-        
-        Args:
-            output_config: Output configuration dictionary
-            
-        Raises:
-            ConfigurationError: If output configuration is invalid
-        """
-        if not isinstance(output_config, dict):
-            raise ConfigurationError("output configuration must be a dictionary")
-        
-        # Validate mode
-        if 'mode' in output_config:
-            if output_config['mode'] not in ['stdout', 'file']:
-                raise ConfigurationError("output.mode must be 'stdout' or 'file'")
-        
-        # Validate type
-        if 'type' in output_config:
-            if output_config['type'] not in ['yaml', 'helm']:
-                raise ConfigurationError("output.type must be 'yaml' or 'helm'")
-        
-        # Validate path (string)
-        if 'path' in output_config and output_config['path'] is not None:
-            if not isinstance(output_config['path'], str):
-                raise ConfigurationError("output.path must be a string")
-    
-    def _validate_global_config(self, global_config: Dict[str, Any]) -> None:
-        """
-        Validate global configuration section
-        
-        Args:
-            global_config: Global configuration dictionary
-            
-        Raises:
-            ConfigurationError: If global configuration is invalid
-        """
-        if not isinstance(global_config, dict):
-            raise ConfigurationError("global configuration must be a dictionary")
-        
-        # Boolean fields
-        boolean_fields = ['skip_tls', 'debug']
-        for field in boolean_fields:
-            if field in global_config and global_config[field] is not None:
-                if not isinstance(global_config[field], bool):
-                    raise ConfigurationError(f"global.{field} must be a boolean")
-        
-        # String fields
-        if 'registry_token' in global_config and global_config['registry_token'] is not None:
-            if not isinstance(global_config['registry_token'], str):
-                raise ConfigurationError("global.registry_token must be a string")
+            # Check required fields
+            elif field_schema.get('required', False):
+                raise ConfigurationError(f"Required field {current_path} is missing")
     
     def get_config(self) -> Dict[str, Any]:
         """
