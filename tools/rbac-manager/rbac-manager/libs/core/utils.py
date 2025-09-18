@@ -96,10 +96,27 @@ def mask_sensitive_info(text: str, url: str = None, token: str = None) -> str:
         try:
             from urllib.parse import urlparse
             parsed = urlparse(url)
-            masked_url = f"https://{parsed.hostname}:***"
-            masked_text = masked_text.replace(url, masked_url)
+            if parsed.hostname:
+                # Extract domain parts and mask the hostname
+                hostname_parts = parsed.hostname.split('.')
+                if len(hostname_parts) >= 3:
+                    # For api.opslab-joe.rh-igc.com -> api.****.com
+                    first_part = hostname_parts[0][:3] if len(hostname_parts[0]) > 3 else hostname_parts[0]
+                    last_part = hostname_parts[-1]  # .com, .org, etc.
+                    masked_hostname = f"{first_part}.****.{last_part}"
+                elif len(hostname_parts) == 2:
+                    # For domain.com -> ****.com
+                    masked_hostname = f"****.{hostname_parts[-1]}"
+                else:
+                    masked_hostname = "****"
+                
+                # Mask the port as well
+                masked_url = f"{parsed.scheme}://{masked_hostname}:***"
+                masked_text = masked_text.replace(url, masked_url)
+            else:
+                masked_text = masked_text.replace(url, "https://****:***")
         except Exception:
-            masked_text = masked_text.replace(url, "https://***masked***:***")
+            masked_text = masked_text.replace(url, "https://****:***")
     
     # Generic patterns for common sensitive information
     # Mask bearer tokens
