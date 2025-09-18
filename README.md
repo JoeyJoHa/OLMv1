@@ -121,116 +121,27 @@ The `templates/CustomRoles/` directory contains reusable templates for custom RB
 
 ## RBAC Manager Tool
 
-The project includes an advanced RBAC Manager tool (`tools/rbac-manager/`) that automates the extraction and processing of RBAC permissions from OLM operators. This tool significantly simplifies the process of creating proper security configurations for OLMv1 deployments.
+The project includes an RBAC Manager tool that automates the extraction and processing of RBAC permissions from operator bundles. This tool simplifies the process of creating proper security configurations for OLMv1 deployments.
 
-### Quick Start
+### Key Features
 
-```bash
-# Navigate to the tool directory
-cd tools/rbac-manager/
-
-# Create and activate virtual environment (recommended)
-python3 -m venv rbac-manager-env
-source rbac-manager-env/bin/activate  # On Linux/macOS
-# rbac-manager-env\Scripts\activate   # On Windows
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Get help for specific commands
-python3 rbac-manager.py catalogd --help
-python3 rbac-manager.py opm --help
-python3 rbac-manager.py list-catalogs --help
-
-# View comprehensive examples
-python3 rbac-manager.py catalogd --examples
-python3 rbac-manager.py opm --examples
-
-# List available catalogs on cluster
-python3 rbac-manager.py list-catalogs --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token
-
-# Generate configuration file with real cluster data
-python3 rbac-manager.py catalogd --generate-config \
-  --catalog-name openshift-community-operators \
-  --package argocd-operator --channel alpha --version 0.8.0 \
-  --openshift-url https://api.cluster.example.com:6443 \
-  --openshift-token sha256~token
-
-# Extract RBAC using generated configuration (filename generated automatically)
-python3 rbac-manager.py opm --config nginx-ingress-operator-rbac-config.yaml
-
-# Direct RBAC extraction with bundle image
-python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --helm
-
-# Save RBAC files for later use
-python3 rbac-manager.py opm --image <bundle-image> --output ./rbac-files
-```
-
-### Benefits for OLMv1 Deployment
-
-1. **Smart RBAC Logic**: Correctly handles different permission patterns:
-   - **Both `clusterPermissions` + `permissions`**: ClusterRoles + grantor Roles (e.g., ArgoCD)
-   - **Only `permissions`**: Treat as ClusterRoles (e.g., Quay operator)
-   - **Only `clusterPermissions`**: ClusterRoles only
-2. **Kubernetes-Native Output**: Generates proper Kubernetes RBAC YAML with consistent naming
-3. **Helm Integration**: Mixed block/flow YAML style with comprehensive security notices
-4. **DRY Deduplication**: Advanced permission deduplication eliminates redundant RBAC rules between ClusterRoles and Roles
-5. **Microservice Architecture**: Clean BundleProcessor orchestrator with separated concerns
-6. **Live Catalog Access**: Query catalogd directly for real-time operator bundle information
-7. **Configuration Management**: Generate and reuse configuration files for consistent deployments
-8. **Real Cluster Integration**: Extract actual bundle images and metadata from live OpenShift clusters
-9. **Enhanced YAML Formatting**: FlowStyleList formatting for readable Helm values with channel guidance
-10. **Automation Ready**: Supports scripting and CI/CD integration for GitOps workflows
-
-### DRY Deduplication Features
-
-The RBAC Manager now includes intelligent **DRY (Don't Repeat Yourself)** deduplication that automatically:
-
-- **🔍 Detects Redundancy**: Identifies when Role permissions are already covered by ClusterRole permissions
-- **🎯 Preserves Specificity**: Keeps resource-specific rules with `resourceNames` even when broader permissions exist  
-- **⚡ Handles Wildcards**: Recognizes when wildcard permissions (`verbs: ['*']`) supersede specific permissions
-- **🧹 Reduces Complexity**: Eliminates duplicate RBAC rules for cleaner, more maintainable configurations
-- **🔒 Enhances Security**: Reduces permission conflicts and improves overall security posture
-
-**Example**: If a ClusterRole grants `['*']` verbs on `[configmaps, services]`, the tool automatically removes redundant Role rules for those same resources, keeping only resource-specific rules with `resourceNames`.
+- **Catalog Discovery**: List and query available operators from cluster catalogs
+- **Permission Extraction**: Extract RBAC permissions from operator bundle images
+- **Smart RBAC Generation**: Generate appropriate ClusterRoles and Roles based on operator requirements
+- **Multiple Output Formats**: Support for both Kubernetes YAML manifests and Helm values
+- **Configuration Management**: Generate and reuse configuration files for consistent deployments
+- **Live Cluster Integration**: Extract metadata from live OpenShift clusters
 
 ### Integration with OLMv1 Workflow
 
-The RBAC Manager integrates seamlessly with the OLMv1 deployment process:
-
-1. **Discover Operators**: Query available catalogs and packages using catalogd integration
-2. **Generate Configuration**: Create reusable configuration templates or extract live metadata from catalogd
-3. **Extract RBAC**: Use the tool to extract required permissions for your chosen operator
+1. **Discover Operators**: Query available catalogs and packages
+2. **Generate Configuration**: Create reusable configuration templates
+3. **Extract RBAC**: Generate required permissions for your chosen operator
 4. **Review Permissions**: Examine the generated RBAC to ensure it meets security requirements
 5. **Deploy RBAC**: Apply the RBAC resources before deploying the ClusterExtension
 6. **Deploy Operator**: Use the generated ServiceAccount in your ClusterExtension manifest
 
-#### Complete Workflow Examples
-
-```bash
-# Step 1: List available catalogs
-python3 rbac-manager.py list-catalogs --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
-
-# Step 2: Generate configuration with real cluster data
-python3 rbac-manager.py catalogd --generate-config \
-  --catalog-name openshift-community-operators \
-  --package argocd-operator --channel alpha --version 0.8.0 \
-  --openshift-url https://api.cluster.example.com:6443 \
-  --openshift-token sha256~token --skip-tls \
-  --output ./config
-
-# Step 3: Extract RBAC using configuration (YAML manifests)
-python3 rbac-manager.py opm --config ./config/nginx-ingress-operator-rbac-config.yaml
-
-# Step 4: Extract RBAC using configuration (Helm values)
-# First, modify config file to set output.type: helm
-python3 rbac-manager.py opm --config ./config/nginx-ingress-operator-rbac-config.yaml
-
-# Alternative: Generate template config for reuse
-python3 rbac-manager.py catalogd --generate-config --output ./templates
-```
-
-For comprehensive usage instructions, examples, and troubleshooting guides, see the [RBAC Manager Documentation](tools/rbac-manager/README.md).
+For comprehensive usage instructions and examples, see the [RBAC Manager Documentation](tools/rbac-manager/README.md).
 
 ## Documentation
 

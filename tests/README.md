@@ -1,53 +1,51 @@
 # RBAC Manager Test Suite
 
-This directory contains comprehensive test suites for the RBAC Manager tool functionality. The test suites have been extensively refactored following DRY (Don't Repeat Yourself) principles to eliminate code duplication and improve maintainability.
+This directory contains comprehensive test suites for the RBAC Manager tool functionality. The test suites are well-structured to ensure maintainability and reliability.
 
 ## Test Files
 
-### `test_catalogd.py` *(DRY Refactored)*
+### `test_catalogd.py`
 
 Tests catalogd functionality including:
 
 - Authentication and port-forwarding
 - Catalog listing and selection (new `list-catalogs` subcommand)
 - Package, channel, and version queries
-- **NEW:** Config generation with `--generate-config` flag
-- **NEW:** Real cluster data extraction and placeholder fallback
-- **NEW:** Config file output to stdout and files
+- Config generation with `--generate-config` flag
+- Real cluster data extraction and placeholder fallback
+- Config file output to stdout and files
 - Error handling and edge cases
 - Output formatting and truncation handling
 
-**DRY Improvements:**
+**Test Structure:**
 
-- **Helper Pattern**: Test methods now use `_run_catalogd_test` helper to eliminate duplication
-- **Consistent Output**: All tests use `_print_test_status` for uniform formatting
-- **Reduced Duplication**: Eliminated ~50 lines of repeated test execution logic
-- **Maintainable Structure**: Success conditions encapsulated in local functions
+- **Helper Pattern**: Test methods use `_run_catalogd_test` helper for consistency
+- **Uniform Output**: All tests use `_print_test_status` for consistent formatting
+- **Maintainable Structure**: Success conditions are clearly defined and reusable
 
-### `test_opm.py` *(Major DRY Refactoring)*
+### `test_opm.py`
 
 Tests OPM functionality including:
 
 - Bundle image processing and metadata extraction
 - RBAC generation (Helm values and YAML manifests)
-- **NEW:** Config file functionality with `--config` flag
-- **NEW:** FlowStyleList YAML formatting for Helm output
-- **NEW:** Channel placeholder and guidance comments
-- **NEW:** Config validation and error handling
-- DRY deduplication logic validation
+- Config file functionality with `--config` flag
+- Clean YAML formatting for Helm output
+- Channel placeholder and guidance comments
+- Config validation and error handling
+- Permission optimization logic validation
 - Permission scenario handling (cluster-only, namespace-only, both, none)
 - Output formatting and file generation
 - Error handling and edge cases
 
-**Major DRY Refactoring:**
+**Test Structure:**
 
-- **Loop-Based Execution**: `run_all_tests` now uses simple loop instead of 70+ lines of manual calls
-- **Leveraged Infrastructure**: Uses existing `get_available_tests` and `run_specific_test` methods
-- **Eliminated Repetition**: Removed massive code duplication in test execution
-- **Improved Maintainability**: Adding new tests only requires updating `get_available_tests`
-- **Code Reduction**: 67% reduction in `run_all_tests` method size
+- **Loop-Based Execution**: `run_all_tests` uses efficient loop structure
+- **Modular Design**: Uses existing `get_available_tests` and `run_specific_test` methods
+- **Clean Implementation**: Streamlined test execution logic
+- **Easy Extension**: Adding new tests only requires updating `get_available_tests`
 
-### `test_workflow.py` *(NEW)*
+### `test_workflow.py`
 
 Tests complete end-to-end workflow including:
 
@@ -100,39 +98,39 @@ python3 tests/test_workflow.py
 
 ## Test Coverage
 
-### Catalogd Test Coverage *(DRY Patterns Applied)*
+### Catalogd Test Coverage
 
 - ✅ Cluster catalog listing (`list-catalogs` subcommand)
 - ✅ Package discovery and filtering
 - ✅ Channel and version queries
 - ✅ Authentication handling
-- ✅ **NEW:** Config template generation (`--generate-config`)
-- ✅ **NEW:** Config generation with real cluster data
-- ✅ **NEW:** Config file output (stdout and file modes)
+- ✅ Config template generation (`--generate-config`)
+- ✅ Config generation with real cluster data
+- ✅ Config file output (stdout and file modes)
 - ✅ Error scenarios and edge cases
 - ✅ Output formatting validation
-- ✅ **DRY:** Consistent test execution patterns with helper methods
-- ✅ **DRY:** Eliminated code duplication across test methods
+- ✅ Consistent test execution patterns with helper methods
+- ✅ Clean test structure across all test methods
 
-### OPM Test Coverage *(Major DRY Improvements)*
+### OPM Test Coverage
 
 - ✅ Bundle image processing
 - ✅ YAML manifest generation
 - ✅ Helm values generation
-- ✅ **NEW:** Config file functionality (`--config` flag)
-- ✅ **NEW:** FlowStyleList YAML formatting
-- ✅ **NEW:** Channel placeholder and guidance
-- ✅ **NEW:** Config validation and error handling
+- ✅ Config file functionality (`--config` flag)
+- ✅ Clean YAML formatting
+- ✅ Channel placeholder and guidance
+- ✅ Config validation and error handling
 - ✅ RBAC component analysis
-- ✅ DRY deduplication validation
+- ✅ Permission optimization validation
 - ✅ Permission scenario handling
 - ✅ Output directory functionality
 - ✅ Error handling and validation
-- ✅ **DRY:** Loop-based test execution eliminates 70+ lines of duplication
-- ✅ **DRY:** Leveraged existing infrastructure for consistent patterns
-- ✅ **DRY:** Improved maintainability with centralized test execution
+- ✅ Efficient loop-based test execution
+- ✅ Consistent patterns using existing infrastructure
+- ✅ Maintainable centralized test execution
 
-### Complete Workflow Test Coverage *(NEW)*
+### Complete Workflow Test Coverage
 
 - ✅ **End-to-end workflow:** `catalogd --generate-config` → `opm --config`
 - ✅ **Real cluster integration:** Live data extraction and validation
@@ -156,7 +154,7 @@ Example output files:
 
 - `catalogd_test_results_YYYYMMDD_HHMMSS.json`
 - `opm_test_results_YYYYMMDD_HHMMSS.json`
-- `workflow_test_results_YYYYMMDD_HHMMSS.json` *(NEW)*
+- `workflow_test_results_YYYYMMDD_HHMMSS.json`
 
 ## Continuous Integration
 
@@ -187,16 +185,16 @@ These tests can be integrated into CI/CD pipelines:
 
 1. **Catalogd Tests**: Add methods to `CatalogdTestSuite` class
 2. **OPM Tests**: Add methods to `OPMTestSuite` class
-3. **Workflow Tests**: Add methods to `WorkflowTestSuite` class *(NEW)*
+3. **Workflow Tests**: Add methods to `WorkflowTestSuite` class
 4. **Follow Patterns**: Use existing test methods as templates
 5. **Update Coverage**: Add new tests to `run_all_tests()` method
 
-**Benefits of DRY Pattern:**
+**Benefits of Structured Testing:**
 
 - ✅ **Consistent Output**: All tests use same formatting
-- ✅ **Reduced Duplication**: Eliminates repeated execution logic  
-- ✅ **Easier Maintenance**: Changes to test infrastructure affect all tests
-- ✅ **Better Readability**: Success conditions clearly separated
+- ✅ **Clean Implementation**: Streamlined execution logic  
+- ✅ **Easy Maintenance**: Changes to test infrastructure affect all tests
+- ✅ **Clear Structure**: Success conditions clearly separated
 
 ## Troubleshooting
 

@@ -1,6 +1,6 @@
 # RBAC Manager Tool
 
-A comprehensive Python tool for extracting and managing RBAC permissions from operator bundles using the `opm` binary and interacting with OpenShift catalogs via `catalogd`. This tool automates the generation of secure RBAC resources and Helm values for OLMv1 operator deployments.
+A Python tool for extracting and managing RBAC permissions from operator bundles using the `opm` binary and interacting with OpenShift catalogs via `catalogd`. This tool automates the generation of secure RBAC resources and Helm values for OLMv1 operator deployments.
 
 ## Features
 
@@ -13,29 +13,27 @@ A comprehensive Python tool for extracting and managing RBAC permissions from op
   - **Both `clusterPermissions` + `permissions`**: ClusterRoles + grantor Roles (e.g., ArgoCD)
   - **Only `permissions`**: Treat as ClusterRoles (e.g., Quay operator)
   - **Only `clusterPermissions`**: ClusterRoles only
-- **🧹 Advanced DRY Deduplication**: Comprehensive permission deduplication eliminates redundant rules:
+- **🧹 Permission Optimization**: Advanced permission deduplication eliminates redundant rules:
   - Removes duplicate permissions between ClusterRoles and Roles
   - Preserves resource-specific rules with `resourceNames`
   - Handles wildcard permissions intelligently
   - Reduces RBAC complexity and improves security posture
-  - **NEW**: Centralized component analysis with single source of truth
-- **🎨 Enhanced YAML Formatting**: FlowStyleList formatting for readable Helm values with channel guidance:
-  - **NEW**: Consistent flow-style arrays in both YAML and Helm outputs
-  - **NEW**: Eliminated YAML anchors/aliases for cleaner manifests
-  - **NEW**: Shared formatting logic eliminates code duplication
-- **🏗️ Clean Architecture**: Refactored codebase following DRY principles:
-  - **NEW**: Eliminated code duplication across 20+ classes and methods
-  - **NEW**: Centralized error handling with decorator patterns
-  - **NEW**: Shared helper methods and base classes
-  - **NEW**: Atomic file operations and caching improvements
+- **🎨 Enhanced YAML Formatting**: Clean formatting for readable Helm values with channel guidance:
+  - Consistent flow-style arrays in both YAML and Helm outputs
+  - Clean manifests without YAML anchors/aliases
+  - Shared formatting logic for consistency
+- **🏗️ Clean Architecture**: Well-structured codebase with modular design:
+  - Centralized error handling with consistent patterns
+  - Shared helper methods and base classes
+  - Atomic file operations and caching improvements
 - **🛡️ Security Best Practices**: Implements OLMv1 security patterns with comprehensive RBAC optimization
 - **📋 Comprehensive Output**: ServiceAccount, ClusterRole, ClusterRoleBinding, Role, RoleBinding manifests
 - **🔧 Interactive Mode**: User-friendly prompts for catalog and package selection
 - **📊 Debug Logging**: Detailed logging for troubleshooting and analysis
-- **🧪 Comprehensive Test Suite**: Extensive test coverage with DRY patterns:
-  - **NEW**: Refactored test methods using helper patterns
-  - **NEW**: Eliminated test code duplication across catalogd and OPM tests
-  - **NEW**: Improved maintainability and consistency
+- **🧪 Comprehensive Test Suite**: Extensive test coverage with consistent patterns:
+  - Well-structured test methods using helper patterns
+  - Consistent test execution across catalogd and OPM tests
+  - Improved maintainability and reliability
 
 ## Prerequisites
 
@@ -76,32 +74,32 @@ tools/rbac-manager/
 │   │   ├── main_help.txt             # Main command help
 │   │   ├── opm_examples_help.txt     # OPM command examples
 │   │   └── opm_help.txt              # OPM command help
-│   └── libs/                         # Core libraries (refactored with DRY principles)
+│   └── libs/                         # Core libraries
 │       ├── catalogd/                 # Catalogd integration
 │       │   ├── __init__.py           # Comprehensive module exports
-│       │   ├── cache.py              # Atomic caching with write-and-rename
-│       │   ├── client.py             # Centralized error handling with enum templates
-│       │   ├── parser.py             # DRY data extraction methods
-│       │   ├── service.py            # Instance caching for expensive operations
-│       │   └── session.py            # SRP-compliant streaming with gzip compression
+│       │   ├── cache.py              # Caching functionality
+│       │   ├── client.py             # Client implementation with error handling
+│       │   ├── parser.py             # Data extraction methods
+│       │   ├── service.py            # Service layer for catalogd operations
+│       │   └── session.py            # HTTP session management
 │       ├── core/                     # Core utilities
 │       │   ├── __init__.py           # Comprehensive module exports
-│       │   ├── auth.py               # Decorator pattern for error handling
-│       │   ├── config.py             # Schema-based validation, centralized file writing
-│       │   ├── constants.py          # Enum-based constants (NetworkConstants, etc.)
-│       │   ├── exceptions.py         # Hierarchical exception structure
-│       │   ├── protocols.py          # Type protocols for dependency injection
-│       │   └── utils.py              # Shared validation helpers with DRY patterns
-│       ├── opm/                      # OPM integration (heavily refactored)
-│       │   ├── __init__.py           # Comprehensive module exports
-│       │   ├── base_generator.py     # Shared formatting logic, centralized RBAC analysis
-│       │   ├── client.py             # DRY command building with helper methods
-│       │   ├── helm_generator.py     # Uses shared base formatting methods
-│       │   ├── processor.py          # Centralized error handling patterns
-│       │   └── yaml_generator.py     # SRP-compliant, uses shared base methods
-│       ├── __init__.py               # Comprehensive library exports
+│       │   ├── auth.py               # Authentication handling
+│       │   ├── config.py             # Configuration management and validation
+│       │   ├── constants.py          # Application constants
+│       │   ├── exceptions.py         # Custom exception definitions
+│       │   ├── protocols.py          # Type protocols and interfaces
+│       │   └── utils.py              # Shared utility functions
+│       ├── opm/                      # OPM integration
+│       │   ├── __init__.py           # Module exports
+│       │   ├── base_generator.py     # Base class for RBAC generators
+│       │   ├── client.py             # OPM command execution
+│       │   ├── helm_generator.py     # Helm values generation
+│       │   ├── processor.py          # Bundle processing logic
+│       │   └── yaml_generator.py     # YAML manifest generation
+│       ├── __init__.py               # Library exports
 │       ├── help_manager.py           # Help system manager
-│       └── main_app.py               # Parent parsers to eliminate redundancy
+│       └── main_app.py               # Main application logic
 ├── rbac-manager.py                   # CLI entry point
 ├── requirements.txt                  # Python dependencies
 └── README.md                         # This documentation
@@ -324,43 +322,20 @@ python3 rbac-manager.py opm --config ./config/argocd-operator-rbac-config.yaml
 - `--debug`: Enable debug logging
 - `--examples`: Show usage examples
 
-## Advanced DRY Architecture & Deduplication
+## Permission Optimization
 
-The RBAC Manager implements comprehensive **DRY (Don't Repeat Yourself)** principles throughout the entire codebase, from RBAC permission deduplication to code architecture refactoring.
+The RBAC Manager implements intelligent permission optimization to create clean, secure RBAC configurations.
 
-### RBAC Deduplication Logic
+### Permission Deduplication Logic
 
 1. **Duplicate Detection**: Identifies when Role permissions are already covered by broader ClusterRole permissions
 2. **Wildcard Handling**: Recognizes when ClusterRole wildcard permissions (`verbs: ['*']`) supersede specific Role permissions
 3. **Resource-Specific Preservation**: Keeps Role rules with `resourceNames` even when broader ClusterRole permissions exist
-4. **Multi-Stage Filtering**: Applies deduplication at multiple stages for comprehensive cleanup
-5. **Centralized Analysis**: Single source of truth for RBAC component analysis eliminates duplicated logic
-
-### Code Architecture Improvements
-
-The entire codebase has been refactored following DRY principles:
-
-#### **Eliminated Code Duplication Across:**
-
-- **Generator Classes**: Shared formatting logic in `BaseGenerator` eliminates 67+ lines of duplication
-- **Error Handling**: Decorator patterns and centralized error handling across 15+ classes
-- **Network Operations**: Shared HTTP client logic and response handling patterns
-- **File Operations**: Atomic write patterns and centralized file management
-- **Test Suites**: Helper methods eliminate 100+ lines of test code duplication
-- **Validation Logic**: Shared validation helpers with single input validation function
-- **Constants**: Enum-based constants replace scattered magic numbers and strings
-
-#### **Architectural Patterns Applied:**
-
-- **Single Responsibility Principle**: Classes focused on single concerns
-- **Dependency Injection**: Protocol-based interfaces for better testability
-- **Template Method Pattern**: Base classes with shared logic and customizable behavior
-- **Decorator Pattern**: Centralized cross-cutting concerns like error handling
-- **Factory Pattern**: Centralized object creation with consistent initialization
+4. **Multi-Stage Filtering**: Applies optimization at multiple stages for comprehensive cleanup
 
 ### Example
 
-**Before Deduplication** (redundant):
+**Before Optimization** (redundant):
 
 ```yaml
 # ClusterRole
@@ -377,7 +352,7 @@ The entire codebase has been refactored following DRY principles:
   verbs: [create, list, watch]
 ```
 
-**After Deduplication** (optimized):
+**After Optimization** (clean):
 
 ```yaml
 # ClusterRole (unchanged)
@@ -394,20 +369,10 @@ The entire codebase has been refactored following DRY principles:
 
 ### Benefits
 
-#### **RBAC Security Benefits:**
-
 - **🔒 Enhanced Security**: Eliminates permission redundancy and potential conflicts
 - **📉 Reduced Complexity**: Fewer RBAC rules to manage and audit
 - **🎯 Precise Permissions**: Preserves granular resource-specific access controls
 - **🚀 Automatic**: No manual intervention required - works out of the box
-
-#### **Code Quality Benefits:**
-
-- **🧹 Maintainability**: Single source of truth for common functionality
-- **🐛 Reduced Bugs**: Less code duplication means fewer places for bugs to hide
-- **⚡ Faster Development**: Shared components accelerate feature development
-- **🔧 Easier Testing**: Centralized logic is easier to test and validate
-- **📊 Better Performance**: Optimized shared algorithms and caching strategies
 
 ## Output
 

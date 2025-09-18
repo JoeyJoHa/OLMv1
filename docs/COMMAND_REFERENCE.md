@@ -2,7 +2,7 @@
 
 This section provides practical commands for interacting with OLMv1 catalogs and analyzing operator bundles. Most commands use the `opm` tool, but equivalent `catalogd` interactions are also shown.
 
-> **💡 Tip**: For easier RBAC extraction and operator analysis, consider using the [RBAC Manager Tool](../tools/rbac-manager/) which automates many of these manual processes with a user-friendly interface, configuration file support, and **comprehensive DRY architecture** that eliminates redundant RBAC rules between ClusterRoles and Roles, plus extensive code quality improvements throughout the entire codebase.
+> **💡 Tip**: For easier RBAC extraction and operator analysis, consider using the [RBAC Manager Tool](../tools/rbac-manager/) which automates many of these manual processes with a user-friendly interface, configuration file support, and **intelligent permission optimization** that eliminates redundant RBAC rules between ClusterRoles and Roles.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ This section provides practical commands for interacting with OLMv1 catalogs and
 
 ## RBAC Manager Tool Commands
 
-The RBAC Manager Tool provides a streamlined interface for catalog discovery, configuration management, and RBAC extraction. The tool has been extensively refactored with DRY (Don't Repeat Yourself) principles, featuring comprehensive code quality improvements, centralized error handling, and advanced RBAC deduplication. Use these commands for the most efficient OLMv1 workflow:
+The RBAC Manager Tool provides a streamlined interface for catalog discovery, configuration management, and RBAC extraction. The tool features comprehensive functionality, centralized error handling, and advanced RBAC optimization. Use these commands for the most efficient OLMv1 workflow:
 
 ### List Available Catalogs
 
@@ -446,7 +446,7 @@ opm render registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e
 
 ## Integration with RBAC Manager
 
-For automated processing of these commands and more user-friendly interfaces, consider using the [RBAC Manager Tool](../tools/rbac-manager/) with **comprehensive DRY architecture and intelligent deduplication**:
+For automated processing of these commands and more user-friendly interfaces, consider using the [RBAC Manager Tool](../tools/rbac-manager/) with **intelligent permission optimization**:
 
 ### Basic Operations
 
@@ -463,15 +463,15 @@ python3 rbac-manager.py --list-catalogs
 # Automated RBAC extraction
 python3 rbac-manager.py --opm --image <bundle-image>
 
-# Generate Helm values with security notices and DRY deduplication
+# Generate Helm values with security notices and permission optimization
 python3 rbac-manager.py --opm --image <bundle-image> --helm
 ```
 
-### Comprehensive DRY Architecture Benefits
+### Permission Optimization Benefits
 
-The RBAC Manager has been completely refactored with **DRY (Don't Repeat Yourself)** principles applied throughout:
+The RBAC Manager provides intelligent permission optimization:
 
-#### **RBAC Deduplication:**
+#### **RBAC Optimization:**
 
 - **🔍 Removes Duplicates**: Automatically removes Role permissions that are already covered by ClusterRole permissions
 - **🎯 Preserves Specificity**: Keeps resource-specific rules with `resourceNames` even when broader permissions exist
@@ -479,13 +479,13 @@ The RBAC Manager has been completely refactored with **DRY (Don't Repeat Yoursel
 - **🧹 Cleaner Output**: Results in fewer, more maintainable RBAC rules
 - **🔒 Better Security**: Reduces permission conflicts and potential security issues
 
-#### **Code Architecture Improvements:**
+#### **Architecture Benefits:**
 
-- **🏗️ Centralized Logic**: Single source of truth for RBAC component analysis eliminates duplicated logic
-- **🎨 Consistent Formatting**: Shared FlowStyleList formatting across YAML and Helm outputs
-- **🛡️ Enhanced Error Handling**: Decorator patterns and centralized error handling across 15+ classes
+- **🏗️ Centralized Logic**: Single source of truth for RBAC component analysis
+- **🎨 Consistent Formatting**: Clean formatting across YAML and Helm outputs
+- **🛡️ Enhanced Error Handling**: Comprehensive error handling patterns
 - **⚡ Optimized Performance**: Instance caching and atomic file operations
-- **🧪 Improved Testing**: DRY test patterns eliminate 100+ lines of test code duplication
+- **🧪 Comprehensive Testing**: Extensive test coverage ensures reliability
 
 **Example**: If a ClusterRole grants `verbs: ['*']` on `resources: [configmaps, services]`, redundant Role rules for those same resources are automatically removed, keeping only resource-specific rules with `resourceNames`.
 
@@ -533,15 +533,15 @@ python3 rbac-manager.py --opm --image <bundle-image> --namespace production | ku
 
 ### Generated Examples Structure
 
-The RBAC Manager tool outputs examples in the following structure with comprehensive DRY improvements:
+The RBAC Manager tool outputs examples in the following structure:
 
 ```tree
 examples/rbac-manager/
-├── generated-files/          # Fresh tool outputs with advanced DRY deduplication
-│   ├── argocd-operator-*.yaml # Complete Helm values with channel guidance and flow-style arrays
-│   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole (centrally analyzed and deduplicated)
+├── generated-files/          # Fresh tool outputs with permission optimization
+│   ├── argocd-operator-*.yaml # Complete Helm values with channel guidance and clean formatting
+│   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole (analyzed and optimized)
 │   ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
-│   ├── argocd-operator-role-*.yaml # Generated Role (DRY filtered against ClusterRole)
+│   ├── argocd-operator-role-*.yaml # Generated Role (optimized against ClusterRole)
 │   ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
 │   └── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
 └── post-installation/        # Hardened examples after deployment
@@ -556,11 +556,11 @@ examples/rbac-manager/
   - **NEW**: Centralized RBAC component analysis eliminates duplication bugs
 - **`post-installation/`**: Reference these examples after deployment to harden permissions with specific `resourceNames`
 
-**DRY Architecture Benefits:**
+**Architecture Benefits:**
 
 - **Centralized Generation**: All RBAC components generated through single analysis pipeline
-- **Shared Formatting**: Consistent YAML/Helm formatting eliminates code duplication
+- **Consistent Formatting**: Clean YAML/Helm formatting for readability
 - **Atomic Operations**: File generation uses atomic write patterns for reliability
-- **Enhanced Testing**: Comprehensive test coverage with DRY patterns ensures quality
+- **Comprehensive Testing**: Extensive test coverage ensures quality
 
-The RBAC Manager tool automates many of these manual processes and provides additional features like configuration file support, automatic cluster discovery, live catalogd data extraction, integrated deployment capabilities, and a completely refactored codebase following clean architecture principles.
+The RBAC Manager tool automates many of these manual processes and provides additional features like configuration file support, automatic cluster discovery, live catalogd data extraction, and integrated deployment capabilities.
