@@ -560,6 +560,11 @@ def generate_config_file(args, extracted_data=None, output_path=None, stdout=Fal
     """
     config_manager = ConfigManager()
     
+    # Calculate configuration values once to eliminate duplication (DRY principle)
+    output_mode = 'file' if (hasattr(args, 'output') and args.output) else 'stdout'
+    output_type = 'helm' if (hasattr(args, 'helm') and args.helm) else 'yaml'
+    namespace = getattr(args, 'namespace', 'default')
+    
     # Determine if we should output to stdout or file
     output_to_stdout = stdout or (not output_path and not (hasattr(args, 'output') and args.output))
     
@@ -569,9 +574,9 @@ def generate_config_file(args, extracted_data=None, output_path=None, stdout=Fal
             # Get YAML content directly as string
             yaml_content = config_manager.get_config_with_values_content(
                 extracted_data=extracted_data,
-                output_mode='file' if (hasattr(args, 'output') and args.output) else 'stdout',
-                output_type='helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
-                namespace=getattr(args, 'namespace', 'default')
+                output_mode=output_mode,
+                output_type=output_type,
+                namespace=namespace
             )
             print(yaml_content)
         else:
@@ -589,9 +594,9 @@ def generate_config_file(args, extracted_data=None, output_path=None, stdout=Fal
             return config_manager.generate_config_with_values(
                 extracted_data=extracted_data,
                 output_dir=output_dir,
-                output_mode='file' if (hasattr(args, 'output') and args.output) else 'stdout',
-                output_type='helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
-                namespace=getattr(args, 'namespace', 'default')
+                output_mode=output_mode,
+                output_type=output_type,
+                namespace=namespace
             )
         else:
             # Generate template config
