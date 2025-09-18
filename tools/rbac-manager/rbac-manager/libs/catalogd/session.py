@@ -200,6 +200,112 @@ class CatalogdSession:
             self._close_ssl_socket()
             raise NetworkError(f"Session request failed: {e}")
     
+    def _read_headers_and_status(self) -> Tuple[Dict[str, Any], int, bytes]:
+        """
+        Read and parse HTTP response headers, validate status code
+        
+        Returns:
+            Tuple of (parsed_headers_dict, body_start_position, initial_response_data)
+            
+        Raises:
+            NetworkError: If headers are invalid or status code is not 200
+        """
+        response_data = b""
+        chunk_size = 16384  # 16KB chunks for better performance
+        
+        # Read until we have complete headers
+        while b"\r\n\r\n" not in response_data:
+            chunk = self._ssl_socket.recv(chunk_size)
+            if not chunk:
+                raise NetworkError("Connection closed while reading headers")
+            response_data += chunk
+        
+        # Find where headers end and body begins
+        header_end = response_data.find(b"\r\n\r\n")
+        headers_part = response_data[:header_end].decode('utf-8')
+        body_start = header_end + 4
+        
+        # Validate status code and provide detailed error messages
+        status_line = headers_part.split('\r\n')[0]
+        status_code = int(status_line.split(' ')[1])
+        if status_code != 200:
+            if status_code == 404:
+                raise NetworkError(f"HTTP 404 Not Found: {status_line}")
+            elif status_code == 401:
+                raise NetworkError(f"HTTP 401 Unauthorized: {status_line}")
+            elif status_code == 403:
+                raise NetworkError(f"HTTP 403 Forbidden: {status_line}")
+            elif status_code == 500:
+                raise NetworkError(f"HTTP 500 Internal Server Error: {status_line}")
+            elif status_code == 503:
+                raise NetworkError(f"HTTP 503 Service Unavailable: {status_line}")
+            else:
+                raise NetworkError(f"HTTP request failed with status {status_code}: {status_line}")
+        
+        # Parse headers for optimization
+        content_length, is_chunked, is_compressed = self._parse_response_headers(headers_part)
+        
+        # Return parsed headers as dictionary for easier access
+        headers_dict = {
+            'content_length': content_length,
+            'is_chunked': is_chunked,
+            'is_compressed': is_compressed,
+            'status_code': status_code,
+            'raw_headers': headers_part
+        }
+        
+        return headers_dict, body_start, response_data
+    
+    def _read_body(self, headers_dict: Dict[str, Any], body_start: int, initial_data: bytes) -> bytes:
+        """
+        Read the complete HTTP response body based on headers
+        
+        Args:
+            headers_dict: Parsed headers dictionary from _read_headers_and_status
+            body_start: Position where body starts in initial_data
+            initial_data: Initial response data containing headers and partial body
+            
+        Returns:
+            bytes: Complete response body
+            
+        Raises:
+            NetworkError: If body reading fails
+        """
+        content_length = headers_dict['content_length']
+        is_compressed = headers_dict['is_compressed']
+        chunk_size = 16384  # 16KB chunks for better performance
+        
+        # Start with any body data we already have
+        response_data = initial_data
+        
+        # Continue reading until we have the complete body
+        while True:
+            body_length = len(response_data) - body_start
+            if content_length is not None and body_length >= content_length:
+                logger.debug(f"Received complete response: {body_length}/{content_length} bytes")
+                break
+            
+            # Read more data
+            chunk = self._ssl_socket.recv(chunk_size)
+            if not chunk:
+                break
+            response_data += chunk
+        
+        # Extract body bytes
+        body_bytes = response_data[body_start:]
+        if content_length is not None:
+            body_bytes = body_bytes[:content_length]
+        
+        # Handle compression
+        if is_compressed:
+            try:
+                body_bytes = self._decompress_response(body_bytes, is_compressed)
+            except Exception as e:
+                logger.debug(f"Decompression failed, using raw data: {e}")
+                # Continue with raw data if decompression fails
+        
+        return body_bytes
+    
     def _read_response_streaming(self) -> str:
         """
         Read HTTP response with streaming for better performance
@@ -210,68 +316,14 @@ class CatalogdSession:
         Raises:
             NetworkError: If response reading fails
         """
-        response_data = b""
-        headers_complete = False
-        content_length = None
-        body_start = 0
-        chunk_size = 16384  # 16KB chunks for better performance
-        
         try:
-            while True:
-                chunk = self._ssl_socket.recv(chunk_size)
-                if not chunk:
-                    break
-                
-                response_data += chunk
-                
-                # Parse headers if not done yet
-                if not headers_complete and b"\r\n\r\n" in response_data:
-                    header_end = response_data.find(b"\r\n\r\n")
-                    headers_part = response_data[:header_end].decode('utf-8')
-                    body_start = header_end + 4
-                    headers_complete = True
-                    
-                    # Parse headers for optimization
-                    content_length, is_chunked, is_compressed = self._parse_response_headers(headers_part)
-                    
-                    # Validate status code and provide detailed error messages
-                    status_line = headers_part.split('\r\n')[0]
-                    status_code = int(status_line.split(' ')[1])
-                    if status_code != 200:
-                        if status_code == 404:
-                            raise NetworkError(f"HTTP 404 Not Found: {status_line}")
-                        elif status_code == 401:
-                            raise NetworkError(f"HTTP 401 Unauthorized: {status_line}")
-                        elif status_code == 403:
-                            raise NetworkError(f"HTTP 403 Forbidden: {status_line}")
-                        elif status_code == 500:
-                            raise NetworkError(f"HTTP 500 Internal Server Error: {status_line}")
-                        elif status_code == 503:
-                            raise NetworkError(f"HTTP 503 Service Unavailable: {status_line}")
-                        else:
-                            raise NetworkError(f"HTTP request failed with status {status_code}: {status_line}")
-                
-                # Check if we have complete response
-                if headers_complete:
-                    body_length = len(response_data) - body_start
-                    if content_length is not None and body_length >= content_length:
-                        logger.debug(f"Received complete response: {body_length}/{content_length} bytes")
-                        break
+            # Step 1: Read and validate headers
+            headers_dict, body_start, initial_data = self._read_headers_and_status()
             
-            if not headers_complete:
-                raise NetworkError("Invalid HTTP response - no headers found")
+            # Step 2: Read complete body
+            body_bytes = self._read_body(headers_dict, body_start, initial_data)
             
-            # Extract and decompress body
-            body_bytes = response_data[body_start:]
-            
-            # Handle compression
-            if is_compressed:
-                try:
-                    body_bytes = self._decompress_response(body_bytes, is_compressed)
-                except Exception as e:
-                    logger.debug(f"Decompression failed, using raw data: {e}")
-                    # Continue with raw data if decompression fails
-            
+            # Step 3: Convert to string and return
             return body_bytes.decode('utf-8')
             
         except ssl.SSLWantReadError:
