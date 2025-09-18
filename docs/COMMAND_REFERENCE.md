@@ -84,8 +84,8 @@ python3 rbac-manager.py catalogd --generate-config \
 ### Extract RBAC Resources
 
 ```bash
-# Using configuration file (recommended)
-python3 rbac-manager.py opm --config operatorname-rbac-config.yaml
+# Using configuration file (recommended) - filename auto-generated from operator name
+python3 rbac-manager.py opm --config nginx-ingress-operator-rbac-config.yaml
 
 # Direct bundle extraction
 python3 rbac-manager.py opm \
@@ -94,7 +94,7 @@ python3 rbac-manager.py opm \
 
 # Save RBAC to files
 python3 rbac-manager.py opm \
-  --config operatorname-rbac-config.yaml \
+  --config nginx-ingress-operator-rbac-config.yaml \
   --output ./rbac-files
 ```
 
@@ -114,8 +114,8 @@ python3 rbac-manager.py catalogd --generate-config \
   --openshift-token sha256~your-token --skip-tls \
   --output ./config
 
-# Step 3: Extract RBAC
-python3 rbac-manager.py opm --config ./config/operatorname-rbac-config.yaml
+# Step 3: Extract RBAC (filename auto-generated from operator name)
+python3 rbac-manager.py opm --config ./config/argocd-operator-rbac-config.yaml
 
 # Step 4: Deploy RBAC resources
 kubectl apply -f argocd-operator-serviceaccount-*.yaml

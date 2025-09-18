@@ -247,13 +247,14 @@ Extract metadata from operator bundle images and generate RBAC resources:
 **Using configuration file (YAML manifests):**
 
 ```bash
-python3 rbac-manager.py opm --config operatorname-rbac-config.yaml
+# Configuration filename is automatically generated: {operator-name}-rbac-config.yaml
+python3 rbac-manager.py opm --config nginx-ingress-operator-rbac-config.yaml
 ```
 
 **Using configuration file (Helm values) - modify config file to set `output.type: helm`:**
 
 ```bash
-python3 rbac-manager.py opm --config operatorname-rbac-config.yaml
+python3 rbac-manager.py opm --config nginx-ingress-operator-rbac-config.yaml
 ```
 
 **Direct bundle extraction (YAML manifests):**
@@ -294,11 +295,11 @@ python3 rbac-manager.py catalogd --generate-config \
   --openshift-token sha256~token --skip-tls \
   --output ./config
 
-# Step 3: Extract RBAC using configuration
-python3 rbac-manager.py opm --config ./config/operatorname-rbac-config.yaml
+# Step 3: Extract RBAC using configuration (filename auto-generated from operator name)
+python3 rbac-manager.py opm --config ./config/argocd-operator-rbac-config.yaml
 
 # Step 4: For Helm values, modify config file to set output.type: helm, then:
-python3 rbac-manager.py opm --config ./config/operatorname-rbac-config.yaml
+python3 rbac-manager.py opm --config ./config/argocd-operator-rbac-config.yaml
 ```
 
 ### Command-Specific Flags

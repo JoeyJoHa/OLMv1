@@ -338,11 +338,15 @@ class ConfigManager:
         
         return self._dict_to_yaml_with_comments(template)
     
-    def get_config_with_values_content(self, extracted_data: Dict[str, Any], 
-                                     output_mode: str = "stdout", output_type: str = "yaml", 
-                                     namespace: str = None) -> str:
+    def get_config_with_values_content(
+        self,
+        extracted_data: Dict[str, Any],
+        output_mode: str = "stdout",
+        output_type: str = "yaml",
+        namespace: str = None
+    ) -> str:
         """
-        Generate configuration content with extracted values as string without file I/O
+        Generate configuration content with extracted values as string without file I/O.
         
         Args:
             extracted_data: Dictionary with extracted values (bundle_image, channel, package, version)
@@ -368,7 +372,7 @@ class ConfigManager:
     
     def _generate_config_filename(self, package_name: str = None) -> str:
         """
-        Generate configuration filename based on operator name (DRY helper)
+        Generate configuration filename based on operator name (DRY helper).
         
         Args:
             package_name: Name of the operator package
@@ -377,18 +381,22 @@ class ConfigManager:
             str: Generated configuration filename
         """
         if package_name:
-            # Sanitize the package name for filename use
+            # Import locally to avoid circular imports (PEP 8 compliant)
             from .utils import sanitize_filename
             sanitized_name = sanitize_filename(package_name)
             return f"{sanitized_name}-rbac-config.yaml"
-        else:
-            return FileConstants.DEFAULT_CONFIG_FILE
+        return FileConstants.DEFAULT_CONFIG_FILE
     
-    def generate_config_with_values(self, extracted_data: Dict[str, Any], output_dir: str = None, 
-                                  output_mode: str = "stdout", output_type: str = "yaml", 
-                                  namespace: str = None) -> str:
+    def generate_config_with_values(
+        self,
+        extracted_data: Dict[str, Any],
+        output_dir: str = None,
+        output_mode: str = "stdout",
+        output_type: str = "yaml",
+        namespace: str = None
+    ) -> str:
         """
-        Generate configuration file with extracted values
+        Generate configuration file with extracted values.
         
         Args:
             extracted_data: Dictionary with extracted values (bundle_image, channel, package, version)

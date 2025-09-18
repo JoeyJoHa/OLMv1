@@ -156,7 +156,7 @@ python3 rbac-manager.py catalogd --generate-config \
   --openshift-url https://api.cluster.example.com:6443 \
   --openshift-token sha256~token
 
-# Extract RBAC using generated configuration
+# Extract RBAC using generated configuration (filename generated automatically)
 python3 rbac-manager.py opm --config nginx-ingress-operator-rbac-config.yaml
 
 # Direct RBAC extraction with bundle image
