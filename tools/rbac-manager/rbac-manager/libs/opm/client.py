@@ -101,12 +101,94 @@ class OPMClient:
         
         return cmd
     
-    def validate_image(self, image: str) -> bool:
+    def _run_opm_command(self, image: str, registry_token: str = None) -> subprocess.CompletedProcess:
+        """
+        Centralized helper method to run opm commands with authentication (DRY principle)
+        
+        Args:
+            image: Container image URL
+            registry_token: Registry authentication token (optional)
+            
+        Returns:
+            subprocess.CompletedProcess: Result of the command execution
+            
+        Raises:
+            BundleProcessingError: If command execution fails
+        """
+        try:
+            validate_image_url(image)
+            
+            # Build render command using centralized helper
+            cmd = self._build_render_command(image)
+            
+            # Set up environment for registry authentication
+            env = {}
+            auth_file_path = None
+            
+            # Enhanced registry authentication handling
+            if registry_token:
+                # Use provided token
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    auth_file_path = self._create_auth_file_from_token(registry_token, image, Path(temp_dir))
+                    env['REGISTRY_AUTH_FILE'] = auth_file_path
+                    
+                    logger.debug(f"Running opm command with authentication: {' '.join(cmd)}")
+                    logger.debug(f"Using authentication file: {auth_file_path}")
+                    
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=NetworkConstants.BUNDLE_EXTRACTION_TIMEOUT,
+                        env={**os.environ, **env}
+                    )
+                    return result
+            else:
+                # Auto-discover authentication from standard locations
+                discovered_auth = self._discover_registry_auth(image)
+                if discovered_auth:
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        auth_file_path = self._create_auth_file_from_discovered(discovered_auth, image, Path(temp_dir))
+                        env['REGISTRY_AUTH_FILE'] = auth_file_path
+                        logger.info(f"Using discovered registry authentication for {self._extract_registry_from_image(image)}")
+                        
+                        logger.debug(f"Running opm command with discovered auth: {' '.join(cmd)}")
+                        logger.debug(f"Using authentication file: {auth_file_path}")
+                        
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=NetworkConstants.BUNDLE_EXTRACTION_TIMEOUT,
+                            env={**os.environ, **env}
+                        )
+                        return result
+                else:
+                    # No authentication needed/available
+                    logger.debug(f"Running opm command without authentication: {' '.join(cmd)}")
+                    
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=NetworkConstants.BUNDLE_EXTRACTION_TIMEOUT
+                    )
+                    return result
+                    
+        except subprocess.TimeoutExpired:
+            raise BundleProcessingError(f"OPM command timed out for image: {image}")
+        except Exception as e:
+            if isinstance(e, BundleProcessingError):
+                raise
+            raise BundleProcessingError(f"Failed to run opm command: {e}")
+    
+    def validate_image(self, image: str, registry_token: str = None) -> bool:
         """
         Validate if image is accessible and is a valid bundle/index
         
         Args:
             image: Container image URL
+            registry_token: Registry authentication token (optional)
             
         Returns:
             bool: True if image is valid
@@ -115,19 +197,8 @@ class OPMClient:
             BundleProcessingError: If image validation fails
         """
         try:
-            validate_image_url(image)
-            
-            # Build render command using centralized helper
-            cmd = self._build_render_command(image)
-            
-            logger.debug(f"Validating bundle image with command: {' '.join(cmd)}")
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=NetworkConstants.PORT_FORWARD_TIMEOUT
-            )
+            # Use centralized helper method (DRY principle)
+            result = self._run_opm_command(image, registry_token)
             
             if result.returncode == 0:
                 # Check if we got valid JSON output
@@ -139,9 +210,9 @@ class OPMClient:
                 logger.debug(f"Bundle image validation failed: {result.stderr}")
                 raise BundleProcessingError(f"Image validation failed: {result.stderr}")
                 
-        except subprocess.TimeoutExpired:
-            raise BundleProcessingError(f"Image validation timed out for: {image}")
         except Exception as e:
+            if isinstance(e, BundleProcessingError):
+                raise
             raise BundleProcessingError(f"Failed to validate image {image}: {e}")
     
     def is_index_image(self, image: str) -> bool:
@@ -199,41 +270,8 @@ class OPMClient:
             BundleProcessingError: If extraction fails
         """
         try:
-            validate_image_url(image)
-            
-            # Build render command using centralized helper
-            cmd = self._build_render_command(image)
-            
-            # Set up environment for registry authentication
-            env = {}
-            auth_file_path = None
-            
-            # Enhanced registry authentication handling
-            if registry_token:
-                # Use provided token
-                 with tempfile.TemporaryDirectory() as temp_dir:
-                    auth_file_path = self._create_auth_file_from_token(registry_token, image, Path(temp_dir))
-                    env['REGISTRY_AUTH_FILE'] = auth_file_path
-            else:
-                # Auto-discover authentication from standard locations
-                discovered_auth = self._discover_registry_auth(image)
-                if discovered_auth:
-                    with tempfile.TemporaryDirectory() as temp_dir:
-                        auth_file_path = self._create_auth_file_from_discovered(discovered_auth, image, Path(temp_dir))
-                        env['REGISTRY_AUTH_FILE'] = auth_file_path
-                        logger.info(f"Using discovered registry authentication for {self._extract_registry_from_image(image)}")
-            
-            logger.debug(f"Rendering bundle with command: {' '.join(cmd)}")
-            if auth_file_path:
-                logger.debug(f"Using authentication file: {auth_file_path}")
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=NetworkConstants.BUNDLE_EXTRACTION_TIMEOUT,
-                env={**os.environ, **env} if env else None
-            )
+            # Use centralized helper method (DRY principle)
+            result = self._run_opm_command(image, registry_token)
             
             if result.returncode != 0:
                 raise BundleProcessingError(f"Failed to render bundle: {result.stderr}")
@@ -245,8 +283,6 @@ class OPMClient:
             logger.info(f"Successfully extracted bundle metadata from: {image}")
             return metadata
                 
-        except subprocess.TimeoutExpired:
-            raise BundleProcessingError(f"Bundle extraction timed out for: {image}")
         except Exception as e:
             if isinstance(e, BundleProcessingError):
                 raise

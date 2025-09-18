@@ -62,8 +62,8 @@ class BundleProcessor:
             BundleProcessingError: When bundle processing fails
         """
         try:
-            # Validate image first
-            self.client.validate_image(image)
+            # Validate image first (pass registry_token for authentication)
+            self.client.validate_image(image, registry_token)
             
             # Extract raw metadata
             raw_metadata = self.client.extract_bundle_metadata(image, registry_token)
