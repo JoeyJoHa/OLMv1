@@ -295,89 +295,78 @@ class CatalogdTestSuite:
     
     def test_list_channels(self) -> bool:
         """Test listing channels for a package"""
-        print("🧪 Testing channel listing...")
+        def success_condition(result):
+            return (
+                result["exit_code"] == 0 and
+                result["json_data"] is not None and
+                result["json_data"].get("type") == "channels" and
+                isinstance(result["json_data"].get("data"), list) and
+                len(result["json_data"]["data"]) > 0
+            )
         
-        result = self.run_command([
-            "--catalog-name", self.test_catalog,
-            "--package", self.test_package
-        ])
-        
-        success = (
-            result["exit_code"] == 0 and
-            result["json_data"] is not None and
-            result["json_data"].get("type") == "channels" and
-            isinstance(result["json_data"].get("data"), list) and
-            len(result["json_data"]["data"]) > 0
+        success = self._run_catalogd_test(
+            "list_channels",
+            "channel listing",
+            ["--catalog-name", self.test_catalog, "--package", self.test_package],
+            success_condition
         )
         
-        self.test_results.append({
-            "test": "list_channels",
-            "success": success,
-            "details": result
-        })
-        
+        # Get the result for status message
+        result = self.test_results[-1]["details"]
         channel_count = len(result["json_data"]["data"]) if result["json_data"] else 0
-        print(f"   {'✅' if success else '❌'} Channel listing: {channel_count} channels found")
+        self._print_test_status("Channel listing", success, f"{channel_count} channels found")
         return success
     
     def test_list_versions(self) -> bool:
         """Test listing versions for a package and channel"""
-        print("🧪 Testing version listing...")
+        def success_condition(result):
+            return (
+                result["exit_code"] == 0 and
+                result["json_data"] is not None and
+                result["json_data"].get("type") == "versions" and
+                isinstance(result["json_data"].get("data"), list) and
+                len(result["json_data"]["data"]) > 0
+            )
         
-        result = self.run_command([
-            "--catalog-name", self.test_catalog,
-            "--package", self.test_package,
-            "--channel", self.test_channel
-        ])
-        
-        success = (
-            result["exit_code"] == 0 and
-            result["json_data"] is not None and
-            result["json_data"].get("type") == "versions" and
-            isinstance(result["json_data"].get("data"), list) and
-            len(result["json_data"]["data"]) > 0
+        success = self._run_catalogd_test(
+            "list_versions",
+            "version listing",
+            ["--catalog-name", self.test_catalog, "--package", self.test_package, "--channel", self.test_channel],
+            success_condition
         )
         
-        self.test_results.append({
-            "test": "list_versions",
-            "success": success,
-            "details": result
-        })
-        
+        # Get the result for status message
+        result = self.test_results[-1]["details"]
         version_count = len(result["json_data"]["data"]) if result["json_data"] else 0
-        print(f"   {'✅' if success else '❌'} Version listing: {version_count} versions found")
+        self._print_test_status("Version listing", success, f"{version_count} versions found")
         return success
     
     def test_get_metadata(self) -> bool:
         """Test getting metadata for a specific version"""
-        print("🧪 Testing metadata retrieval...")
+        def success_condition(result):
+            return (
+                result["exit_code"] == 0 and
+                result["json_data"] is not None and
+                result["json_data"].get("type") == "metadata" and
+                isinstance(result["json_data"].get("data"), dict) and
+                "bundle_image" in result["json_data"]["data"] and
+                "olmv1_compatible" in result["json_data"]["data"] and
+                "install_modes" in result["json_data"]["data"] and
+                "webhooks" in result["json_data"]["data"]
+            )
         
-        result = self.run_command([
-            "--catalog-name", self.test_catalog,
-            "--package", self.test_package,
-            "--channel", self.test_channel,
-            "--version", self.test_version
-        ])
-        
-        success = (
-            result["exit_code"] == 0 and
-            result["json_data"] is not None and
-            result["json_data"].get("type") == "metadata" and
-            isinstance(result["json_data"].get("data"), dict) and
-            "bundle_image" in result["json_data"]["data"] and
-            "olmv1_compatible" in result["json_data"]["data"] and
-            "install_modes" in result["json_data"]["data"] and
-            "webhooks" in result["json_data"]["data"]
+        success = self._run_catalogd_test(
+            "get_metadata",
+            "metadata retrieval",
+            ["--catalog-name", self.test_catalog, "--package", self.test_package, 
+             "--channel", self.test_channel, "--version", self.test_version],
+            success_condition
         )
         
-        self.test_results.append({
-            "test": "get_metadata",
-            "success": success,
-            "details": result
-        })
-        
+        # Get the result for status message
+        result = self.test_results[-1]["details"]
         bundle_image = result["json_data"]["data"].get("bundle_image") if result["json_data"] else "N/A"
-        print(f"   {'✅' if success else '❌'} Metadata retrieval: {bundle_image}")
+        self._print_test_status("Metadata retrieval", success, bundle_image)
         return success
     
     def test_interactive_catalog_selection(self) -> bool:
