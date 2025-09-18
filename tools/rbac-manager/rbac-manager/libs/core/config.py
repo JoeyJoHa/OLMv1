@@ -262,28 +262,42 @@ class ConfigManager:
         
         return "\n".join(yaml_lines)
     
-    def get_config_template_content(self) -> str:
+    def _create_config_template_structure(self, header_comment: str = None, 
+                                        operator_image: str = None, operator_namespace: str = None,
+                                        operator_channel: str = None, operator_package: str = None, 
+                                        operator_version: str = None, output_mode: str = None, 
+                                        output_type: str = None) -> Dict[str, Any]:
         """
-        Generate configuration template content as string without file I/O
+        Create the standard configuration template structure
         
+        Args:
+            header_comment: Second header comment line
+            operator_image: Operator image URL
+            operator_namespace: Target namespace
+            operator_channel: Operator channel
+            operator_package: Package name
+            operator_version: Operator version
+            output_mode: Output mode (stdout/file)
+            output_type: Output type (yaml/helm)
+            
         Returns:
-            str: YAML configuration template content
+            Dict: Configuration template structure
         """
-        template = {
+        return {
             "# RBAC Manager Configuration File": None,
-            "# Template for configuring RBAC extraction from operator bundles": None,
+            f"# {header_comment or 'Configuration template'}": None,
             "": None,
             "operator": {
-                "image": "quay.io/example/operator-bundle:latest",
-                "namespace": KubernetesConstants.DEFAULT_NAMESPACE,
-                "channel": "#<VERIFY_WITH_CATALOGD_AND_SET_CHANNEL>",
-                "packageName": "example-operator",
-                "version": "1.0.0"
+                "image": operator_image or "quay.io/example/operator-bundle:latest",
+                "namespace": operator_namespace or KubernetesConstants.DEFAULT_NAMESPACE,
+                "channel": operator_channel or "#<VERIFY_WITH_CATALOGD_AND_SET_CHANNEL>",
+                "packageName": operator_package or "example-operator",
+                "version": operator_version or "1.0.0"
             },
             "": None,
             "output": {
-                "mode": "yaml",
-                "type": "yaml",
+                "mode": output_mode or "yaml",
+                "type": output_type or "yaml",
                 "path": "./output"
             },
             "": None,
@@ -293,6 +307,17 @@ class ConfigManager:
                 "registry_token": ""
             }
         }
+    
+    def get_config_template_content(self) -> str:
+        """
+        Generate configuration template content as string without file I/O
+        
+        Returns:
+            str: YAML configuration template content
+        """
+        template = self._create_config_template_structure(
+            header_comment="Template for configuring RBAC extraction from operator bundles"
+        )
         
         return self._dict_to_yaml_with_comments(template)
     
@@ -311,30 +336,16 @@ class ConfigManager:
         Returns:
             str: YAML configuration content with extracted values
         """
-        template = {
-            "# RBAC Manager Configuration File": None,
-            "# Generated from extracted values": None,
-            "": None,
-            "operator": {
-                "image": extracted_data.get('bundle_image', 'image-url'),
-                "namespace": namespace or KubernetesConstants.DEFAULT_NAMESPACE,
-                "channel": extracted_data.get('channel', 'channel-name'),
-                "packageName": extracted_data.get('package', 'package-name'),
-                "version": extracted_data.get('version', 'version')
-            },
-            "": None,
-            "output": {
-                "mode": output_mode,
-                "type": output_type,
-                "path": "./output"
-            },
-            "": None,
-            "global": {
-                "skip_tls": False,
-                "debug": False,
-                "registry_token": ""
-            }
-        }
+        template = self._create_config_template_structure(
+            header_comment="Generated from extracted values",
+            operator_image=extracted_data.get('bundle_image', 'image-url'),
+            operator_namespace=namespace,
+            operator_channel=extracted_data.get('channel', 'channel-name'),
+            operator_package=extracted_data.get('package', 'package-name'),
+            operator_version=extracted_data.get('version', 'version'),
+            output_mode=output_mode,
+            output_type=output_type
+        )
         
         return self._dict_to_yaml_with_comments(template)
     
