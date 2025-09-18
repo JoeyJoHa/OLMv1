@@ -110,7 +110,7 @@ class TestUtilities:
             sys.path.insert(0, str(rbac_manager_path))
         
         try:
-            from libs.core.utils import mask_sensitive_info
+            from libs.core.utils import mask_sensitive_info  # pyright: ignore[reportMissingImports]
             return mask_sensitive_info(text, url, token)
         except ImportError:
             # Fallback to original implementation if import fails
