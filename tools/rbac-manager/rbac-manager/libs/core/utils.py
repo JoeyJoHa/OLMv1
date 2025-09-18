@@ -131,6 +131,31 @@ def mask_sensitive_info(text: str, url: str = None, token: str = None) -> str:
     return masked_text
 
 
+def _validate_input(value: str, pattern: str, error_template: str, name: str) -> bool:
+    """
+    Private helper function to validate input against a regex pattern.
+    
+    Args:
+        value: The string to validate
+        pattern: The regex pattern to match against
+        error_template: Error message template from ErrorMessages enum
+        name: The name of the field being validated (for error messages)
+        
+    Returns:
+        bool: True if validation passes
+        
+    Raises:
+        ConfigurationError: If validation fails
+    """
+    if not value or not isinstance(value, str):
+        raise ConfigurationError(f"{name} cannot be empty")
+    
+    if not re.match(pattern, value):
+        raise ConfigurationError(error_template.format(**{name.lower(): value}))
+    
+    return True
+
+
 def validate_image_url(image: str) -> bool:
     """
     Validate if the provided string is a valid container image URL.
@@ -144,17 +169,12 @@ def validate_image_url(image: str) -> bool:
     Raises:
         ConfigurationError: If image URL is invalid
     """
-    if not image or not isinstance(image, str):
-        raise ConfigurationError("Image URL cannot be empty")
-    
     # Basic validation for container image format
     # registry.com/namespace/image:tag or registry.com/namespace/image@sha256:hash
-    image_pattern = r'^([a-zA-Z0-9.-]+(?:\:[0-9]+)?\/)?[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(?:\:[a-zA-Z0-9._-]+|@sha256\:[a-fA-F0-9]{64})?$'
+    # Also supports localhost:port/image:tag format
+    image_pattern = r'^([a-zA-Z0-9.-]+(?:\:[0-9]+)?\/)?[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)?(?:\:[a-zA-Z0-9._-]+|@sha256\:[a-fA-F0-9]{64})?$'
     
-    if not re.match(image_pattern, image):
-        raise ConfigurationError(f"Invalid container image URL format: {image}")
-    
-    return True
+    return _validate_input(image, image_pattern, str(ErrorMessages.ConfigError.INVALID_IMAGE_URL), "Image")
 
 
 def validate_namespace(namespace: str) -> bool:
@@ -170,14 +190,14 @@ def validate_namespace(namespace: str) -> bool:
     Raises:
         ConfigurationError: If namespace is invalid
     """
-    if not namespace or not isinstance(namespace, str):
-        raise ConfigurationError("Namespace cannot be empty")
-    
     # Kubernetes namespace validation
     # Must be lowercase alphanumeric with hyphens, max 63 chars
-    if not re.match(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$', namespace):
-        raise ConfigurationError(f"Invalid Kubernetes namespace format: {namespace}")
+    namespace_pattern = r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
     
+    # First validate the pattern
+    _validate_input(namespace, namespace_pattern, str(ErrorMessages.ConfigError.INVALID_NAMESPACE), "Namespace")
+    
+    # Additional length validation specific to namespaces
     if len(namespace) > 63:
         raise ConfigurationError(f"Namespace too long (max 63 chars): {namespace}")
     
@@ -197,16 +217,10 @@ def validate_openshift_url(url: str) -> bool:
     Raises:
         ConfigurationError: If URL is invalid
     """
-    if not url or not isinstance(url, str):
-        raise ConfigurationError("OpenShift URL cannot be empty")
-    
     # Basic URL validation for OpenShift API
     url_pattern = r'^https?:\/\/[a-zA-Z0-9.-]+(?:\:[0-9]+)?(?:\/.*)?$'
     
-    if not re.match(url_pattern, url):
-        raise ConfigurationError(f"Invalid OpenShift URL format: {url}")
-    
-    return True
+    return _validate_input(url, url_pattern, str(ErrorMessages.ConfigError.INVALID_OPENSHIFT_URL), "URL")
 
 
 def sanitize_filename(filename: str) -> str:
