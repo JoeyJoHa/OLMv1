@@ -839,9 +839,10 @@ def main():
         debug = getattr(args, 'debug', False)
         
         if config:
-            config_defaults = config
-            skip_tls = skip_tls or config_defaults.get('skip_tls', False)
-            debug = debug or config_defaults.get('debug', False)
+            # Fix: Look for skip_tls and debug in the global section of config
+            global_config = config.get('global', {})
+            skip_tls = skip_tls or global_config.get('skip_tls', False)
+            debug = debug or global_config.get('debug', False)
         
         rbac_manager = create_rbac_manager(skip_tls=skip_tls, debug=debug)
         
