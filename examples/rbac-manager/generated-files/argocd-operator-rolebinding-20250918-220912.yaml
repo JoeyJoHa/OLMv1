@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/managed-by: rbac-manager
     app.kubernetes.io/name: argocd-operator
   name: argocd-operator-installer-rolebinding
-  namespace: default
+  namespace: argocd-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -13,4 +13,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: argocd-operator-installer
-  namespace: default
+  namespace: argocd-operator

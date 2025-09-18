@@ -12,7 +12,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: argocd-operator-installer
-  namespace: default
+  namespace: argocd-operator
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -29,4 +29,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: argocd-operator-installer
-  namespace: default
+  namespace: argocd-operator

@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/managed-by: rbac-manager
     app.kubernetes.io/name: argocd-operator
   name: argocd-operator-installer-role
-  namespace: default
+  namespace: argocd-operator
 rules:
 - apiGroups: [coordination.k8s.io]
   resources: [leases]
@@ -18,10 +18,6 @@ rules:
   resources: [serviceaccounts]
   verbs: [get, update, patch, delete]
   resourceNames: [argocd-operator-controller-manager]
-- apiGroups: ['']
-  resources: [configmaps]
-  verbs: [get, update, patch, delete]
-  resourceNames: [argocd-operator-manager-config]
 - apiGroups: ['']
   resources: [services]
   verbs: [get, update, patch, delete]
