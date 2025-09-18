@@ -225,53 +225,24 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         # Step 3: Bundled namespace-scoped resource permissions (installer-specific)
         namespace_resources = bundle_metadata.get('namespace_scoped_resources', [])
         if namespace_resources:
-            # Group resources by API group and resource type for efficient rules
-            resource_groups = {}
+            # Define verbs for namespace resources
+            broad_verbs = [
+                str(KubernetesConstants.RBACVerb.CREATE),
+                str(KubernetesConstants.RBACVerb.LIST),
+                str(KubernetesConstants.RBACVerb.WATCH)
+            ]
+            scoped_verbs = [
+                str(KubernetesConstants.RBACVerb.GET),
+                str(KubernetesConstants.RBACVerb.UPDATE),
+                str(KubernetesConstants.RBACVerb.PATCH),
+                str(KubernetesConstants.RBACVerb.DELETE)
+            ]
             
-            for resource in namespace_resources:
-                kind = resource.get('kind', '')
-                name = resource.get('name', '')
-                api_version = resource.get('apiVersion', '')
-                
-                # Extract API group and resource type from kind and apiVersion
-                api_group, resource_type = self._get_api_group_and_resource(kind, api_version)
-                
-                if api_group is not None and resource_type:
-                    group_key = (api_group, resource_type)
-                    if group_key not in resource_groups:
-                        resource_groups[group_key] = []
-                    
-                    if name:
-                        resource_groups[group_key].append(name)
-            
-            # Create rules for each resource group
-            for (api_group, resource_type), resource_names in resource_groups.items():
-                # Broad permissions (create, list, watch)
-                broad_rule = {
-                    'apiGroups': [api_group],
-                    'resources': [resource_type],
-                    'verbs': [
-                        str(KubernetesConstants.RBACVerb.CREATE),
-                        str(KubernetesConstants.RBACVerb.LIST),
-                        str(KubernetesConstants.RBACVerb.WATCH)
-                    ]
-                }
-                rules.append(broad_rule)
-                
-                # Scoped permissions (get, update, patch, delete) - if we have names
-                if resource_names:
-                    scoped_rule = {
-                        'apiGroups': [api_group],
-                        'resources': [resource_type],
-                        'verbs': [
-                            str(KubernetesConstants.RBACVerb.GET),
-                            str(KubernetesConstants.RBACVerb.UPDATE),
-                            str(KubernetesConstants.RBACVerb.PATCH),
-                            str(KubernetesConstants.RBACVerb.DELETE)
-                        ],
-                        'resourceNames': resource_names
-                    }
-                    rules.append(scoped_rule)
+            # Generate rules using the centralized helper
+            namespace_rules = self._generate_rules_from_resource_list(
+                namespace_resources, scoped_verbs, broad_verbs
+            )
+            rules.extend(namespace_rules)
         
         return rules
     
@@ -910,74 +881,112 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         rules = []
         cluster_resources = bundle_metadata.get('cluster_scoped_resources', [])
         
-        if cluster_resources:
-            # Separate ClusterRoles from other cluster resources for special handling
-            cluster_roles = []
-            other_cluster_resources = []
+        if not cluster_resources:
+            return rules
+        
+        # Separate ClusterRoles from other cluster resources for special handling
+        cluster_roles = []
+        other_cluster_resources = []
+        
+        for resource in cluster_resources:
+            kind = resource.get('kind', '')
+            if kind == 'ClusterRole':
+                cluster_roles.append(resource)
+            else:
+                other_cluster_resources.append(resource)
+        
+        # Handle ClusterRoles specifically - create individual rules for each ClusterRole
+        if cluster_roles:
+            management_verbs = [
+                str(KubernetesConstants.RBACVerb.GET),
+                str(KubernetesConstants.RBACVerb.UPDATE),
+                str(KubernetesConstants.RBACVerb.PATCH),
+                str(KubernetesConstants.RBACVerb.DELETE)
+            ]
             
-            for resource in cluster_resources:
-                kind = resource.get('kind', '')
-                if kind == 'ClusterRole':
-                    cluster_roles.append(resource)
-                else:
-                    other_cluster_resources.append(resource)
+            for cluster_role in cluster_roles:
+                name = cluster_role.get('name', '')
+                if name:
+                    # Create a specific rule for this ClusterRole
+                    cluster_role_rule = {
+                        'apiGroups': ['rbac.authorization.k8s.io'],
+                        'resources': ['clusterroles'],
+                        'verbs': management_verbs,
+                        'resourceNames': [name]
+                    }
+                    rules.append(cluster_role_rule)
+        
+        # Handle other cluster-scoped resources using the centralized helper
+        if other_cluster_resources:
+            management_verbs = [
+                str(KubernetesConstants.RBACVerb.GET),
+                str(KubernetesConstants.RBACVerb.UPDATE),
+                str(KubernetesConstants.RBACVerb.PATCH),
+                str(KubernetesConstants.RBACVerb.DELETE)
+            ]
             
-            # Handle ClusterRoles specifically - create individual rules for each ClusterRole
-            if cluster_roles:
-                for cluster_role in cluster_roles:
-                    name = cluster_role.get('name', '')
-                    if name:
-                        # Create a specific rule for this ClusterRole
-                        cluster_role_rule = {
-                            'apiGroups': ['rbac.authorization.k8s.io'],
-                            'resources': ['clusterroles'],
-                            'verbs': [
-                                str(KubernetesConstants.RBACVerb.GET),
-                                str(KubernetesConstants.RBACVerb.UPDATE),
-                                str(KubernetesConstants.RBACVerb.PATCH),
-                                str(KubernetesConstants.RBACVerb.DELETE)
-                            ],
-                            'resourceNames': [name]
-                        }
-                        rules.append(cluster_role_rule)
+            other_rules = self._generate_rules_from_resource_list(other_cluster_resources, management_verbs)
+            rules.extend(other_rules)
+        
+        return rules
+    
+    def _generate_rules_from_resource_list(self, resources: List[Dict[str, Any]], verbs: List[str], 
+                                          broad_verbs: List[str] = None) -> List[Dict[str, Any]]:
+        """
+        Generate RBAC rules from a list of resource dictionaries by grouping them by API group and resource type
+        
+        Args:
+            resources: List of resource dictionaries with 'kind', 'name', and 'apiVersion' keys
+            verbs: List of RBAC verbs to apply to resources with resourceNames (scoped permissions)
+            broad_verbs: Optional list of verbs for broad permissions (without resourceNames)
             
-            # Handle other cluster-scoped resources with the existing grouping logic
-            if other_cluster_resources:
-                # Group other cluster-scoped resources by API group and resource type
-                cluster_resource_groups = {}
+        Returns:
+            List of RBAC rules grouped by API group and resource type
+        """
+        rules = []
+        
+        if not resources:
+            return rules
+        
+        # Group resources by API group and resource type
+        resource_groups = {}
+        
+        for resource in resources:
+            kind = resource.get('kind', '')
+            name = resource.get('name', '')
+            api_version = resource.get('apiVersion', '')
+            
+            # Extract API group and resource type from kind and apiVersion
+            api_group, resource_type = self._get_api_group_and_resource(kind, api_version)
+            
+            if api_group is not None and resource_type:
+                group_key = (api_group, resource_type)
+                if group_key not in resource_groups:
+                    resource_groups[group_key] = []
                 
-                for resource in other_cluster_resources:
-                    kind = resource.get('kind', '')
-                    name = resource.get('name', '')
-                    api_version = resource.get('apiVersion', '')
-                    
-                    # Extract API group and resource type from kind and apiVersion
-                    api_group, resource_type = self._get_api_group_and_resource(kind, api_version)
-                    
-                    if api_group is not None and resource_type:
-                        group_key = (api_group, resource_type)
-                        if group_key not in cluster_resource_groups:
-                            cluster_resource_groups[group_key] = []
-                        
-                        if name:
-                            cluster_resource_groups[group_key].append(name)
-                
-                # Create rules for each cluster resource group
-                for (api_group, resource_type), resource_names in cluster_resource_groups.items():
-                    # For cluster-scoped resources, add scoped permissions
-                    if resource_names:
-                        cluster_manage_rule = {
-                            'apiGroups': [api_group],
-                            'resources': [resource_type],
-                            'verbs': [
-                                str(KubernetesConstants.RBACVerb.GET),
-                                str(KubernetesConstants.RBACVerb.UPDATE),
-                                str(KubernetesConstants.RBACVerb.PATCH),
-                                str(KubernetesConstants.RBACVerb.DELETE)
-                            ],
-                            'resourceNames': resource_names
-                        }
-                        rules.append(cluster_manage_rule)
+                if name:
+                    resource_groups[group_key].append(name)
+        
+        # Create rules for each resource group
+        for (api_group, resource_type), resource_names in resource_groups.items():
+            # Add broad permissions rule if broad_verbs provided
+            if broad_verbs:
+                broad_rule = {
+                    'apiGroups': [api_group],
+                    'resources': [resource_type],
+                    'verbs': broad_verbs
+                }
+                rules.append(broad_rule)
+            
+            # Add scoped permissions rule if we have resource names
+            if resource_names:
+                scoped_rule = {
+                    'apiGroups': [api_group],
+                    'resources': [resource_type],
+                    'verbs': verbs,
+                    'resourceNames': resource_names
+                }
+                rules.append(scoped_rule)
         
         return rules
     
@@ -992,57 +1001,23 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         Returns:
             List of RBAC rules for managing non-ClusterRole cluster-scoped resources from bundle
         """
-        rules = []
         cluster_resources = bundle_metadata.get('cluster_scoped_resources', [])
         
-        if cluster_resources:
-            # Only process non-ClusterRole cluster resources for grantor
-            other_cluster_resources = []
-            
-            for resource in cluster_resources:
-                kind = resource.get('kind', '')
-                if kind != 'ClusterRole':  # Exclude ClusterRoles from grantor
-                    other_cluster_resources.append(resource)
-            
-            # Handle non-ClusterRole cluster-scoped resources with the existing grouping logic
-            if other_cluster_resources:
-                # Group cluster-scoped resources by API group and resource type
-                cluster_resource_groups = {}
-                
-                for resource in other_cluster_resources:
-                    kind = resource.get('kind', '')
-                    name = resource.get('name', '')
-                    api_version = resource.get('apiVersion', '')
-                    
-                    # Extract API group and resource type from kind and apiVersion
-                    api_group, resource_type = self._get_api_group_and_resource(kind, api_version)
-                    
-                    if api_group is not None and resource_type:
-                        group_key = (api_group, resource_type)
-                        if group_key not in cluster_resource_groups:
-                            cluster_resource_groups[group_key] = []
-                        
-                        if name:
-                            cluster_resource_groups[group_key].append(name)
-                
-                # Create rules for each cluster resource group
-                for (api_group, resource_type), resource_names in cluster_resource_groups.items():
-                    # For cluster-scoped resources, add scoped permissions
-                    if resource_names:
-                        cluster_manage_rule = {
-                            'apiGroups': [api_group],
-                            'resources': [resource_type],
-                            'verbs': [
-                                str(KubernetesConstants.RBACVerb.GET),
-                                str(KubernetesConstants.RBACVerb.UPDATE),
-                                str(KubernetesConstants.RBACVerb.PATCH),
-                                str(KubernetesConstants.RBACVerb.DELETE)
-                            ],
-                            'resourceNames': resource_names
-                        }
-                        rules.append(cluster_manage_rule)
+        # Filter out ClusterRoles - they should only be managed by the installer ClusterRole
+        non_cluster_role_resources = [
+            resource for resource in cluster_resources 
+            if resource.get('kind', '') != 'ClusterRole'
+        ]
         
-        return rules
+        # Generate rules using the centralized helper with management verbs
+        management_verbs = [
+            str(KubernetesConstants.RBACVerb.GET),
+            str(KubernetesConstants.RBACVerb.UPDATE),
+            str(KubernetesConstants.RBACVerb.PATCH),
+            str(KubernetesConstants.RBACVerb.DELETE)
+        ]
+        
+        return self._generate_rules_from_resource_list(non_cluster_role_resources, management_verbs)
     
     def _generate_grantor_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
