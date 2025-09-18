@@ -2,11 +2,11 @@
 # Generated from extracted values
 
 operator:
-  image: "registry.connect.redhat.com/nginx/nginx-ingress-operator-bundle@sha256:4e032549f2c36c5a660994b5ec460ef214bb875a53f6f7e9b814d57049683a7a"
+  image: "quay.io/openshift-community-operators/argocd-operator@sha256:3edc4f132ee4ac9378e331f8eba14a3371132e3274295bfa99c554631e38e8b5"
   namespace: "default"
   channel: "alpha"
-  packageName: "nginx-ingress-operator"
-  version: "3.3.0"
+  packageName: "argocd-operator"
+  version: "0.7.0"
 output:
   mode: "file"
   type: "yaml"
