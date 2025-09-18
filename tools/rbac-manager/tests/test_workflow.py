@@ -35,8 +35,7 @@ class WorkflowTestSuite:
             openshift_url: OpenShift cluster URL
             openshift_token: Authentication token
             skip_tls: Whether to skip TLS verification
-            debug: Enable debug output
-        """
+            debug: Enable debug output        """
         self.openshift_url = openshift_url
         self.openshift_token = openshift_token
         self.skip_tls = skip_tls
@@ -172,6 +171,8 @@ class WorkflowTestSuite:
         
         # List catalogs
         cmd = ["python3", "rbac-manager.py", "list-catalogs"] + self.catalogd_cmd[3:]  # Skip catalogd subcommand
+        if self.debug:
+            print(f"   Running command: {' '.join(cmd)}")
         result = self.run_command(cmd)
         
         if not result["success"]:
@@ -181,19 +182,39 @@ class WorkflowTestSuite:
         # Parse catalog output to find a serving catalog
         serving_catalogs = []
         
+        if self.debug:
+            print(f"   Raw catalog output: {result['stdout'][:500]}...")
+        
         # Try to parse as JSON first (new format)
         try:
             if result["stdout"].strip():
-                lines = result["stdout"].strip().split('\n')
-                for line in lines:
-                    line = line.strip()
-                    if line and (line.startswith('{') or '"name"' in line):
-                        try:
-                            catalog_data = json.loads(line)
-                            if catalog_data.get("status") == "Serving" or catalog_data.get("serving") == True:
-                                serving_catalogs.append(catalog_data.get("name", ""))
-                        except json.JSONDecodeError:
-                            continue
+                stdout_content = result["stdout"].strip()
+                
+                # Try parsing entire output as JSON array first
+                try:
+                    catalog_list = json.loads(stdout_content)
+                    if isinstance(catalog_list, list):
+                        for catalog_data in catalog_list:
+                            if isinstance(catalog_data, dict):
+                                catalog_name = catalog_data.get("name", "")
+                                status = catalog_data.get("status", "")
+                                if catalog_name and (status == "Serving" or catalog_data.get("serving") == True):
+                                    serving_catalogs.append(catalog_name)
+                except json.JSONDecodeError:
+                    # Try line-by-line parsing
+                    lines = stdout_content.split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if line and line.startswith('{') and line.endswith('}'):
+                            try:
+                                catalog_data = json.loads(line)
+                                if isinstance(catalog_data, dict):
+                                    catalog_name = catalog_data.get("name", "")
+                                    status = catalog_data.get("status", "")
+                                    if catalog_name and (status == "Serving" or catalog_data.get("serving") == True):
+                                        serving_catalogs.append(catalog_name)
+                            except json.JSONDecodeError:
+                                continue
         except Exception:
             pass
         
@@ -216,12 +237,43 @@ class WorkflowTestSuite:
             
             # Try to find any catalog names for fallback
             all_catalogs = []
-            for line in result["stdout"].split('\n'):
-                line = line.strip()
-                if line and not line.startswith('NAME') and not line.startswith('---'):
-                    parts = line.split()
-                    if parts and not parts[0].startswith('#'):
-                        all_catalogs.append(parts[0])
+            
+            # First try JSON parsing for any catalogs (regardless of status)
+            try:
+                stdout_content = result["stdout"].strip()
+                try:
+                    catalog_list = json.loads(stdout_content)
+                    if isinstance(catalog_list, list):
+                        for catalog_data in catalog_list:
+                            if isinstance(catalog_data, dict):
+                                catalog_name = catalog_data.get("name", "")
+                                if catalog_name:
+                                    all_catalogs.append(catalog_name)
+                except json.JSONDecodeError:
+                    # Try line-by-line JSON parsing
+                    lines = stdout_content.split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if line and line.startswith('{') and line.endswith('}'):
+                            try:
+                                catalog_data = json.loads(line)
+                                if isinstance(catalog_data, dict):
+                                    catalog_name = catalog_data.get("name", "")
+                                    if catalog_name:
+                                        all_catalogs.append(catalog_name)
+                            except json.JSONDecodeError:
+                                continue
+            except Exception:
+                pass
+            
+            # Fallback to text parsing for catalog names
+            if not all_catalogs:
+                for line in result["stdout"].split('\n'):
+                    line = line.strip()
+                    if line and not line.startswith('NAME') and not line.startswith('---') and not line.startswith('{'):
+                        parts = line.split()
+                        if parts and not parts[0].startswith('#') and len(parts[0]) > 2:
+                            all_catalogs.append(parts[0])
             
             if all_catalogs:
                 print(f"   Found catalogs (any status): {all_catalogs}")
@@ -679,6 +731,7 @@ def main():
     parser = argparse.ArgumentParser(description="Complete Workflow Test Suite")
     parser.add_argument("--unit", nargs="?", const="", help="Run specific test (use without argument to list available tests)")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
+    parser.add_argument("--skip-tls", action="store_true", help="Skip TLS verification")
     args = parser.parse_args()
     
     print("🧪 Complete Workflow Test Suite")
@@ -722,7 +775,7 @@ def main():
     test_suite = WorkflowTestSuite(
         openshift_url=openshift_url,
         openshift_token=openshift_token,
-        skip_tls=True,
+        skip_tls=args.skip_tls if hasattr(args, 'skip_tls') else True,
         debug=args.debug
     )
     
