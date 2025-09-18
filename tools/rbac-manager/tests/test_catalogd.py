@@ -884,7 +884,7 @@ class CatalogdTestSuite:
             "test_suite": "catalogd",
             "timestamp": time.time(),
             "configuration": {
-                "openshift_url": self.openshift_url,
+                "openshift_url": TestUtilities.mask_sensitive_data(self.openshift_url, self.openshift_url, self.openshift_token),
                 "skip_tls": self.skip_tls,
                 "test_catalog": self.test_catalog,
                 "test_package": self.test_package,
