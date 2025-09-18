@@ -84,7 +84,7 @@ class OPMCommandBuilder:
 class OPMTestSuite:
     """Test suite for OPM functionality"""
     
-    def __init__(self, skip_tls: bool = True, debug: bool = False):
+    def __init__(self, skip_tls: bool = False, debug: bool = False):
         """
         Initialize test suite
         
@@ -1251,7 +1251,7 @@ def main():
     parser = argparse.ArgumentParser(description="OPM Test Suite")
     parser.add_argument("--unit", nargs="?", const="", help="Run specific test (use without argument to list available tests)")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    parser.add_argument("--no-skip-tls", action="store_true", help="Don't skip TLS verification")
+    parser.add_argument("--skip-tls", action="store_true", help="Skip TLS verification")
     args = parser.parse_args()
     
     print("🧪 OPM Test Suite")
@@ -1266,7 +1266,7 @@ def main():
     
     # Initialize test suite
     test_suite = OPMTestSuite(
-        skip_tls=not args.no_skip_tls,
+        skip_tls=args.skip_tls,
         debug=args.debug
     )
     
