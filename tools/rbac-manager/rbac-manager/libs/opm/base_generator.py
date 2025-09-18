@@ -997,21 +997,21 @@ e        Generate installer service account Role permissions - ONLY installer-sp
     
     def _generate_bundled_cluster_resource_rules_for_grantor(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Generate rules for bundled cluster-scoped resources EXCLUDING ClusterRoles (for grantor ClusterRole)
-        ClusterRole management should only be in the installer ClusterRole, not grantor
+        Generate rules for bundled cluster-scoped resources EXCLUDING ClusterRoles and CustomResourceDefinitions (for grantor ClusterRole)
+        ClusterRole and CRD management should only be in the installer ClusterRole, not grantor
         
         Args:
             bundle_metadata: Bundle metadata from OPM
             
         Returns:
-            List of RBAC rules for managing non-ClusterRole cluster-scoped resources from bundle
+            List of RBAC rules for managing non-ClusterRole, non-CRD cluster-scoped resources from bundle
         """
         cluster_resources = bundle_metadata.get('cluster_scoped_resources', [])
         
-        # Filter out ClusterRoles - they should only be managed by the installer ClusterRole
-        non_cluster_role_resources = [
+        # Filter out ClusterRoles and CustomResourceDefinitions - they should only be managed by the installer ClusterRole
+        filtered_resources = [
             resource for resource in cluster_resources 
-            if resource.get('kind', '') != 'ClusterRole'
+            if resource.get('kind', '') not in ['ClusterRole', 'CustomResourceDefinition']
         ]
         
         # Generate rules using the centralized helper with management verbs
@@ -1022,7 +1022,7 @@ e        Generate installer service account Role permissions - ONLY installer-sp
             str(KubernetesConstants.RBACVerb.DELETE)
         ]
         
-        return self._generate_rules_from_resource_list(non_cluster_role_resources, management_verbs)
+        return self._generate_rules_from_resource_list(filtered_resources, management_verbs)
     
     def _generate_grantor_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
