@@ -1,11 +1,11 @@
 # Deployment Process
 
-This document provides comprehensive deployment instructions for OLMv1 operators using both YAML manifests and the generic Helm chart.
+This guide provides step-by-step instructions for deploying operators using OLMv1 with both YAML manifests and Helm charts.
 
 ## Table of Contents
 
 - [Deployment Methods](#deployment-methods)
-- [Method 1: YAML Manifest Deployment (Manual)](#method-1-yaml-manifest-deployment-manual)
+- [Method 1: YAML Manifest Deployment](#method-1-yaml-manifest-deployment)
   - [Step-by-Step Deployment](#step-by-step-deployment)
     - [Create Project/Namespace](#1-create-projectnamespace)
     - [Deploy Resources](#2-deploy-resources)
@@ -13,16 +13,15 @@ This document provides comprehensive deployment instructions for OLMv1 operators
     - [Monitor Deployment Progress](#4-monitor-deployment-progress)
     - [Verify Installation](#5-verify-installation)
   - [Cleanup Process](#cleanup-process)
-- [Method 2: Helm Chart Deployment (Recommended)](#method-2-helm-chart-deployment-recommended)
+- [Method 2: Helm Chart Deployment](#method-2-helm-chart-deployment)
   - [Basic Installation](#basic-installation)
   - [Customized Installation](#customized-installation)
   - [Management Operations](#management-operations)
   - [Configuration Examples](#configuration-examples)
     - [Basic Operator Configuration](#basic-operator-configuration)
     - [Quay Operator Configuration](#quay-operator-configuration)
-  - [Resource Naming and Labeling](#resource-naming-and-labeling)
-    - [Smart Naming Convention](#smart-naming-convention)
-  - [Permission Types Explained](#permission-types-explained)
+  - [Resource Naming Convention](#resource-naming-convention)
+  - [Permission Types](#permission-types)
     - [Type: "operator"](#type-operator)
     - [Type: "grantor"](#type-grantor)
   - [Enterprise Usage Examples](#enterprise-usage-examples)
@@ -42,9 +41,10 @@ This document provides comprehensive deployment instructions for OLMv1 operators
 
 ## Deployment Methods
 
-### Method 1: YAML Manifest Deployment (Manual)
+Two deployment methods are available:
 
-### Method 2: Helm Chart Deployment (Recommended)
+- **YAML Manifests**: Direct application of Kubernetes resources
+- **Helm Chart**: Template-based deployment with configuration management (recommended)
 
 ---
 
@@ -133,7 +133,7 @@ oc delete project quay-operator
 
 ## Method 2: Helm Chart Deployment
 
-The project provides a **generic Helm chart** that can deploy any operator using OLMv1. This is the recommended approach for production deployments.
+The project includes a generic Helm chart that can deploy any operator using OLMv1. This is the recommended approach for production deployments.
 
 ### Basic Installation
 
@@ -240,47 +240,41 @@ permissions:
           verbs: ["*"]
 ```
 
-### Resource Naming and Labeling
+### Resource Naming Convention
 
-#### Smart Naming Convention
+The Helm chart uses a consistent naming pattern for all resources:
 
-- **Default naming** (when `name: ""` or not specified):
-  - Release: `quay-test`, Chart: `operator-olm-v1`
-  - → ServiceAccount: `quay-test-operator-olm-v1-installer`
-  - → ClusterRole (operator): `quay-test-operator-olm-v1-installer`
-  - → ClusterRole (grantor): `quay-test-operator-olm-v1-installer-grantor`
-  - → ClusterRoleBinding (operator): `quay-test-operator-olm-v1-installer-crb`
-  - → ClusterRoleBinding (grantor): `quay-test-operator-olm-v1-installer-grantor-crb`
-  - → ClusterExtension: `quay-test` (auto-generated from release name)
+- **ServiceAccount**: `<release>-<chart>-installer`
+- **ClusterRole (operator)**: `<release>-<chart>-installer`
+- **ClusterRole (grantor)**: `<release>-<chart>-installer-grantor`
+- **ClusterRoleBinding**: `<release>-<chart>-installer-crb`
+- **ClusterExtension**: Uses `operator.name` if specified, otherwise `<release>`
 
-- **Custom naming** (when `operator.name: "quay-operator"`):
-  - Release: `quay-test`, Chart: `operator-olm-v1`, Custom Name: `quay-operator`
-  - → ServiceAccount: `quay-test-operator-olm-v1-installer`
-  - → ClusterRole (operator): `quay-test-operator-olm-v1-installer`
-  - → ClusterRole (grantor): `quay-test-operator-olm-v1-installer-grantor`
-  - → ClusterRoleBinding (operator): `quay-test-operator-olm-v1-installer-crb`
-  - → ClusterRoleBinding (grantor): `quay-test-operator-olm-v1-installer-grantor-crb`
-  - → ClusterExtension: `quay-operator` (custom name)
+Example with release `quay-test` and chart `operator-olm-v1`:
 
-### Permission Types Explained
+- ServiceAccount: `quay-test-operator-olm-v1-installer`
+- ClusterRole: `quay-test-operator-olm-v1-installer`
+- ClusterExtension: `quay-operator` (if `operator.name: "quay-operator"`)
+
+### Permission Types
 
 #### Type: "operator"
 
-- **Purpose**: Permissions needed by the operator to function
-- **Examples**: CRD management, finalizer updates, operator-specific resources
-- **Naming**: `-installer` suffix (e.g., `quay-test-operator-olm-v1-installer`)
+- Purpose: Permissions needed by the operator to function
+- Examples: CRD management, finalizer updates, operator-specific resources
+- Naming: `-installer` suffix
 
 #### Type: "grantor"
 
-- **Purpose**: RBAC permissions to manage other resources
-- **Examples**: Managing deployments, services, roles, rolebindings
-- **Naming**: `-installer-grantor` suffix (e.g., `quay-test-operator-olm-v1-installer-grantor`)
+- Purpose: RBAC permissions to manage other resources
+- Examples: Managing deployments, services, roles, rolebindings
+- Naming: `-installer-grantor` suffix
 
 ### Enterprise Usage Examples
 
 #### Scenario 1: Using Admin-Provided Resources
 
-When cluster admins or security teams provide pre-configured RBAC resources:
+When cluster administrators provide pre-configured RBAC resources, you can configure the Helm chart to use them:
 
 ```yaml
 operator:
@@ -289,15 +283,15 @@ operator:
 
 serviceAccount:
   create: false
-  name: "admin-provided-operator-sa"  # Must provide existing name
-  bind: false  # Cannot bind to resources we don't own
+  name: "admin-provided-operator-sa"
+  bind: false
 
-permissions: {}  # Empty - no resources created or bound
+permissions: {}  # No resources created
 ```
 
 #### Scenario 2: Full Admin with Custom Naming
 
-When you have full control and need specific resource names:
+When you have full administrative access and need specific resource names:
 
 ```yaml
 operator:
@@ -307,41 +301,47 @@ operator:
 serviceAccount:
   create: true
   name: "quay-operator-installer"
-  bind: true  # Will bind to all created resources
+  bind: true
 
 permissions:
   clusterRoles:
-    - name: "quay-operator-admin"  # Custom name
+    - name: "quay-operator-admin"
       type: "operator"
       create: true
-      customRules: [...]
-    
-    - name: "quay-operator-grantor"  # Custom name
-      type: "grantor"
-      create: true
-      customRules: [...]
+      customRules:
+        - apiGroups: [olm.operatorframework.io]
+          resources: [clusterextensions/finalizers]
+          verbs: [update]
 ```
 
 ### Key Benefits of the New Approach
 
-- **🔄 Reusable**: Deploy any operator available in OLM catalogs
-- **⚙️ Configurable**: Flexible RBAC with type-based permission management
-- **🏗️ Best Practices**: Follows Helm and Kubernetes best practices
-- **📋 Consistent**: Standardized deployment pattern for all operators
-- **🏷️ Smart Naming**: Intelligent resource naming with type-based suffixes
-- **🔗 Existing Resources**: Support for using pre-existing RBAC resources
-- **🏢 Enterprise Ready**: Designed for production environments
-- **🎯 Type Safety**: Clear distinction between operator and grantor permissions
-- **🏷️ Meaningful Labels**: Labels reflect actual operator, not generic chart
+- **Reusable**: Deploy any operator available in OLM catalogs
+- **Configurable**: Flexible RBAC with type-based permission management
+- **Consistent**: Standardized deployment pattern for all operators
+- **Production Ready**: Designed for enterprise environments
+- **Resource Management**: Support for using pre-existing RBAC resources
+- **Clear Permissions**: Distinction between operator and grantor permissions
 
 ### Advanced Configuration Options
 
 #### Custom Resource Names
 
+When you need specific resource names:
+
 ```yaml
+operator:
+  name: "quay-operator"
+  namespace: "quay-operator"
+
+serviceAccount:
+  create: true
+  name: "quay-operator-installer"
+  bind: true
+
 permissions:
   clusterRoles:
-    - name: "custom-role-name"  # Use custom name instead of generated
+    - name: "quay-operator-admin"
       type: "operator"
       create: true
       customRules: [...]
@@ -349,13 +349,14 @@ permissions:
 
 #### Using Existing Resources
 
+When cluster admins provide pre-configured RBAC resources:
+
 ```yaml
 permissions:
   clusterRoles:
-    - name: "admin-provided-role"  # Must provide existing resource name
+    - name: "admin-provided-role"
       type: "operator"
-      create: false
-      customRules: [...]  # Will be ignored when create: false
+      create: false  # Use existing resource
 ```
 
 #### Multiple Permission Types
@@ -372,12 +373,6 @@ permissions:
     - type: "grantor"
       create: true
       customRules: [...]
-    
-    # Additional custom permissions
-    - name: "custom-permissions"
-      type: "operator"
-      create: true
-      customRules: [...]
 ```
 
 ### Testing and Validation
@@ -386,42 +381,38 @@ permissions:
 
 ```bash
 # Test template rendering without deployment
-helm template test examples/helm/ \
-  --values examples/values/values-quay-operator.yaml
-
-# Test with different release name
-helm template quay-test examples/helm/ \
-  --values examples/values/values-quay-operator.yaml
+helm template <release-name> helm/ --values <values-file>
 ```
 
 #### Chart Validation
 
 ```bash
 # Lint the chart for best practices
-helm lint examples/helm/
+helm lint helm/
 
 # Validate against Kubernetes schemas
-helm template test examples/helm/ | kubeval
+helm template <release-name> helm/ | kubeval
 ```
 
 ### Troubleshooting
 
 #### Common Issues
 
-1. **Permission Denied**: Ensure `serviceAccount.bind: true` when creating RBAC resources
-2. **Resource Naming Conflicts**: Use custom names or ensure unique release names
-3. **Type Field Required**: Always specify `type: "operator"` or `type: "grantor"`
+| Issue | Solution |
+|-------|----------|
+| Permission Denied | Ensure `serviceAccount.bind: true` when creating RBAC resources |
+| Resource Naming Conflicts | Use custom names or ensure unique release names |
+| Missing Type Field | Always specify `type: "operator"` or `type: "grantor"` |
 
 #### Debug Commands
 
 ```bash
 # Check generated resources
-helm get manifest quay-operator -n quay-operator
+helm get manifest <release-name> -n <namespace>
 
 # Verify RBAC bindings
-kubectl get clusterrolebinding | grep quay-operator
-kubectl get rolebinding -n quay-operator
+kubectl get clusterrolebinding | grep <operator-name>
 
 # Check operator status
-kubectl get clusterextension -n quay-operator
+kubectl get clusterextension -n <namespace>
 ```
