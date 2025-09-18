@@ -21,6 +21,11 @@ from ..core.constants import (
 logger = logging.getLogger(__name__)
 
 
+class FlowStyleList(list):
+    """Custom list type to indicate that this list should be formatted in YAML flow style"""
+    pass
+
+
 class PermissionStrategy(Enum):
     """Enumeration of permission generation strategies"""
     BOTH_CLUSTER_AND_NAMESPACE = "both_cluster_and_namespace"
@@ -1060,6 +1065,33 @@ e        Generate installer service account Role permissions - ONLY installer-sp
             rules.extend(perm_rules)
         
         return rules
+    
+    def _dump_yaml_with_flowstyle_lists(self, data: Dict[str, Any]) -> str:
+        """
+        Dump YAML with flow style for FlowStyleList instances
+        
+        Args:
+            data: Data to format as YAML
+            
+        Returns:
+            YAML string with flow style for FlowStyleList instances
+        """
+        # Create a custom YAML dumper that uses flow style for FlowStyleList instances
+        class FlowArrayDumper(yaml.SafeDumper):
+            pass
+        
+        def represent_list(dumper, data):
+            # Use flow style for FlowStyleList instances, block style for regular lists
+            if isinstance(data, FlowStyleList):
+                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+            else:
+                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+        
+        FlowArrayDumper.add_representer(list, represent_list)
+        FlowArrayDumper.add_representer(FlowStyleList, represent_list)
+        
+        # Generate YAML
+        return yaml.dump(data, Dumper=FlowArrayDumper, default_flow_style=False, sort_keys=False)
     
     def _dump_yaml_with_flow_arrays(self, data: Dict[str, Any]) -> str:
         """

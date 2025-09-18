@@ -6,12 +6,7 @@ Generates Helm values.yaml content from OPM bundle metadata.
 
 import yaml
 from typing import Dict, List, Any, Optional
-from .base_generator import BaseGenerator, PermissionStructure, HelmValueTemplates
-
-
-class FlowStyleList(list):
-    """Custom list type to indicate that this list should be formatted in YAML flow style"""
-    pass
+from .base_generator import BaseGenerator, PermissionStructure, HelmValueTemplates, FlowStyleList
 
 
 class HelmValuesGenerator(BaseGenerator):
@@ -45,8 +40,11 @@ class HelmValuesGenerator(BaseGenerator):
         # Generate header comment
         header = self._generate_security_header_comment(operator_name, package_name, 'helm')
         
-        # Convert to YAML with flow style for arrays
-        yaml_content = self._dump_yaml_with_flow_arrays(values)
+        # Convert to YAML with flow style for FlowStyleList instances
+        yaml_content = self._dump_yaml_with_flowstyle_lists(values)
+        
+        # Add Helm-specific RBAC comments
+        yaml_content = self._add_rbac_comments(yaml_content)
         
         return f"{header}\n{yaml_content}"
     
@@ -151,36 +149,6 @@ class HelmValuesGenerator(BaseGenerator):
                 return True
         
         return False
-    
-    def _dump_yaml_with_flow_arrays(self, data: Dict[str, Any]) -> str:
-        """
-        Dump YAML with flow style for RBAC arrays
-        
-        Args:
-            data: Data to format as YAML
-            
-        Returns:
-            YAML string with flow style arrays for RBAC rules
-        """
-        # Create a custom YAML dumper that uses flow style for specific arrays
-        class FlowArrayDumper(yaml.SafeDumper):
-            pass
-        
-        def represent_list(dumper, data):
-            # Use flow style for FlowStyleList instances, block style for regular lists
-            if isinstance(data, FlowStyleList):
-                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
-            else:
-                return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
-        
-        FlowArrayDumper.add_representer(list, represent_list)
-        FlowArrayDumper.add_representer(FlowStyleList, represent_list)
-        
-        # Generate YAML and add comments
-        yaml_content = yaml.dump(data, Dumper=FlowArrayDumper, default_flow_style=False, sort_keys=False)
-        
-        # Post-process to add comments before customRules sections
-        return self._add_rbac_comments(yaml_content)
     
     def _add_rbac_comments(self, yaml_content: str) -> str:
         """
