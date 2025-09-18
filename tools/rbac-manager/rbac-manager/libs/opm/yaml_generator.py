@@ -6,7 +6,7 @@ Generates Kubernetes YAML manifests from OPM bundle metadata.
 
 import yaml
 from typing import Dict, Any, Optional, List
-from .base_generator import BaseGenerator, ManifestTemplates
+from .base_generator import BaseGenerator, ManifestTemplates, FlowStyleList
 from ..core.constants import OPMConstants, KubernetesConstants
 
 
@@ -91,6 +91,23 @@ class YAMLManifestGenerator(BaseGenerator):
         
         return '\n---\n'.join(yaml_parts)
     
+    def _format_rules_for_yaml(self, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Format RBAC rules for YAML output by converting arrays to FlowStyleList for compact formatting
+        
+        Args:
+            rules: List of RBAC rule dictionaries
+            
+        Returns:
+            List of formatted rules with FlowStyleList instances for compact arrays
+        """
+        # Use shared base class method with YAML-specific configuration
+        return self._format_rules_for_flow_style(
+            rules, 
+            use_copy=True,  # YAML copies existing rule dicts
+            add_hardening_placeholders=False  # YAML doesn't need hardening placeholders
+        )
+    
     def _generate_cluster_roles(self, rules: Dict[str, Any], operator_name: str, 
                               package_name: str, components_needed: Dict[str, bool]) -> str:
         """
@@ -114,8 +131,11 @@ class YAMLManifestGenerator(BaseGenerator):
         if components_needed['installer_cluster_role'] and rules['installer_cluster_role']:
             operator_cr_name = f"{operator_name}-installer-clusterrole"
             
+            # Format rules for compact YAML output
+            formatted_rules = self._format_rules_for_yaml(rules['installer_cluster_role'])
+            
             operator_cr = ManifestTemplates.cluster_role_template(
-                operator_cr_name, operator_name, rules['installer_cluster_role']
+                operator_cr_name, operator_name, formatted_rules
             )
             manifests.append(operator_cr)
         
@@ -123,8 +143,11 @@ class YAMLManifestGenerator(BaseGenerator):
         if components_needed['grantor_cluster_role'] and rules['grantor_cluster_role']:
             grantor_cr_name = f"{operator_name}-installer-rbac-clusterrole"
             
+            # Format rules for compact YAML output
+            formatted_rules = self._format_rules_for_yaml(rules['grantor_cluster_role'])
+            
             grantor_cr = ManifestTemplates.cluster_role_template(
-                grantor_cr_name, operator_name, rules['grantor_cluster_role']
+                grantor_cr_name, operator_name, formatted_rules
             )
             manifests.append(grantor_cr)
         
@@ -191,8 +214,11 @@ class YAMLManifestGenerator(BaseGenerator):
         if role_rules:
             role_name = f"{operator_name}-installer-role"
             
+            # Format rules for compact YAML output
+            formatted_rules = self._format_rules_for_yaml(role_rules)
+            
             role_manifest = ManifestTemplates.role_template(
-                role_name, namespace, operator_name, role_rules
+                role_name, namespace, operator_name, formatted_rules
             )
             manifests.append(role_manifest)
         

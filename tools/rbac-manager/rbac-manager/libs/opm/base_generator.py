@@ -1400,6 +1400,57 @@ e        Generate installer service account Role permissions - ONLY installer-sp
             result['rules']['namespace_role'] = []  # Empty rules
         
         return result
+    
+    def _format_rules_for_flow_style(self, rules: List[Dict[str, Any]], 
+                                   use_copy: bool = True, 
+                                   add_hardening_placeholders: bool = False) -> List[Dict[str, Any]]:
+        """
+        Format RBAC rules for compact YAML output by converting arrays to FlowStyleList
+        
+        This shared method eliminates code duplication between HelmGenerator and YAMLGenerator
+        by providing common formatting logic with customizable behavior.
+        
+        Args:
+            rules: List of RBAC rule dictionaries
+            use_copy: If True, copy each rule dict; if False, create new empty dict
+            add_hardening_placeholders: If True, add placeholders for resourceNames that need hardening
+            
+        Returns:
+            List of formatted rules with FlowStyleList instances for compact arrays
+        """
+        formatted_rules = []
+        
+        for rule in rules:
+            # Create base formatted rule - either copy existing or start fresh
+            formatted_rule = rule.copy() if use_copy else {}
+            
+            # API groups - use FlowStyleList for compact formatting
+            if 'apiGroups' in rule:
+                if not use_copy or (formatted_rule.get('apiGroups')):
+                    formatted_rule['apiGroups'] = FlowStyleList(rule['apiGroups'])
+            
+            # Resources - use FlowStyleList for compact formatting  
+            if 'resources' in rule:
+                if not use_copy or (formatted_rule.get('resources')):
+                    formatted_rule['resources'] = FlowStyleList(rule['resources'])
+            
+            # Verbs - use FlowStyleList for compact formatting
+            if 'verbs' in rule:
+                if not use_copy or (formatted_rule.get('verbs')):
+                    formatted_rule['verbs'] = FlowStyleList(rule['verbs'])
+            
+            # Resource names - handle both existing and hardening placeholders
+            if 'resourceNames' in rule:
+                if not use_copy or (formatted_rule.get('resourceNames')):
+                    formatted_rule['resourceNames'] = FlowStyleList(rule['resourceNames'])
+            elif add_hardening_placeholders and hasattr(self, '_needs_resource_names_hardening'):
+                # Add descriptive placeholder for resource names that need to be filled in (Helm-specific)
+                if self._needs_resource_names_hardening(rule):
+                    formatted_rule['resourceNames'] = FlowStyleList(["#<ADD_CREATED_RESOURCE_NAMES_HERE>"])
+            
+            formatted_rules.append(formatted_rule)
+        
+        return formatted_rules
 
     @abstractmethod
     def generate(self, bundle_metadata: Dict[str, Any], **kwargs) -> str:

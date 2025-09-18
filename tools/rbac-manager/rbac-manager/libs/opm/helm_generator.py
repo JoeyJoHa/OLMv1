@@ -101,33 +101,12 @@ class HelmValuesGenerator(BaseGenerator):
         Returns:
             Formatted rules for Helm values
         """
-        formatted_rules = []
-        
-        for rule in rules:
-            formatted_rule = {}
-            
-            # API groups - use FlowStyleList for compact formatting
-            if 'apiGroups' in rule:
-                formatted_rule['apiGroups'] = FlowStyleList(rule['apiGroups'])
-            
-            # Resources - use FlowStyleList for compact formatting
-            if 'resources' in rule:
-                formatted_rule['resources'] = FlowStyleList(rule['resources'])
-            
-            # Verbs - use FlowStyleList for compact formatting
-            if 'verbs' in rule:
-                formatted_rule['verbs'] = FlowStyleList(rule['verbs'])
-            
-            # Resource names (if present or needs hardening)
-            if 'resourceNames' in rule:
-                formatted_rule['resourceNames'] = FlowStyleList(rule['resourceNames'])
-            elif self._needs_resource_names_hardening(rule):
-                # Add descriptive placeholder for resource names that need to be filled in
-                formatted_rule['resourceNames'] = FlowStyleList(["#<ADD_CREATED_RESOURCE_NAMES_HERE>"])
-            
-            formatted_rules.append(formatted_rule)
-        
-        return formatted_rules
+        # Use shared base class method with Helm-specific configuration
+        return self._format_rules_for_flow_style(
+            rules, 
+            use_copy=False,  # Helm creates fresh dicts
+            add_hardening_placeholders=True  # Helm needs hardening placeholders
+        )
     
     def _needs_resource_names_hardening(self, rule: Dict[str, Any]) -> bool:
         """Check if a rule needs resourceNames hardening"""
