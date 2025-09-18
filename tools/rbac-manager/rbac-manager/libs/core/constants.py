@@ -7,54 +7,97 @@ and improve maintainability.
 
 
 class KubernetesConstants:
-    """Kubernetes-related constants"""
+    """Kubernetes-related constants with improved enum-based structure"""
     
-    # Namespaces
+    from enum import Enum
+    
+    # Namespace constants - simple attributes for configurable values
     DEFAULT_NAMESPACE = "default"
     OPENSHIFT_CATALOGD_NAMESPACE = "openshift-catalogd"
     
-    # API Groups
+    # API Group constants - simple attributes for extensible values
     OLM_API_GROUP = "olm.operatorframework.io"
     RBAC_API_GROUP = "rbac.authorization.k8s.io"
     APIEXTENSIONS_API_GROUP = "apiextensions.k8s.io"
     CORE_API_GROUP = ""  # Core API group (empty string)
+    APPS_API_GROUP = "apps"
     
-    # Labels
+    # Label constants - simple attributes for standard Kubernetes labels
     MANAGED_BY_LABEL = "app.kubernetes.io/managed-by"
     NAME_LABEL = "app.kubernetes.io/name"
     
-    # Label Values
+    # Component constants - simple attributes for configurable values
     RBAC_MANAGER_COMPONENT = "rbac-manager"
     OLM_COMPONENT = "olm"
     
-    
-    # Channels and Versions
+    # Channel constants - simple attributes for configurable values
     DEFAULT_CHANNEL = "stable"
     
-    # Resource Names
-    CLUSTER_EXTENSIONS_RESOURCE = "clusterextensions"
-    CLUSTER_ROLES_RESOURCE = "clusterroles"
-    CLUSTER_ROLE_BINDINGS_RESOURCE = "clusterrolebindings"
-    CUSTOM_RESOURCE_DEFINITIONS_RESOURCE = "customresourcedefinitions"
-    ROLES_RESOURCE = "roles"
+    class RBACVerb(str, Enum):
+        """RBAC verbs used in Kubernetes role definitions"""
+        CREATE = "create"
+        GET = "get"
+        LIST = "list"
+        WATCH = "watch"
+        UPDATE = "update"
+        PATCH = "patch"
+        DELETE = "delete"
+        WILDCARD = "*"
+        
+        def __str__(self) -> str:
+            """Return the verb value for use in RBAC rules"""
+            return self.value
+        
+        @classmethod
+        def get_read_verbs(cls) -> list:
+            """Get all read-only RBAC verbs"""
+            return [cls.GET, cls.LIST, cls.WATCH]
+        
+        @classmethod
+        def get_write_verbs(cls) -> list:
+            """Get all write RBAC verbs"""
+            return [cls.CREATE, cls.UPDATE, cls.PATCH, cls.DELETE]
+        
+        @classmethod
+        def get_all_verbs(cls) -> list:
+            """Get all RBAC verbs except wildcard"""
+            return [cls.CREATE, cls.GET, cls.LIST, cls.WATCH, cls.UPDATE, cls.PATCH, cls.DELETE]
     
-    # RBAC Verbs
-    CREATE_VERB = "create"
-    GET_VERB = "get"
-    LIST_VERB = "list"
-    WATCH_VERB = "watch"
-    UPDATE_VERB = "update"
-    PATCH_VERB = "patch"
-    DELETE_VERB = "delete"
-    WILDCARD_VERB = "*"
-    
-    # Additional API Groups (beyond the ones defined above)
-    APPS_API_GROUP = "apps"
-    
-    # Additional Resources (beyond the ones defined above)
-    DEPLOYMENTS_RESOURCE = "deployments"
-    SERVICE_ACCOUNTS_RESOURCE = "serviceaccounts"
-    ROLE_BINDINGS_RESOURCE = "rolebindings"
+    class ResourceName(str, Enum):
+        """Kubernetes resource names used in the RBAC Manager tool"""
+        # Core RBAC resources
+        CLUSTER_ROLES = "clusterroles"
+        CLUSTER_ROLE_BINDINGS = "clusterrolebindings"
+        ROLES = "roles"
+        ROLE_BINDINGS = "rolebindings"
+        SERVICE_ACCOUNTS = "serviceaccounts"
+        
+        # OLM resources
+        CLUSTER_EXTENSIONS = "clusterextensions"
+        CUSTOM_RESOURCE_DEFINITIONS = "customresourcedefinitions"
+        
+        # Application resources
+        DEPLOYMENTS = "deployments"
+        
+        def __str__(self) -> str:
+            """Return the resource name for use in Kubernetes API calls"""
+            return self.value
+        
+        @classmethod
+        def get_rbac_resources(cls) -> list:
+            """Get all RBAC-related resource names"""
+            return [
+                cls.CLUSTER_ROLES, 
+                cls.CLUSTER_ROLE_BINDINGS, 
+                cls.ROLES, 
+                cls.ROLE_BINDINGS,
+                cls.SERVICE_ACCOUNTS
+            ]
+        
+        @classmethod
+        def get_olm_resources(cls) -> list:
+            """Get all OLM-related resource names"""
+            return [cls.CLUSTER_EXTENSIONS, cls.CUSTOM_RESOURCE_DEFINITIONS]
 
 
 class OPMConstants:

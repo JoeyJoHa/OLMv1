@@ -5,9 +5,7 @@ Handles OpenShift authentication and context discovery.
 """
 
 import logging
-import os
 import urllib3
-import yaml
 from typing import Optional, Tuple, Dict
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
