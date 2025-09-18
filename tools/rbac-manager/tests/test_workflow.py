@@ -172,9 +172,8 @@ class WorkflowTestSuite:
         # List catalogs
         cmd = ["python3", "rbac-manager.py", "list-catalogs"] + self.catalogd_cmd[3:]  # Skip catalogd subcommand
         if self.debug:
-            # Import the core utility for masking
-            from libs.core.utils import mask_sensitive_info
-            masked_cmd = mask_sensitive_info(' '.join(cmd), self.openshift_url, self.openshift_token)
+            # Import the core utility for masking (use TestUtilities for consistency)
+            masked_cmd = TestUtilities.mask_sensitive_data(' '.join(cmd), self.openshift_url, self.openshift_token)
             print(f"   Running command: {masked_cmd}")
         result = self.run_command(cmd)
         
@@ -770,9 +769,6 @@ def main():
         print("     export OPENSHIFT_URL='https://api.cluster.example.com:6443'")
         print("     export TOKEN='your-openshift-token'")
         sys.exit(1)
-    
-    print(f"🔗 Using cluster: {openshift_url}")
-    print(f"🔑 Token: {openshift_token[:20]}...")
     
     # Initialize test suite
     test_suite = WorkflowTestSuite(

@@ -91,30 +91,44 @@ class TestUtilities:
     def mask_sensitive_data(text: str, url: str = None, token: str = None) -> str:
         """
         Mask sensitive data in text for test output
-        
+
         Args:
             text: Text to mask
             url: URL to mask (optional)
             token: Token to mask (optional)
-            
+
         Returns:
             Text with sensitive data masked
         """
-        masked_text = text
+        # Use the centralized masking utility from core.utils
+        import sys
+        from pathlib import Path
         
-        if token and token in masked_text:
-            # Extract the token prefix (e.g., "sha256~") and mask the rest
-            if '~' in token:
-                prefix = token.split('~')[0] + '~'
-                masked_token = prefix + CommonTestConstants.MASKED_TOKEN
-            else:
-                masked_token = CommonTestConstants.MASKED_TOKEN
-            masked_text = masked_text.replace(token, masked_token)
+        # Add rbac-manager to path if not already there
+        rbac_manager_path = Path(__file__).parent.parent / "rbac-manager"
+        if str(rbac_manager_path) not in sys.path:
+            sys.path.insert(0, str(rbac_manager_path))
         
-        if url and url in masked_text:
-            masked_text = masked_text.replace(url, CommonTestConstants.EXAMPLE_URL)
-        
-        return masked_text
+        try:
+            from libs.core.utils import mask_sensitive_info
+            return mask_sensitive_info(text, url, token)
+        except ImportError:
+            # Fallback to original implementation if import fails
+            masked_text = text
+
+            if token and token in masked_text:
+                # Extract the token prefix (e.g., "sha256~") and mask the rest
+                if '~' in token:
+                    prefix = token.split('~')[0] + '~'
+                    masked_token = prefix + CommonTestConstants.MASKED_TOKEN
+                else:
+                    masked_token = CommonTestConstants.MASKED_TOKEN
+                masked_text = masked_text.replace(token, masked_token)
+
+            if url and url in masked_text:
+                masked_text = masked_text.replace(url, CommonTestConstants.EXAMPLE_URL)
+
+            return masked_text
     
     @staticmethod
     def create_test_result(test_name: str, success: bool, details: Dict, duration: float = 0.0) -> Dict:
