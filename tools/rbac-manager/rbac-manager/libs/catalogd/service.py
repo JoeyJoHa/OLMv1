@@ -45,6 +45,36 @@ class CatalogdService:
         # Initialize client and parser
         self.client = CatalogdClient(core_api, skip_tls) if core_api else None
         self.parser = NDJSONParser()
+        
+        # Instance variables for caching catalog data
+        self._loaded_catalog_name = None
+        self._loaded_catalog_data = None
+    
+    def _get_or_load_catalog_data(self, catalog_name: str, auth_headers: Dict[str, str] = None) -> List[Dict[str, Any]]:
+        """
+        Get or load catalog data with caching to avoid repeated expensive operations
+        
+        Args:
+            catalog_name: Name of the catalog to query
+            auth_headers: Authentication headers
+            
+        Returns:
+            List of parsed catalog items (cached if available)
+        """
+        # Check if we already have the data for this catalog cached
+        if self._loaded_catalog_name == catalog_name and self._loaded_catalog_data is not None:
+            logger.debug(f"Using cached catalog data for: {catalog_name}")
+            return self._loaded_catalog_data
+        
+        # Cache miss - fetch and parse the data
+        logger.debug(f"Cache miss - fetching catalog data for: {catalog_name}")
+        catalog_data = self.query_catalog_data(catalog_name, auth_headers)
+        
+        # Store in cache
+        self._loaded_catalog_name = catalog_name
+        self._loaded_catalog_data = catalog_data
+        
+        return catalog_data
     
     def list_cluster_catalogs(self) -> List[Dict[str, Any]]:
         """
@@ -278,7 +308,7 @@ class CatalogdService:
         Returns:
             List of package names
         """
-        items = self.query_catalog_data(catalog_name, auth_headers)
+        items = self._get_or_load_catalog_data(catalog_name, auth_headers)
         return self.parser.extract_packages(items)
     
     def get_package_channels(self, catalog_name: str, package_name: str, 
@@ -294,7 +324,7 @@ class CatalogdService:
         Returns:
             List of channel names
         """
-        items = self.query_catalog_data(catalog_name, auth_headers)
+        items = self._get_or_load_catalog_data(catalog_name, auth_headers)
         return self.parser.extract_channels(items, package_name)
     
     def get_channel_versions(self, catalog_name: str, package_name: str, channel_name: str,
@@ -311,7 +341,7 @@ class CatalogdService:
         Returns:
             List of version names
         """
-        items = self.query_catalog_data(catalog_name, auth_headers)
+        items = self._get_or_load_catalog_data(catalog_name, auth_headers)
         return self.parser.extract_versions(items, package_name, channel_name)
     
     def get_version_metadata(self, catalog_name: str, package_name: str, channel_name: str, 
@@ -329,7 +359,7 @@ class CatalogdService:
         Returns:
             Bundle metadata dictionary
         """
-        items = self.query_catalog_data(catalog_name, auth_headers)
+        items = self._get_or_load_catalog_data(catalog_name, auth_headers)
         return self.parser.find_bundle_by_version(items, package_name, channel_name, version)
     
     def _calculate_age(self, creation_timestamp: str) -> str:
