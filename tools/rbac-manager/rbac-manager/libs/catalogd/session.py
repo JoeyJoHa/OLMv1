@@ -166,7 +166,7 @@ class CatalogdSession:
                 f"GET {path} HTTP/1.1",
                 f"Host: {self.service_name}.{self.namespace}.svc.cluster.local",
                 "Connection: keep-alive",  # Enable connection reuse
-                "Accept-Encoding: identity",  # Disable compression for now
+                "Accept-Encoding: gzip",  # Enable compression for better performance
                 f"User-Agent: {NetworkConstants.USER_AGENT}"
             ]
             
@@ -296,10 +296,21 @@ class CatalogdSession:
         if content_length is not None:
             body_bytes = body_bytes[:content_length]
         
-        # Handle compression
-        if is_compressed:
+        # Handle chunked transfer encoding
+        if headers_dict['is_chunked']:
+            body_bytes = self._decode_chunked_data(body_bytes)
+        
+        # Handle compression - check both header and data signature
+        is_compressed = headers_dict['is_compressed']
+        
+        if is_compressed or body_bytes.startswith(b'\x1f\x8b'):  # gzip magic bytes
             try:
-                body_bytes = self._decompress_response(body_bytes, is_compressed)
+                if body_bytes.startswith(b'\x1f\x8b'):
+                    # Data is gzip compressed regardless of header
+                    body_bytes = self._decompress_response(body_bytes, 'gzip')
+                elif is_compressed:
+                    # Use header-specified compression
+                    body_bytes = self._decompress_response(body_bytes, is_compressed)
             except Exception as e:
                 logger.debug(f"Decompression failed, using raw data: {e}")
                 # Continue with raw data if decompression fails
@@ -326,58 +337,21 @@ class CatalogdSession:
             # Step 3: Convert to string and return
             return body_bytes.decode('utf-8')
             
-        except ssl.SSLWantReadError:
-            # Handle SSL read timeouts gracefully
-            raise NetworkError(
-                "SSL read timeout - connection may be unstable.\n"
-                "This could indicate:\n"
-                "  • Network connectivity issues\n"
-                "  • Catalogd service overload\n"
-                "  • Firewall or proxy interference\n\n"
-                "Try retrying the request or checking network connectivity."
-            )
+        except ssl.SSLWantReadError as e:
+            raise NetworkError(f"SSL read timeout: {e}")
         except ssl.SSLError as e:
-            raise NetworkError(
-                f"SSL connection error: {e}\n"
-                "This could mean:\n"
-                "  • Certificate validation issues\n"
-                "  • TLS version mismatch\n"
-                "  • Connection interrupted during SSL handshake\n\n"
-                "Try adding --skip-tls flag if using self-signed certificates."
-            )
+            raise NetworkError(f"SSL connection error: {e}")
         except socket.timeout as e:
-            raise NetworkError(
-                f"Socket timeout occurred: {e}\n"
-                "This usually means:\n"
-                "  • The catalogd service is not responding\n"
-                "  • Network latency is too high\n"
-                "  • The request is taking longer than expected\n\n"
-                "Try retrying the request or checking service health."
-            )
+            raise NetworkError(f"Socket timeout: {e}")
         except ConnectionResetError as e:
-            raise NetworkError(
-                f"Connection was reset by the server: {e}\n"
-                "This could indicate:\n"
-                "  • Catalogd service restarted during request\n"
-                "  • Network infrastructure reset the connection\n"
-                "  • Load balancer or proxy issues\n\n"
-                "Try retrying the request."
-            )
+            raise NetworkError(f"Connection reset by server: {e}")
         except Exception as e:
             # Check for common error patterns in the exception message
-            error_str = str(e)
-            if "broken pipe" in error_str.lower():
-                raise NetworkError(
-                    f"Connection broken during data transfer: {e}\n"
-                    "This usually means the connection was interrupted.\n"
-                    "Try retrying the request."
-                )
-            elif "connection aborted" in error_str.lower():
-                raise NetworkError(
-                    f"Connection aborted: {e}\n"
-                    "The connection was terminated unexpectedly.\n"
-                    "Try retrying the request."
-                )
+            error_str = str(e).lower()
+            if "broken pipe" in error_str:
+                raise NetworkError(f"Connection broken during data transfer: {e}")
+            elif "connection aborted" in error_str:
+                raise NetworkError(f"Connection aborted: {e}")
             else:
                 raise NetworkError(f"Failed to read response: {e}")
     
@@ -405,6 +379,50 @@ class CatalogdSession:
                 compression_type = line.split(':')[1].strip().lower()
         
         return content_length, is_chunked, compression_type
+    
+    def _decode_chunked_data(self, chunked_data: bytes) -> bytes:
+        """
+        Decode HTTP chunked transfer encoding
+        
+        Args:
+            chunked_data: Raw chunked data
+            
+        Returns:
+            bytes: Decoded data without chunk headers
+        """
+        decoded_data = b""
+        offset = 0
+        
+        while offset < len(chunked_data):
+            # Find the end of the chunk size line
+            chunk_size_end = chunked_data.find(b'\r\n', offset)
+            if chunk_size_end == -1:
+                break
+            
+            # Parse chunk size (hexadecimal)
+            try:
+                chunk_size_str = chunked_data[offset:chunk_size_end].decode('ascii')
+                chunk_size = int(chunk_size_str, 16)
+            except (ValueError, UnicodeDecodeError):
+                logger.debug(f"Failed to parse chunk size: {chunked_data[offset:chunk_size_end]}")
+                break
+            
+            # If chunk size is 0, we've reached the end
+            if chunk_size == 0:
+                break
+            
+            # Extract the chunk data
+            chunk_data_start = chunk_size_end + 2  # Skip \r\n
+            chunk_data_end = chunk_data_start + chunk_size
+            
+            if chunk_data_end <= len(chunked_data):
+                decoded_data += chunked_data[chunk_data_start:chunk_data_end]
+            
+            # Move to the next chunk (skip trailing \r\n)
+            offset = chunk_data_end + 2
+        
+        logger.debug(f"Decoded chunked data: {len(chunked_data)} bytes -> {len(decoded_data)} bytes")
+        return decoded_data
     
     def _decompress_response(self, data: bytes, compression_type: str) -> bytes:
         """
