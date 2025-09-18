@@ -1375,6 +1375,35 @@ e        Generate installer service account Role permissions - ONLY installer-sp
 # Package: {package_name}
 # Generated automatically from bundle metadata"""
     
+    def _prepare_grantor_rules(self, bundle_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Prepare grantor ClusterRole rules by generating initial rules, adding bundled resources,
+        and processing them for deduplication.
+        
+        This method encapsulates the common logic for preparing grantor rules that was
+        duplicated across multiple scenarios in analyze_rbac_components.
+        
+        Args:
+            bundle_metadata: Bundle metadata from OPM
+            
+        Returns:
+            List of processed and deduplicated RBAC rules for grantor ClusterRole
+        """
+        # Generate initial grantor rules from cluster permissions
+        cluster_grantor_rules = []
+        for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
+            cluster_grantor_rules.extend(perm.get('rules', []))
+        
+        # Add bundled cluster resources (excluding ClusterRoles and CRDs for grantor)
+        bundled_cluster_rules_grantor = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
+        cluster_grantor_rules.extend(bundled_cluster_rules_grantor)
+        
+        # Process and deduplicate the combined rules
+        if cluster_grantor_rules:
+            return self._process_and_deduplicate_rules(cluster_grantor_rules)
+        else:
+            return []
+    
     def analyze_rbac_components(self, bundle_metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
         Analyze bundle metadata and determine which RBAC components are needed.
@@ -1434,29 +1463,27 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         result['rules']['installer_cluster_role'] = self._process_and_deduplicate_rules(combined_operator_rules)
         
         # Decision logic based on permission types
+        
+        # Handle scenarios that need grantor ClusterRole with cluster permissions
+        if has_cluster_permissions:
+            result['components_needed']['grantor_cluster_role'] = True
+            
+            # Generate grantor ClusterRole rules using centralized helper
+            grantor_rules = self._prepare_grantor_rules(bundle_metadata)
+            if grantor_rules:
+                result['rules']['grantor_cluster_role'] = grantor_rules
+            else:
+                result['components_needed']['grantor_cluster_role'] = False
+        
+        # Scenario-specific logic
         if has_cluster_permissions and has_namespace_permissions:
             # Scenario 1: Both clusterPermissions and permissions (e.g., ArgoCD)
             # - installer ClusterRole: operator management + bundled cluster resources
             # - grantor ClusterRole: CSV cluster permissions + bundled cluster resources (excluding ClusterRoles)
             # - namespace Role: CSV namespace permissions (deduplicated against cluster rules)
             result['permission_scenario'] = 'both_cluster_and_namespace'
-            result['components_needed']['grantor_cluster_role'] = True
             result['components_needed']['namespace_role'] = True
             result['components_needed']['role_bindings'] = True
-            
-            # Generate grantor ClusterRole rules
-            cluster_grantor_rules = []
-            for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
-                cluster_grantor_rules.extend(perm.get('rules', []))
-            
-            # Add bundled cluster resources (excluding ClusterRoles for grantor)
-            bundled_cluster_rules_grantor = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
-            cluster_grantor_rules.extend(bundled_cluster_rules_grantor)
-            
-            if cluster_grantor_rules:
-                result['rules']['grantor_cluster_role'] = self._process_and_deduplicate_rules(cluster_grantor_rules)
-            else:
-                result['components_needed']['grantor_cluster_role'] = False
             
             # Generate namespace Role rules (deduplicated against cluster rules)
             namespace_rules = self._generate_namespace_rules(bundle_metadata)
@@ -1485,21 +1512,6 @@ e        Generate installer service account Role permissions - ONLY installer-sp
             # - grantor ClusterRole: CSV cluster permissions + bundled cluster resources (excluding ClusterRoles)
             # - No namespace Role needed
             result['permission_scenario'] = 'cluster_only'
-            result['components_needed']['grantor_cluster_role'] = True
-            
-            # Generate grantor ClusterRole rules
-            cluster_grantor_rules = []
-            for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
-                cluster_grantor_rules.extend(perm.get('rules', []))
-            
-            # Add bundled cluster resources (excluding ClusterRoles for grantor)
-            bundled_cluster_rules_grantor = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
-            cluster_grantor_rules.extend(bundled_cluster_rules_grantor)
-            
-            if cluster_grantor_rules:
-                result['rules']['grantor_cluster_role'] = self._process_and_deduplicate_rules(cluster_grantor_rules)
-            else:
-                result['components_needed']['grantor_cluster_role'] = False
                 
         elif has_namespace_permissions:
             # Scenario 3: Only permissions (e.g., Quay operator - treat as ClusterRoles)
