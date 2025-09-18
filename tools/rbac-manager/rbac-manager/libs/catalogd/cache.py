@@ -134,7 +134,7 @@ class CatalogdCache:
     
     def put(self, catalog_name: str, url_path: str, data: str) -> None:
         """
-        Store response data in cache
+        Store response data in cache using atomic write-and-rename strategy
         
         Args:
             catalog_name: Name of the catalog
@@ -143,14 +143,20 @@ class CatalogdCache:
         """
         cache_key = self._generate_cache_key(catalog_name, url_path)
         
+        # Get final file paths
+        cache_file = self._get_cache_file_path(cache_key)
+        meta_file = self._get_metadata_file_path(cache_key)
+        
+        # Get temporary file paths
+        cache_temp = cache_file.with_suffix(cache_file.suffix + '.tmp')
+        meta_temp = meta_file.with_suffix(meta_file.suffix + '.tmp')
+        
         try:
-            # Write data file
-            cache_file = self._get_cache_file_path(cache_key)
-            with open(cache_file, 'w', encoding='utf-8') as f:
+            # Write data to temporary file first
+            with open(cache_temp, 'w', encoding='utf-8') as f:
                 f.write(data)
             
-            # Write metadata file
-            meta_file = self._get_metadata_file_path(cache_key)
+            # Prepare metadata
             metadata = {
                 'timestamp': time.time(),
                 'catalog_name': catalog_name,
@@ -158,12 +164,26 @@ class CatalogdCache:
                 'size': len(data)
             }
             
-            with open(meta_file, 'w') as f:
+            # Write metadata to temporary file
+            with open(meta_temp, 'w') as f:
                 json.dump(metadata, f)
+            
+            # Atomic rename operations - data file first, then metadata
+            # This ensures that if metadata exists, the data file is guaranteed to exist
+            cache_temp.rename(cache_file)
+            meta_temp.rename(meta_file)
             
             logger.debug(f"Cached response: {catalog_name}{url_path} ({len(data)} bytes)")
             
         except Exception as e:
+            # Clean up temporary files if they exist
+            for temp_file in [cache_temp, meta_temp]:
+                try:
+                    if temp_file.exists():
+                        temp_file.unlink()
+                except Exception as cleanup_error:
+                    logger.debug(f"Error cleaning up temporary file {temp_file}: {cleanup_error}")
+            
             logger.warning(f"Failed to cache response: {e}")
     
     def invalidate(self, catalog_name: str, url_path: str = None) -> None:
