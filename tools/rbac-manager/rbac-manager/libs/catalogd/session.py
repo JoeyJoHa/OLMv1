@@ -228,16 +228,16 @@ class CatalogdSession:
         # Validate status code and provide detailed error messages
         status_line = headers_part.split('\r\n')[0]
         status_code = int(status_line.split(' ')[1])
-        if status_code != 200:
-            if status_code == 404:
+        if status_code != NetworkConstants.HTTPStatus.OK:
+            if status_code == NetworkConstants.HTTPStatus.NOT_FOUND:
                 raise NetworkError(f"HTTP 404 Not Found: {status_line}")
-            elif status_code == 401:
+            elif status_code == NetworkConstants.HTTPStatus.UNAUTHORIZED:
                 raise NetworkError(f"HTTP 401 Unauthorized: {status_line}")
-            elif status_code == 403:
+            elif status_code == NetworkConstants.HTTPStatus.FORBIDDEN:
                 raise NetworkError(f"HTTP 403 Forbidden: {status_line}")
-            elif status_code == 500:
+            elif status_code == NetworkConstants.HTTPStatus.INTERNAL_SERVER_ERROR:
                 raise NetworkError(f"HTTP 500 Internal Server Error: {status_line}")
-            elif status_code == 503:
+            elif status_code == NetworkConstants.HTTPStatus.SERVICE_UNAVAILABLE:
                 raise NetworkError(f"HTTP 503 Service Unavailable: {status_line}")
             else:
                 raise NetworkError(f"HTTP request failed with status {status_code}: {status_line}")
