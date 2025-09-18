@@ -45,8 +45,7 @@ class ConfigManager:
             'required': False,
             'fields': {
                 'skip_tls': {'type': bool, 'required': False},
-                'debug': {'type': bool, 'required': False},
-                'registry_token': {'type': str, 'required': False}
+                'debug': {'type': bool, 'required': False}
             }
         },
     }
@@ -325,8 +324,7 @@ class ConfigManager:
             "": None,
             "global": {
                 "skip_tls": False,
-                "debug": False,
-                "registry_token": ""
+                "debug": False
             }
         }
     

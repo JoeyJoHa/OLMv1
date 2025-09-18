@@ -650,8 +650,6 @@ def merge_config_with_args(args, config, command_name: str):
             args.skip_tls = global_config['skip_tls']
         if hasattr(args, 'debug') and not args.debug and global_config.get('debug'):
             args.debug = global_config['debug']
-        if hasattr(args, 'registry_token') and (not args.registry_token or args.registry_token == '') and 'registry_token' in global_config:
-            args.registry_token = global_config['registry_token']
     
     # Handle legacy config structure for backward compatibility
     if command_name in config:

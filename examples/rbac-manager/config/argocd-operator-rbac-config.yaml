@@ -3,15 +3,14 @@
 
 operator:
   image: "quay.io/openshift-community-operators/argocd-operator@sha256:3edc4f132ee4ac9378e331f8eba14a3371132e3274295bfa99c554631e38e8b5"
-  namespace: "default"
+  namespace: "argocd-operator"
   channel: "alpha"
   packageName: "argocd-operator"
   version: "0.7.0"
 output:
   mode: "file"
-  type: "yaml"
-  path: "./output"
+  type: "helm"
+  path: "/files"
 global:
   skip_tls: False
   debug: False
-  registry_token: ""
