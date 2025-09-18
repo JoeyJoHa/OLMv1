@@ -752,6 +752,93 @@ class CatalogdTestSuite:
         print(f"   {'✅' if success else '❌'} List catalogs: command executed successfully")
         return success
     
+    def get_available_tests(self) -> Dict[str, str]:
+        """Get dictionary of available test methods and their descriptions"""
+        return {
+            "basic_catalogd_help": "Test basic catalogd command without arguments",
+            "list_catalogs_command": "Test list-catalogs subcommand",
+            "list_packages": "Test listing packages in a catalog",
+            "list_channels": "Test listing channels for a package",
+            "list_versions": "Test listing versions for a package and channel",
+            "get_metadata": "Test getting metadata for a specific version",
+            "generate_config_template": "Test generating config template without parameters",
+            "generate_config_with_params": "Test generating config with package parameters",
+            "generate_config_file_output": "Test generating config file to output directory",
+            "interactive_catalog_selection": "Test interactive catalog selection",
+            "invalid_catalog": "Test error handling with invalid catalog",
+            "misspelled_catalog": "Test error handling with misspelled catalog name",
+            "invalid_characters_catalog": "Test error handling with invalid characters in catalog name",
+            "ssl_error_handling": "Test SSL error handling without --skip-tls",
+            "output_truncation_handling": "Test handling of large JSON output that might be truncated"
+        }
+    
+    def run_specific_test(self, test_name: str) -> Dict[str, Any]:
+        """Run a specific test by name"""
+        start_time = time.time()
+        
+        # Map test names to methods
+        test_methods = {
+            "basic_catalogd_help": self.test_basic_catalogd_help,
+            "list_catalogs_command": self.test_list_catalogs_command,
+            "list_packages": self.test_list_packages,
+            "list_channels": self.test_list_channels,
+            "list_versions": self.test_list_versions,
+            "get_metadata": self.test_get_metadata,
+            "generate_config_template": self.test_generate_config_template,
+            "generate_config_with_params": self.test_generate_config_with_params,
+            "generate_config_file_output": self.test_generate_config_file_output,
+            "interactive_catalog_selection": self.test_interactive_catalog_selection,
+            "invalid_catalog": self.test_invalid_catalog,
+            "misspelled_catalog": self.test_misspelled_catalog,
+            "invalid_characters_catalog": self.test_invalid_characters_catalog,
+            "ssl_error_handling": self.test_ssl_error_handling,
+            "output_truncation_handling": self.test_output_truncation_handling
+        }
+        
+        if test_name not in test_methods:
+            print(f"❌ Unknown test: {test_name}")
+            return {"error": f"Unknown test: {test_name}"}
+        
+        print(f"🎯 Running specific test: {test_name}")
+        print("=" * 50)
+        
+        try:
+            # Execute the test method using the dictionary mapping
+            success = test_methods[test_name]()
+            end_time = time.time()
+            
+            # Find the result in test_results
+            test_result = None
+            for result in reversed(self.test_results):
+                if result["test"] == test_name:
+                    test_result = result
+                    break
+            
+            print(f"\n📊 Test '{test_name}' Results:")
+            print(f"Status: {'✅ PASSED' if success else '❌ FAILED'}")
+            print(f"Duration: {end_time - start_time:.2f}s")
+            
+            if not success and test_result:
+                error_msg = test_result.get("details", {}).get("error", "Unknown error")
+                print(f"Error: {error_msg}")
+            
+            return {
+                "test_name": test_name,
+                "success": success,
+                "duration": end_time - start_time,
+                "result": test_result
+            }
+            
+        except Exception as e:
+            end_time = time.time()
+            print(f"❌ Test '{test_name}' failed with exception: {e}")
+            return {
+                "test_name": test_name,
+                "success": False,
+                "duration": end_time - start_time,
+                "error": str(e)
+            }
+    
     def run_all_tests(self) -> Dict[str, Any]:
         """Run all catalogd tests"""
         print("🚀 Starting Catalogd Test Suite")
@@ -839,6 +926,7 @@ class CatalogdTestSuite:
 def _parse_arguments() -> argparse.Namespace:
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description="Catalogd Test Suite")
+    parser.add_argument("--unit", nargs="?", const="", help="Run specific test (use without argument to list available tests)")
     parser.add_argument("--skip-tls", action="store_true", help="Skip TLS verification")
     parser.add_argument("--openshift-url", help="OpenShift cluster URL")
     parser.add_argument("--openshift-token", help="OpenShift authentication token")
@@ -866,16 +954,50 @@ def _validate_environment(args: argparse.Namespace) -> tuple[str, str]:
 def main():
     """Main test runner"""
     args = _parse_arguments()
+    
+    # Handle --unit flag for listing tests
+    if hasattr(args, 'unit') and args.unit is not None:
+        if args.unit == "":
+            # List available tests
+            dummy_suite = CatalogdTestSuite("https://example.com", "dummy-token")
+            available_tests = dummy_suite.get_available_tests()
+            print("📋 Available Catalogd Tests:")
+            print("=" * 60)
+            for test_name, description in available_tests.items():
+                print(f"  {test_name:30} - {description}")
+            print(f"\nUsage: python3 {Path(__file__).name} --unit <test_name> --openshift-url <url> --openshift-token <token>")
+            sys.exit(0)
+    
     openshift_url, openshift_token = _validate_environment(args)
     
-    # Initialize and run test suite
+    # Initialize test suite
     test_suite = CatalogdTestSuite(
         openshift_url=openshift_url,
         openshift_token=openshift_token,
         skip_tls=args.skip_tls
     )
     
-    # Run tests
+    # Handle --unit flag for running specific test
+    if hasattr(args, 'unit') and args.unit is not None and args.unit != "":
+        available_tests = test_suite.get_available_tests()
+        if args.unit not in available_tests:
+            print(f"❌ Unknown test: {args.unit}")
+            print(f"\nAvailable tests: {', '.join(available_tests.keys())}")
+            sys.exit(1)
+        
+        # Run specific test
+        result = test_suite.run_specific_test(args.unit)
+        
+        if "error" in result:
+            sys.exit(1)
+        
+        # Save results
+        test_suite.save_results(f"catalogd_test_{args.unit}_results.json")
+        
+        # Exit with appropriate code
+        sys.exit(0 if result["success"] else 1)
+    
+    # Run all tests
     results = test_suite.run_all_tests()
     
     # Save results

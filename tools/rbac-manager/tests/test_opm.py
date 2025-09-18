@@ -11,6 +11,7 @@ Comprehensive tests for OPM functionality including:
 - Error handling and edge cases
 """
 
+import argparse
 import json
 import os
 import subprocess
@@ -1074,6 +1075,95 @@ global:
         
         return results
     
+    def get_available_tests(self) -> Dict[str, str]:
+        """Get dictionary of available test methods and their descriptions"""
+        return {
+            "bundle_processing": "Test bundle processing and metadata extraction for all bundles",
+            "helm_generation": "Test Helm values generation for all bundles", 
+            "rbac_component_analysis": "Test centralized RBAC component analysis for all bundles",
+            "dry_deduplication": "Test DRY deduplication functionality for all bundles",
+            "output_directory": "Test output directory functionality for all bundles",
+            "permission_detection": "Test permission scenario detection for each bundle type",
+            "config_functionality": "Test config file functionality",
+            "formatting_features": "Test FlowStyleList formatting and channel placeholder features",
+            "error_handling": "Test error handling with invalid inputs",
+            "permission_scenarios": "Test different permission scenarios comprehensively"
+        }
+    
+    def run_specific_test(self, test_name: str) -> Dict[str, Any]:
+        """Run a specific test by name"""
+        start_time = time.time()
+        results = []
+        
+        # Define test execution functions
+        def run_bundle_tests(test_method):
+            """Helper to run test method for all valid bundles"""
+            for bundle_name, bundle_image in self.test_bundles.items():
+                if bundle_name != "invalid-bundle":  # Skip invalid bundle for most tests
+                    result = test_method(bundle_name, bundle_image)
+                    results.append(result)
+                    self.test_results.append(result)
+        
+        def run_list_returning_test(test_method):
+            """Helper to run test methods that return lists"""
+            test_results = test_method()
+            results.extend(test_results)
+            self.test_results.extend(test_results)
+        
+        def run_single_test(test_method):
+            """Helper to run test methods that return single results"""
+            result = test_method()
+            results.append(result)
+            self.test_results.append(result)
+        
+        # Map test names to their execution functions
+        test_map = {
+            "bundle_processing": lambda: run_bundle_tests(self.test_bundle_processing),
+            "helm_generation": lambda: run_bundle_tests(self.test_helm_generation),
+            "rbac_component_analysis": lambda: run_bundle_tests(self.test_rbac_component_analysis),
+            "dry_deduplication": lambda: run_bundle_tests(self.test_dry_deduplication),
+            "output_directory": lambda: run_bundle_tests(self.test_output_directory),
+            "permission_detection": lambda: run_list_returning_test(self.test_permission_detection),
+            "config_functionality": lambda: run_list_returning_test(self.test_config_functionality),
+            "formatting_features": lambda: run_list_returning_test(self.test_formatting_features),
+            "error_handling": lambda: run_single_test(self.test_error_handling),
+            "permission_scenarios": lambda: run_list_returning_test(self.test_permission_scenarios)
+        }
+        
+        # Execute the test if it exists
+        if test_name not in test_map:
+            print(f"❌ Unknown test: {test_name}")
+            return {"error": f"Unknown test: {test_name}"}
+        
+        test_map[test_name]()
+        
+        end_time = time.time()
+        
+        # Calculate summary
+        total_tests = len(results)
+        passed_tests = sum(1 for r in results if r["success"])
+        failed_tests = total_tests - passed_tests
+        
+        print(f"\n📊 Test '{test_name}' Results:")
+        print(f"Total: {total_tests}, Passed: {passed_tests} ✅, Failed: {failed_tests} ❌")
+        print(f"Duration: {end_time - start_time:.2f}s")
+        
+        if failed_tests > 0:
+            print("\n❌ Failed Tests:")
+            for result in results:
+                if not result["success"]:
+                    print(f"  - {result['test']}: {result.get('details', {}).get('error', 'Unknown error')}")
+        
+        return {
+            "test_name": test_name,
+            "total": total_tests,
+            "passed": passed_tests,
+            "failed": failed_tests,
+            "success_rate": (passed_tests/total_tests)*100 if total_tests > 0 else 0,
+            "duration": end_time - start_time,
+            "results": results
+        }
+    
     def run_all_tests(self) -> Dict[str, Any]:
         """Run all OPM tests"""
         print("🚀 Starting OPM Test Suite")
@@ -1189,6 +1279,13 @@ global:
 
 def main():
     """Main test runner"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="OPM Test Suite")
+    parser.add_argument("--unit", nargs="?", const="", help="Run specific test (use without argument to list available tests)")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument("--no-skip-tls", action="store_true", help="Don't skip TLS verification")
+    args = parser.parse_args()
+    
     print("🧪 OPM Test Suite")
     print("Testing RBAC Manager OPM functionality")
     print("=" * 60)
@@ -1199,13 +1296,45 @@ def main():
         print("   Please run this test from the tools/rbac-manager directory")
         sys.exit(1)
     
-    # Initialize and run test suite
+    # Initialize test suite
     test_suite = OPMTestSuite(
-        skip_tls=True,
-        debug=False
+        skip_tls=not args.no_skip_tls,
+        debug=args.debug
     )
     
-    # Run tests
+    # Handle --unit flag
+    if args.unit is not None:
+        if args.unit == "":
+            # List available tests
+            available_tests = test_suite.get_available_tests()
+            print("\n📋 Available Tests:")
+            print("=" * 60)
+            for test_name, description in available_tests.items():
+                print(f"  {test_name:25} - {description}")
+            print(f"\nUsage: python3 {Path(__file__).name} --unit <test_name>")
+            sys.exit(0)
+        else:
+            # Run specific test
+            available_tests = test_suite.get_available_tests()
+            if args.unit not in available_tests:
+                print(f"❌ Unknown test: {args.unit}")
+                print(f"\nAvailable tests: {', '.join(available_tests.keys())}")
+                sys.exit(1)
+            
+            print(f"🎯 Running specific test: {args.unit}")
+            print("=" * 60)
+            results = test_suite.run_specific_test(args.unit)
+            
+            if "error" in results:
+                sys.exit(1)
+            
+            # Save results
+            test_suite.save_results(f"opm_test_{args.unit}_results.json")
+            
+            # Exit with appropriate code
+            sys.exit(0 if results["failed"] == 0 else 1)
+    
+    # Run all tests
     results = test_suite.run_all_tests()
     
     # Save results
