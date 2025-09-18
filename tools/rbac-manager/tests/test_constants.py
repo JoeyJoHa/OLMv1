@@ -5,7 +5,7 @@ Shared Test Constants
 Common constants used across all test suites to follow DRY principle.
 """
 
-from typing import Dict, List
+from typing import Dict
 
 
 class CommonTestConstants:

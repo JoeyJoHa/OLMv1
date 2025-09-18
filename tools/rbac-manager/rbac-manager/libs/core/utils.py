@@ -64,6 +64,56 @@ def is_output_piped() -> bool:
     return not sys.stdout.isatty()
 
 
+def mask_sensitive_info(text: str, url: str = None, token: str = None) -> str:
+    """
+    Mask sensitive information in text for logging and debug output.
+    
+    Args:
+        text: Text to mask
+        url: URL to mask (optional)
+        token: Token to mask (optional)
+        
+    Returns:
+        Text with sensitive information masked
+    """
+    if not text:
+        return text
+        
+    masked_text = text
+    
+    # Mask token if provided
+    if token and token in masked_text:
+        # Extract the token prefix (e.g., "sha256~") and mask the rest
+        if '~' in token:
+            prefix = token.split('~')[0] + '~'
+            masked_token = prefix + "***MASKED***"
+        else:
+            masked_token = "***MASKED***"
+        masked_text = masked_text.replace(token, masked_token)
+    
+    # Mask URL if provided
+    if url and url in masked_text:
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            masked_url = f"https://{parsed.hostname}:***"
+            masked_text = masked_text.replace(url, masked_url)
+        except Exception:
+            masked_text = masked_text.replace(url, "https://***masked***:***")
+    
+    # Generic patterns for common sensitive information
+    # Mask bearer tokens
+    masked_text = re.sub(r'Bearer [A-Za-z0-9+/=_-]+', 'Bearer ***MASKED***', masked_text)
+    
+    # Mask basic auth tokens
+    masked_text = re.sub(r'Basic [A-Za-z0-9+/=]+', 'Basic ***MASKED***', masked_text)
+    
+    # Mask OpenShift tokens (sha256~ prefix)
+    masked_text = re.sub(r'sha256~[A-Za-z0-9_-]+', 'sha256~***MASKED***', masked_text)
+    
+    return masked_text
+
+
 def validate_image_url(image: str) -> bool:
     """
     Validate if the provided string is a valid container image URL.

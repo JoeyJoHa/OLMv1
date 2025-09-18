@@ -98,7 +98,11 @@ class OpenShiftAuth:
             self.custom_api = client.CustomObjectsApi(self.k8s_client)
             self.core_api = client.CoreV1Api(self.k8s_client)
             
-            logger.info(f"Successfully configured Kubernetes client for {self.openshift_url}")
+            # Mask sensitive information in URL for logging
+            from .utils import mask_sensitive_info
+            masked_url = mask_sensitive_info(self.openshift_url, self.openshift_url)
+            
+            logger.info(f"Successfully configured Kubernetes client for {masked_url}")
             return True
             
         except Exception as e:

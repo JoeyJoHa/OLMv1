@@ -1,0 +1,13 @@
+{
+  "test_suite": "complete_workflow",
+  "timestamp": 1758181806.939204,
+  "configuration": {
+    "openshift_url": "https://api.opslab-joe.rh-igc.com:6443",
+    "skip_tls": true,
+    "test_catalog": "\"status\":",
+    "test_package": null,
+    "test_channel": null,
+    "test_version": null
+  },
+  "results": []
+}

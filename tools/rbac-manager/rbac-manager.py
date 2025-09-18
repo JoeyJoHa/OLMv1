@@ -6,7 +6,6 @@ This script provides a simple entry point for the RBAC Manager tool.
 All application logic is contained in the libs.main_app module.
 """
 
-import logging
 import sys
 from pathlib import Path
 

@@ -172,7 +172,10 @@ class WorkflowTestSuite:
         # List catalogs
         cmd = ["python3", "rbac-manager.py", "list-catalogs"] + self.catalogd_cmd[3:]  # Skip catalogd subcommand
         if self.debug:
-            print(f"   Running command: {' '.join(cmd)}")
+            # Import the core utility for masking
+            from libs.core.utils import mask_sensitive_info
+            masked_cmd = mask_sensitive_info(' '.join(cmd), self.openshift_url, self.openshift_token)
+            print(f"   Running command: {masked_cmd}")
         result = self.run_command(cmd)
         
         if not result["success"]:
