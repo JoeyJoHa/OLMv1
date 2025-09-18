@@ -12,7 +12,7 @@ from .constants import (
 )
 from .exceptions import (
     RBACManagerError, AuthenticationError, ConfigurationError,
-    CatalogdError, OPMError, BundleProcessingError, ParsingError
+    CatalogdError, OPMError, BundleProcessingError, ParsingError, NetworkError
 )
 from .protocols import AuthProvider, ConfigProvider, BundleProvider, CatalogdProvider, HelpProvider
 from .utils import (
@@ -39,6 +39,7 @@ __all__ = [
     'OPMError',
     'BundleProcessingError',
     'ParsingError',
+    'NetworkError',
     # Protocols
     'AuthProvider',
     'ConfigProvider',
