@@ -7,7 +7,7 @@ High-level processing of operator bundles including metadata extraction and vali
 import base64
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from ..core.exceptions import BundleProcessingError
 from ..core.constants import OPMConstants, KubernetesConstants
@@ -289,7 +289,7 @@ class BundleProcessor:
     
     def _extract_rbac_rules(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Extract and organize RBAC rules
+        Extract and organize RBAC rules using DRY principle
         
         Args:
             metadata: Bundle metadata
@@ -303,25 +303,43 @@ class BundleProcessor:
             'service_accounts': []
         }
         
-        # Extract namespace-scoped rules
-        for permission in metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []):
+        # Use set for efficient unique service account collection
+        service_accounts_set = set()
+        
+        # Extract namespace-scoped rules using helper method (DRY principle)
+        self._process_permission_block(
+            metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []),
+            rbac_rules['namespace_rules'],
+            service_accounts_set
+        )
+        
+        # Extract cluster-scoped rules using helper method (DRY principle)
+        self._process_permission_block(
+            metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []),
+            rbac_rules['cluster_rules'],
+            service_accounts_set
+        )
+        
+        # Convert set back to list for final result
+        rbac_rules['service_accounts'] = list(service_accounts_set)
+        
+        return rbac_rules
+    
+    def _process_permission_block(self, permissions: List[Dict[str, Any]], rules_list: List[Dict[str, Any]], service_accounts_set: set) -> None:
+        """
+        Process a block of permissions and extract rules and service accounts (DRY helper)
+        
+        Args:
+            permissions: List of permission objects to process
+            rules_list: List to extend with extracted rules
+            service_accounts_set: Set to add unique service account names to
+        """
+        for permission in permissions:
             service_account = permission.get('serviceAccountName', 'default')
             rules = permission.get('rules', [])
             
-            rbac_rules['namespace_rules'].extend(rules)
-            if service_account not in rbac_rules['service_accounts']:
-                rbac_rules['service_accounts'].append(service_account)
-        
-        # Extract cluster-scoped rules
-        for cluster_permission in metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
-            service_account = cluster_permission.get('serviceAccountName', 'default')
-            rules = cluster_permission.get('rules', [])
-            
-            rbac_rules['cluster_rules'].extend(rules)
-            if service_account not in rbac_rules['service_accounts']:
-                rbac_rules['service_accounts'].append(service_account)
-        
-        return rbac_rules
+            rules_list.extend(rules)
+            service_accounts_set.add(service_account)
     
     def _create_summary(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
