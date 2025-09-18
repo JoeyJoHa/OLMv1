@@ -16,11 +16,7 @@ libs_path = rbac_manager_path / "libs"
 sys.path.insert(0, str(rbac_manager_path))
 sys.path.insert(0, str(libs_path))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Logging will be configured by main_app.main()
 
 # Import and execute main application
 if __name__ == "__main__":

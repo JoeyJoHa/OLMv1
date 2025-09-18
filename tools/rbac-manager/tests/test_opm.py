@@ -22,42 +22,9 @@ import yaml
 from pathlib import Path
 from typing import Dict, List, Any, NamedTuple
 
-# Add the rbac-manager directory to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent / "rbac-manager"))
-
-
-class OPMTestConstants:
-    """Constants for OPM test configuration"""
-    DEFAULT_TIMEOUT = 60
-    DEFAULT_NAMESPACE = "test-namespace"
-    PRODUCTION_NAMESPACE = "production"
-    OUTPUT_SUBDIR = "test-output"
-    
-    # Test bundle images - Real operator bundles for comprehensive testing
-    ARGOCD_BUNDLE = "quay.io/openshift-community-operators/argocd-operator@sha256:3edc4f132ee4ac9378e331f8eba14a3371132e3274295bfa99c554631e38e8b5"
-    GITOPS_BUNDLE = "registry.redhat.io/openshift-gitops-1/gitops-operator-bundle@sha256:53daa863b16b421cc1d9bc7e042cf1ecce9de9913b978561145b319c2a1a8ae5"
-    QUAY_BUNDLE = "registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2"
-    INVALID_BUNDLE = "invalid-registry.com/nonexistent/bundle:latest"
-    
-    # Expected document types
-    EXPECTED_YAML_DOCS = ["ServiceAccount", "ClusterRole", "ClusterRoleBinding"]
-    EXPECTED_HELM_KEYS = ["operator", "serviceAccount", "permissions"]
-    EXPECTED_FILE_PATTERNS = ["serviceaccount", "clusterrole", "clusterrolebinding"]
-    
-    # Test channels and versions
-    STABLE_CHANNEL = "stable"
-    ALPHA_CHANNEL = "alpha"
-    TEST_VERSION = "1.0.0"
-    
-    # Validation keywords
-    ERROR_KEYWORDS = ["image", "bundle", "failed", "error"]
-    DEDUP_KEYWORDS = ["deduplicated", "dry", "filtered"]
-    
-    # Formatting patterns
-    FLOW_STYLE_PATTERNS = ["apiGroups: [", "resources: [", "verbs: ["]
-    RESOURCE_PLACEHOLDER = "#<ADD_CREATED_RESOURCE_NAMES_HERE>"
-    CHANNEL_PLACEHOLDER = "#<VERIFY_WITH_CATALOGD_AND_SET_CHANNEL>"
-    CHANNEL_GUIDANCE = "IMPORTANT: Verify Correct Channel"
+# Import shared test constants and setup path
+from test_constants import OPMTestConstants, TestUtilities
+TestUtilities.setup_test_path()
 
 
 class OPMTestResult(NamedTuple):
@@ -224,13 +191,9 @@ class OPMTestSuite:
     def _create_test_result(self, test_name: str, description: str, success: bool, 
                            details: Dict[str, Any], duration: float = 0.0) -> Dict[str, Any]:
         """Create standardized test result structure"""
-        return {
-            "test": test_name,
-            "description": description,
-            "success": success,
-            "duration": duration,
-            "details": details
-        }
+        result = TestUtilities.create_test_result(test_name, success, details, duration)
+        result["description"] = description  # Add OPM-specific field
+        return result
     
     def _is_placeholder_bundle(self, bundle_image: str) -> bool:
         """Check if bundle image is a placeholder"""

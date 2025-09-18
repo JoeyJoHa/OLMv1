@@ -22,20 +22,9 @@ import yaml
 from pathlib import Path
 from typing import Dict, List, Any, NamedTuple
 
-# Add the rbac-manager directory to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent / "rbac-manager"))
-
-
-class TestConstants:
-    """Constants for test configuration"""
-    DEFAULT_TIMEOUT = 120
-    DEFAULT_CATALOG = "openshift-redhat-operators"
-    DEFAULT_PACKAGE = "quay-operator"
-    DEFAULT_CHANNEL = "stable-3.10"
-    DEFAULT_VERSION = "3.10.0"
-    EXAMPLE_URL = "https://api.example.com:6443"
-    MASKED_TOKEN = "***MASKED***"
-    TEMP_DIR_PLACEHOLDER = "/tmp/placeholder-output-dir"
+# Import shared test constants and setup path
+from test_constants import CatalogdTestConstants as TestConstants, TestUtilities
+TestUtilities.setup_test_path()
 
 
 class TestResult(NamedTuple):
@@ -126,23 +115,10 @@ class CatalogdTestSuite:
     
     def _mask_token_in_command(self, command: str) -> str:
         """Mask the authentication token, OpenShift URL, and temp directories in command strings"""
-        masked_command = command
+        # Use shared utility for basic masking
+        masked_command = TestUtilities.mask_sensitive_data(command, self.openshift_url, self.openshift_token)
         
-        # Mask the authentication token
-        if self.openshift_token and self.openshift_token in masked_command:
-            # Extract the token prefix (e.g., "sha256~") and mask the rest
-            if '~' in self.openshift_token:
-                prefix = self.openshift_token.split('~')[0] + '~'
-                masked_token = prefix + TestConstants.MASKED_TOKEN
-            else:
-                masked_token = TestConstants.MASKED_TOKEN
-            masked_command = masked_command.replace(self.openshift_token, masked_token)
-        
-        # Mask the OpenShift URL
-        if self.openshift_url and self.openshift_url in masked_command:
-            masked_command = masked_command.replace(self.openshift_url, TestConstants.EXAMPLE_URL)
-        
-        # Mask temporary directories with placeholders
+        # Mask temporary directories with placeholders (specific to catalogd tests)
         temp_patterns = [
             r'/var/folders/[a-zA-Z0-9_/]+/tmp[a-zA-Z0-9_]+',
             r'/tmp/tmp[a-zA-Z0-9_]+'
