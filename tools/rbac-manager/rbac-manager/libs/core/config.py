@@ -207,30 +207,8 @@ class ConfigManager:
             ConfigurationError: If template generation fails
         """
         try:
-            template = {
-                "# RBAC Manager Configuration File": None,
-                "# Generated from template": None,
-                "": None,
-                "operator": {
-                    "image": "image-url",
-                    "namespace": KubernetesConstants.DEFAULT_NAMESPACE,
-                    "channel": "channel-name",
-                    "packageName": "package-name",
-                    "version": "version"
-                },
-                "": None,
-                "output": {
-                    "mode": "stdout",
-                    "type": "yaml",
-                    "path": "./output"
-                },
-                "": None,
-                "global": {
-                    "skip_tls": False,
-                    "debug": False,
-                    "registry_token": ""
-                }
-            }
+            # Use the existing method to generate content (DRY principle)
+            yaml_content = self.get_config_template_content()
             
             # Determine output path
             if output_dir:
@@ -240,9 +218,7 @@ class ConfigManager:
             else:
                 config_file = Path(FileConstants.DEFAULT_CONFIG_FILE)
             
-            # Generate YAML content manually to preserve comments
-            yaml_content = self._dict_to_yaml_with_comments(template)
-            
+            # Write content to file
             with open(config_file, 'w') as f:
                 f.write(yaml_content)
             
@@ -382,30 +358,13 @@ class ConfigManager:
             ConfigurationError: If config generation fails
         """
         try:
-            template = {
-                "# RBAC Manager Configuration File": None,
-                "# Generated from extracted values": None,
-                "": None,
-                "operator": {
-                    "image": extracted_data.get('bundle_image', 'image-url'),
-                    "namespace": namespace or KubernetesConstants.DEFAULT_NAMESPACE,
-                    "channel": extracted_data.get('channel', 'channel-name'),
-                    "packageName": extracted_data.get('package', 'package-name'),
-                    "version": extracted_data.get('version', 'version')
-                },
-                "": None,
-                "output": {
-                    "mode": output_mode,
-                    "type": output_type,
-                    "path": output_dir or "./output"
-                },
-                "": None,
-                "global": {
-                    "skip_tls": False,
-                    "debug": False,
-                    "registry_token": ""
-                }
-            }
+            # Use the existing method to generate content (DRY principle)
+            yaml_content = self.get_config_with_values_content(
+                extracted_data=extracted_data,
+                output_mode=output_mode,
+                output_type=output_type,
+                namespace=namespace
+            )
             
             # Determine output path
             if output_dir:
@@ -416,9 +375,7 @@ class ConfigManager:
                 config_file = Path('./config') / FileConstants.DEFAULT_CONFIG_FILE
                 config_file.parent.mkdir(parents=True, exist_ok=True)
             
-            # Generate YAML content manually to preserve comments
-            yaml_content = self._dict_to_yaml_with_comments(template)
-            
+            # Write content to file
             with open(config_file, 'w') as f:
                 f.write(yaml_content)
             
