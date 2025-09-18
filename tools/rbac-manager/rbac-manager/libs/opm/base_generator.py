@@ -855,50 +855,45 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                 'resourceNames': crd_names
             })
         
-        # RBAC management permissions
-        # Unscoped permissions for RBAC lifecycle
-        rules.extend([
-            {
-                'apiGroups': [KubernetesConstants.RBAC_API_GROUP],
-                'resources': [KubernetesConstants.CLUSTER_ROLES_RESOURCE],
-                'verbs': [
-                    KubernetesConstants.CREATE_VERB, 
-                    KubernetesConstants.LIST_VERB, 
-                    KubernetesConstants.WATCH_VERB
-                ]
-            },
-            {
-                'apiGroups': [KubernetesConstants.RBAC_API_GROUP],
-                'resources': [KubernetesConstants.CLUSTER_ROLES_RESOURCE],
-                'verbs': [
-                    KubernetesConstants.GET_VERB, 
-                    KubernetesConstants.UPDATE_VERB, 
-                    KubernetesConstants.PATCH_VERB, 
-                    KubernetesConstants.DELETE_VERB
-                ]
+        # RBAC management permissions - data-driven approach for easy extension
+        rbac_management_config = {
+            'api_group': KubernetesConstants.RBAC_API_GROUP,
+            'lifecycle_verbs': [
+                KubernetesConstants.CREATE_VERB, 
+                KubernetesConstants.LIST_VERB, 
+                KubernetesConstants.WATCH_VERB
+            ],
+            'management_verbs': [
+                KubernetesConstants.GET_VERB, 
+                KubernetesConstants.UPDATE_VERB, 
+                KubernetesConstants.PATCH_VERB, 
+                KubernetesConstants.DELETE_VERB
+            ],
+            'resources': [
+                KubernetesConstants.CLUSTER_ROLES_RESOURCE,
+                KubernetesConstants.CLUSTER_ROLE_BINDINGS_RESOURCE
+                # Future: Add ServiceAccounts, RoleBindings, etc. as needed
+                # KubernetesConstants.SERVICE_ACCOUNTS_RESOURCE,
+                # KubernetesConstants.ROLE_BINDINGS_RESOURCE
+            ]
+        }
+        
+        # Generate RBAC management rules from configuration
+        for resource in rbac_management_config['resources']:
+            # Unscoped permissions for RBAC lifecycle
+            rules.append({
+                'apiGroups': [rbac_management_config['api_group']],
+                'resources': [resource],
+                'verbs': rbac_management_config['lifecycle_verbs']
+            })
+            
+            # Scoped permissions for RBAC management (resourceNames added post-installation)
+            rules.append({
+                'apiGroups': [rbac_management_config['api_group']],
+                'resources': [resource],
+                'verbs': rbac_management_config['management_verbs']
                 # Note: resourceNames should be added post-installation
-            },
-            {
-                'apiGroups': [KubernetesConstants.RBAC_API_GROUP],
-                'resources': [KubernetesConstants.CLUSTER_ROLE_BINDINGS_RESOURCE],
-                'verbs': [
-                    KubernetesConstants.CREATE_VERB, 
-                    KubernetesConstants.LIST_VERB, 
-                    KubernetesConstants.WATCH_VERB
-                ]
-            },
-            {
-                'apiGroups': [KubernetesConstants.RBAC_API_GROUP],
-                'resources': [KubernetesConstants.CLUSTER_ROLE_BINDINGS_RESOURCE],
-                'verbs': [
-                    KubernetesConstants.GET_VERB, 
-                    KubernetesConstants.UPDATE_VERB, 
-                    KubernetesConstants.PATCH_VERB, 
-                    KubernetesConstants.DELETE_VERB
-                ]
-                # Note: resourceNames should be added post-installation
-            }
-        ])
+            })
         
         return rules
     
