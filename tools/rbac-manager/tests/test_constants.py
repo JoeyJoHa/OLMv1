@@ -104,11 +104,7 @@ class TestUtilities:
             Text with sensitive data masked
         """
         # Use the centralized masking utility from core.utils
-        # Add rbac-manager to path if not already there
-        rbac_manager_path = Path(__file__).parent.parent / "rbac-manager"
-        if str(rbac_manager_path) not in sys.path:
-            sys.path.insert(0, str(rbac_manager_path))
-        
+        # Assumes setup_test_path() has already been called to set up sys.path
         try:
             from libs.core.utils import mask_sensitive_info  # pyright: ignore[reportMissingImports]
             return mask_sensitive_info(text, url, token)

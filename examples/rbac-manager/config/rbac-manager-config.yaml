@@ -1,0 +1,17 @@
+# RBAC Manager Configuration File
+# Generated from extracted values
+
+operator:
+  image: "registry.connect.redhat.com/nginx/nginx-ingress-operator-bundle@sha256:4e032549f2c36c5a660994b5ec460ef214bb875a53f6f7e9b814d57049683a7a"
+  namespace: "default"
+  channel: "alpha"
+  packageName: "nginx-ingress-operator"
+  version: "3.3.0"
+output:
+  mode: "file"
+  type: "yaml"
+  path: "./output"
+global:
+  skip_tls: False
+  debug: False
+  registry_token: ""
