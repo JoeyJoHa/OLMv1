@@ -11,7 +11,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
 from .exceptions import AuthenticationError, ConfigurationError
-from .utils import validate_openshift_url, handle_ssl_error
+from .utils import validate_openshift_url, handle_ssl_error, mask_sensitive_info
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,6 @@ class OpenShiftAuth:
             
             # Mask sensitive information in URL for logging
             if self.openshift_url:
-                from .utils import mask_sensitive_info
                 masked_url = mask_sensitive_info(self.openshift_url, self.openshift_url)
                 logger.info(f"Successfully configured Kubernetes client for {masked_url}")
             

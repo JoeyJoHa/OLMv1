@@ -5,6 +5,8 @@ Shared Test Constants
 Common constants used across all test suites to follow DRY principle.
 """
 
+import sys
+from pathlib import Path
 from typing import Dict
 
 
@@ -82,8 +84,6 @@ class TestUtilities:
     @staticmethod
     def setup_test_path():
         """Setup Python path for test imports"""
-        import sys
-        from pathlib import Path
         
         # Add the rbac-manager directory to Python path
         rbac_manager_path = Path(__file__).parent.parent / "rbac-manager"
@@ -104,9 +104,6 @@ class TestUtilities:
             Text with sensitive data masked
         """
         # Use the centralized masking utility from core.utils
-        import sys
-        from pathlib import Path
-        
         # Add rbac-manager to path if not already there
         rbac_manager_path = Path(__file__).parent.parent / "rbac-manager"
         if str(rbac_manager_path) not in sys.path:
@@ -162,7 +159,6 @@ class TestUtilities:
         Returns:
             Full path to the results directory
         """
-        from pathlib import Path
         
         # Get the directory where this file is located (tests/)
         tests_dir = Path(__file__).parent

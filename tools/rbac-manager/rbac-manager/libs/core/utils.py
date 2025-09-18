@@ -9,6 +9,7 @@ import re
 import sys
 import urllib3
 from typing import Type
+from urllib.parse import urlparse
 from .exceptions import ConfigurationError, RBACManagerError, AuthenticationError, CatalogdError, NetworkError
 from .constants import ErrorMessages
 
@@ -94,7 +95,6 @@ def mask_sensitive_info(text: str, url: str = None, token: str = None) -> str:
     # Mask URL if provided
     if url and url in masked_text:
         try:
-            from urllib.parse import urlparse
             parsed = urlparse(url)
             if parsed.hostname:
                 # Extract domain parts and mask the hostname

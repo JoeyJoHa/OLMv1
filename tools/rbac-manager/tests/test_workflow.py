@@ -10,6 +10,7 @@ This test requires cluster authentication and validates the entire
 end-to-end user experience.
 """
 
+import argparse
 import json
 import os
 import sys
@@ -728,7 +729,6 @@ global:
 
 def main():
     """Main test runner"""
-    import argparse
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Complete Workflow Test Suite")

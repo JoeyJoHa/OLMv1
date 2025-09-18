@@ -5,11 +5,11 @@ Centralized constants for the RBAC Manager tool to eliminate magic strings
 and improve maintainability.
 """
 
+from enum import Enum, IntEnum
+
 
 class KubernetesConstants:
     """Kubernetes-related constants with improved enum-based structure"""
-    
-    from enum import Enum
     
     # Namespace constants - simple attributes for configurable values
     DEFAULT_NAMESPACE = "default"
@@ -103,8 +103,6 @@ class KubernetesConstants:
 class OPMConstants:
     """OPM-related constants with improved enum-based structure"""
     
-    from enum import Enum
-    
     # Bundle metadata keys (internal storage) - simple attributes for configurable values
     BUNDLE_PERMISSIONS_KEY = "permissions"
     BUNDLE_CLUSTER_PERMISSIONS_KEY = "cluster_permissions"
@@ -172,8 +170,6 @@ class OPMConstants:
 class NetworkConstants:
     """Network-related constants with improved enum-based structure"""
     
-    from enum import Enum, IntEnum
-    
     # Timeout constants (seconds) - simple attributes for configurable values
     DEFAULT_TIMEOUT = 30
     BUNDLE_EXTRACTION_TIMEOUT = 300
@@ -233,8 +229,6 @@ class NetworkConstants:
 
 class ErrorMessages:
     """Centralized error message templates with improved enum-based structure"""
-    
-    from enum import Enum
     
     class SSLError(str, Enum):
         """SSL-related error message templates"""
@@ -343,8 +337,6 @@ class ErrorMessages:
 
 class FileConstants:
     """File and directory related constants with improved enum-based structure"""
-    
-    from enum import Enum
     
     # Configuration file constants - simple attributes for configurable values
     DEFAULT_CONFIG_FILE = "rbac-manager-config.yaml"

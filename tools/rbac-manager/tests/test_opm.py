@@ -26,6 +26,17 @@ from typing import Dict, List, Any, NamedTuple
 from test_constants import OPMTestConstants, TestUtilities
 TestUtilities.setup_test_path()
 
+# Import RBAC manager modules for direct testing
+try:
+    from libs.opm.processor import BundleProcessor  # pyright: ignore[reportMissingImports]
+    from libs.opm.helm_generator import HelmValuesGenerator  # pyright: ignore[reportMissingImports]
+    from libs.core.exceptions import BundleProcessingError  # pyright: ignore[reportMissingImports]
+except ImportError:
+    # Fallback if imports fail
+    BundleProcessor = None
+    HelmValuesGenerator = None
+    BundleProcessingError = None
+
 
 class OPMTestResult(NamedTuple):
     """Structured test result for OPM tests"""
@@ -547,12 +558,11 @@ global:
         """Test centralized RBAC component analysis"""
         print(f"🔍 Testing RBAC component analysis: {bundle_name}")
         
-        # Import the RBAC manager modules for direct testing
+        # Use the imported RBAC manager modules for direct testing
         try:
-            from libs.opm.processor import BundleProcessor  # pyright: ignore[reportMissingImports]
-            from libs.opm.helm_generator import HelmValuesGenerator  # pyright: ignore[reportMissingImports]
-            from libs.core.exceptions import BundleProcessingError  # pyright: ignore[reportMissingImports]
-            
+            if not BundleProcessor or not HelmValuesGenerator:
+                raise ImportError("Required modules not available")
+                
             processor = BundleProcessor()
             generator = HelmValuesGenerator()
             
