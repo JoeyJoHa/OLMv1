@@ -90,38 +90,65 @@ class OPMConstants:
 
 
 class NetworkConstants:
-    """Network-related constants"""
+    """Network-related constants with improved enum-based structure"""
     
-    # Timeouts (seconds)
+    from enum import Enum, IntEnum
+    
+    # Timeout constants (seconds) - simple attributes for configurable values
     DEFAULT_TIMEOUT = 30
     BUNDLE_EXTRACTION_TIMEOUT = 300
     PORT_FORWARD_TIMEOUT = 60
     SSL_HANDSHAKE_TIMEOUT = 10
     
-    # Buffer sizes
+    # Buffer size constants - simple attributes for configurable values
     DEFAULT_BUFFER_SIZE = 8192
     
-    # HTTP Status Codes
-    HTTP_OK = 200
-    HTTP_NOT_FOUND = 404
-    HTTP_UNAUTHORIZED = 401
-    HTTP_FORBIDDEN = 403
-    HTTP_INTERNAL_SERVER_ERROR = 500
-    HTTP_SERVICE_UNAVAILABLE = 503
-    
-    # Content Types
-    CONTENT_TYPE_JSON = "application/json"
-    CONTENT_TYPE_YAML = "application/yaml"
-    
-    # Headers
-    AUTHORIZATION_HEADER = "Authorization"
-    CONTENT_TYPE_HEADER = "Content-Type"
-    CONTENT_LENGTH_HEADER = "Content-Length"
-    CONTENT_ENCODING_HEADER = "Content-Encoding"
-    USER_AGENT_HEADER = "User-Agent"
-    
-    # User Agent
+    # User Agent - simple attribute for configurable value
     USER_AGENT = "rbac-manager/1.0"
+    
+    class HTTPStatus(IntEnum):
+        """HTTP status codes used in the RBAC Manager tool"""
+        OK = 200
+        UNAUTHORIZED = 401
+        FORBIDDEN = 403
+        NOT_FOUND = 404
+        INTERNAL_SERVER_ERROR = 500
+        SERVICE_UNAVAILABLE = 503
+        
+        def __str__(self) -> str:
+            """Return a human-readable description of the status code"""
+            descriptions = {
+                200: "OK",
+                401: "Unauthorized", 
+                403: "Forbidden",
+                404: "Not Found",
+                500: "Internal Server Error",
+                503: "Service Unavailable"
+            }
+            return f"{self.value} {descriptions.get(self.value, 'Unknown')}"
+    
+    class ContentType(Enum):
+        """Content-Type header values"""
+        JSON = "application/json"
+        YAML = "application/yaml"
+        TEXT_PLAIN = "text/plain"
+        
+        def __str__(self) -> str:
+            """Return the content type value for use in headers"""
+            return self.value
+    
+    class HTTPHeader(Enum):
+        """Standard HTTP header names"""
+        AUTHORIZATION = "Authorization"
+        CONTENT_TYPE = "Content-Type"
+        CONTENT_LENGTH = "Content-Length"
+        CONTENT_ENCODING = "Content-Encoding"
+        USER_AGENT = "User-Agent"
+        ACCEPT = "Accept"
+        
+        def __str__(self) -> str:
+            """Return the header name for use in HTTP requests"""
+            return self.value
 
 
 class ErrorMessages:
