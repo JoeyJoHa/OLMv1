@@ -439,7 +439,26 @@ def create_rbac_manager(skip_tls: bool = False, debug: bool = False) -> RBACMana
 
 # Command-line interface functions (keeping existing structure)
 def create_argument_parser():
-    """Create and configure argument parser with subcommands"""
+    """Create and configure argument parser with subcommands using parent parsers to eliminate redundancy"""
+    
+    # Create parent parsers for common argument groups
+    
+    # Common parser: arguments shared by ALL commands
+    common_parser = argparse.ArgumentParser(add_help=False)
+    common_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    common_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
+    
+    # Auth parser: arguments shared by commands that need authentication
+    auth_parser = argparse.ArgumentParser(add_help=False)
+    auth_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
+    auth_parser.add_argument('--openshift-url', help='OpenShift cluster URL')
+    auth_parser.add_argument('--openshift-token', help='OpenShift authentication token')
+    
+    # Output parser: arguments shared by commands that generate output
+    output_parser = argparse.ArgumentParser(add_help=False)
+    output_parser.add_argument('--output', help='Output directory for generated files')
+    
+    # Main parser
     parser = argparse.ArgumentParser(
         description='RBAC Manager - Extract RBAC permissions from operator bundles and query catalogs',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -456,52 +475,44 @@ Use --help with specific commands for detailed help.
     # Create subparsers for commands
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
-    # list-catalogs subcommand
+    # list-catalogs subcommand: inherits from common_parser and auth_parser
     list_parser = subparsers.add_parser(
-        'list-catalogs', 
+        'list-catalogs',
+        parents=[common_parser, auth_parser],
         help='List all ClusterCatalogs',
         description='List all available ClusterCatalogs in the cluster'
     )
-    list_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
-    list_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
-    list_parser.add_argument('--openshift-url', help='OpenShift cluster URL')
-    list_parser.add_argument('--openshift-token', help='OpenShift authentication token')
-    list_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
+    # No additional arguments needed - all inherited from parents
     
-    # catalogd subcommand
+    # catalogd subcommand: inherits from common_parser, auth_parser, and output_parser
     catalogd_parser = subparsers.add_parser(
         'catalogd',
+        parents=[common_parser, auth_parser, output_parser],
         help='Query catalogd service',
         description='Query catalogd service for package information'
     )
-    catalogd_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
-    catalogd_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
-    catalogd_parser.add_argument('--openshift-url', help='OpenShift cluster URL')
-    catalogd_parser.add_argument('--openshift-token', help='OpenShift authentication token')
+    # Add catalogd-specific arguments
     catalogd_parser.add_argument('--catalog-name', help='Catalog name')
     catalogd_parser.add_argument('--package', help='Package name')
     catalogd_parser.add_argument('--channel', help='Channel name')
     catalogd_parser.add_argument('--version', help='Version')
-    catalogd_parser.add_argument('--output', help='Output directory for generated files')
-    catalogd_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
     catalogd_parser.add_argument('--generate-config', action='store_true', help='Generate configuration file (stdout by default, use --output to save to file)')
     
-    # opm subcommand
+    # opm subcommand: inherits from common_parser and output_parser (no auth needed for local operations)
     opm_parser = subparsers.add_parser(
         'opm',
+        parents=[common_parser, output_parser],
         help='Extract RBAC from bundle using OPM',
         description='Extract RBAC permissions from operator bundle images using OPM'
     )
+    # Add opm-specific arguments
     opm_parser.add_argument('--config', help='Configuration file path')
     opm_parser.add_argument('--skip-tls', action='store_true', help='Skip TLS verification for insecure requests')
-    opm_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     opm_parser.add_argument('--image', help='Container image URL')
     opm_parser.add_argument('--namespace', default=KubernetesConstants.DEFAULT_NAMESPACE, help='Target namespace')
     opm_parser.add_argument('--openshift-namespace', help='Alias for --namespace')
     opm_parser.add_argument('--registry-token', help='Registry authentication token')
     opm_parser.add_argument('--helm', action='store_true', help='Generate Helm values')
-    opm_parser.add_argument('--output', help='Output directory')
-    opm_parser.add_argument('--examples', action='store_true', help='Show usage examples for this command')
     
     return parser
 
