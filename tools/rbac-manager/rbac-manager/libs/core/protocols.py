@@ -48,6 +48,16 @@ class ConfigProvider(Protocol):
         """Generate configuration template file"""
         ...
     
+    def get_config_template_content(self) -> str:
+        """Generate configuration template content as string without file I/O"""
+        ...
+    
+    def get_config_with_values_content(self, extracted_data: Dict[str, Any], 
+                                     output_mode: str = "stdout", output_type: str = "yaml", 
+                                     namespace: str = None) -> str:
+        """Generate configuration content with extracted values as string without file I/O"""
+        ...
+    
     def get_config(self) -> Dict[str, Any]:
         """Get current configuration data"""
         ...

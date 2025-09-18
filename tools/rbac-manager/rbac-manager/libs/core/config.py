@@ -351,6 +351,82 @@ class ConfigManager:
         
         return "\n".join(yaml_lines)
     
+    def get_config_template_content(self) -> str:
+        """
+        Generate configuration template content as string without file I/O
+        
+        Returns:
+            str: YAML configuration template content
+        """
+        template = {
+            "# RBAC Manager Configuration File": None,
+            "# Template for configuring RBAC extraction from operator bundles": None,
+            "": None,
+            "operator": {
+                "image": "quay.io/example/operator-bundle:latest",
+                "namespace": KubernetesConstants.DEFAULT_NAMESPACE,
+                "channel": "#<VERIFY_WITH_CATALOGD_AND_SET_CHANNEL>",
+                "packageName": "example-operator",
+                "version": "1.0.0"
+            },
+            "": None,
+            "output": {
+                "mode": "yaml",
+                "type": "yaml",
+                "path": "./output"
+            },
+            "": None,
+            "global": {
+                "skip_tls": False,
+                "debug": False,
+                "registry_token": ""
+            }
+        }
+        
+        return self._dict_to_yaml_with_comments(template)
+    
+    def get_config_with_values_content(self, extracted_data: Dict[str, Any], 
+                                     output_mode: str = "stdout", output_type: str = "yaml", 
+                                     namespace: str = None) -> str:
+        """
+        Generate configuration content with extracted values as string without file I/O
+        
+        Args:
+            extracted_data: Dictionary with extracted values (bundle_image, channel, package, version)
+            output_mode: Output mode (stdout or file)
+            output_type: Output type (yaml or helm)
+            namespace: Target namespace
+            
+        Returns:
+            str: YAML configuration content with extracted values
+        """
+        template = {
+            "# RBAC Manager Configuration File": None,
+            "# Generated from extracted values": None,
+            "": None,
+            "operator": {
+                "image": extracted_data.get('bundle_image', 'image-url'),
+                "namespace": namespace or KubernetesConstants.DEFAULT_NAMESPACE,
+                "channel": extracted_data.get('channel', 'channel-name'),
+                "packageName": extracted_data.get('package', 'package-name'),
+                "version": extracted_data.get('version', 'version')
+            },
+            "": None,
+            "output": {
+                "mode": output_mode,
+                "type": output_type,
+                "path": "./output"
+            },
+            "": None,
+            "global": {
+                "skip_tls": False,
+                "debug": False,
+                "registry_token": ""
+            }
+        }
+        
+        return self._dict_to_yaml_with_comments(template)
+    
     def generate_config_with_values(self, extracted_data: Dict[str, Any], output_dir: str = None, 
                                   output_mode: str = "stdout", output_type: str = "yaml", 
                                   namespace: str = None) -> str:

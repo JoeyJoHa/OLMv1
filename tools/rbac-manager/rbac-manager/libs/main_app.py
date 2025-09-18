@@ -555,23 +555,18 @@ def generate_config_file(args, extracted_data=None, output_path=None, stdout=Fal
     if output_to_stdout:
         # Generate config content and output to stdout
         if extracted_data:
-            # Create temporary config to get the YAML content
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_file = config_manager.generate_config_with_values(
-                    extracted_data=extracted_data,
-                    output_dir=temp_dir,
-                    output_mode='file' if (hasattr(args, 'output') and args.output) else 'stdout',
-                    output_type='helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
-                    namespace=getattr(args, 'namespace', 'default')
-                )
-                with open(temp_file, 'r') as f:
-                    print(f.read())
+            # Get YAML content directly as string
+            yaml_content = config_manager.get_config_with_values_content(
+                extracted_data=extracted_data,
+                output_mode='file' if (hasattr(args, 'output') and args.output) else 'stdout',
+                output_type='helm' if (hasattr(args, 'helm') and args.helm) else 'yaml',
+                namespace=getattr(args, 'namespace', 'default')
+            )
+            print(yaml_content)
         else:
-            # Create temporary template config to get the YAML content
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_file = config_manager.generate_config_template(output_dir=temp_dir)
-                with open(temp_file, 'r') as f:
-                    print(f.read())
+            # Get template YAML content directly as string
+            yaml_content = config_manager.get_config_template_content()
+            print(yaml_content)
         
         return None
     else:
