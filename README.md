@@ -92,53 +92,11 @@ This project provides a structured approach for deploying OLMv1 operators with p
 ```tree
 OLMv1/
 ├── .github/                           # GitHub-specific configuration
-│   ├── workflows/                     # GitHub Actions CI/CD workflows
-│   ├── ISSUE_TEMPLATE/               # Issue templates
-│   ├── PULL_REQUEST_TEMPLATE.md      # Pull request template
-│   └── markdown-link-check-config.json # Link checker config
 ├── docs/                              # Project documentation
-│   ├── API.md                        # API reference documentation
-│   ├── COMMAND_REFERENCE.md          # OPM and catalogd command reference
-│   ├── DEPLOYMENT.md                 # Deployment instructions
-│   └── PROJECT_STRUCTURE.md          # Repository organization guide
 ├── examples/                          # Example configurations and use cases
-│   ├── helm/                         # Example Helm values files
-│   │   ├── additional-resources-example.yaml # Additional resources example
-│   │   ├── rbac-only-example.yaml    # RBAC-only deployment example
-│   │   └── values-quay-operator.yaml # Quay operator Helm values
-│   ├── rbac-manager/                 # RBAC Manager tool output examples
-│   │   ├── argocd-operator-*.yaml    # Generated RBAC files with real cluster data
-│   │   ├── argocd-operator-clusterrole-*.yaml # Generated ClusterRole with deduplication
-│   │   ├── argocd-operator-clusterrolebinding-*.yaml # Generated ClusterRoleBinding
-│   │   ├── argocd-operator-role-*.yaml # Generated Role (deduplicated)
-│   │   ├── argocd-operator-rolebinding-*.yaml # Generated RoleBinding
-│   │   └── argocd-operator-serviceaccount-*.yaml # Generated ServiceAccount
-│   └── yamls/                        # Example Kubernetes YAML files
-│       ├── 00-namespace.yaml         # Namespace definition
-│       ├── 01-serviceaccount.yaml    # Service account for operator
-│       ├── 02-clusterrole.yaml       # Cluster role with optimized permissions
-│       ├── 03-clusterrolebinding.yaml # Cluster role binding
-│       └── 04-clusterextension.yaml  # OLMv1 ClusterExtension
 ├── helm/                             # Helm chart for OLMv1 deployment
-│   ├── Chart.yaml                    # Helm chart metadata
-│   ├── values.yaml                   # Default values
-│   └── templates/                    # Helm templates
-│       ├── _helpers.tpl              # Template helpers
-│       ├── clusterextension.yaml     # ClusterExtension template
-│       ├── clusterrole.yaml          # ClusterRole template
-│       ├── role.yaml                 # Role template
-│       ├── serviceaccount.yaml       # ServiceAccount template
-│       └── NOTES.txt                 # Post-install notes
 ├── templates/                        # Kubernetes resource templates
-│   ├── CustomRoles/                  # Custom RBAC templates
-│   │   ├── 00-rolebinding.yaml       # Role binding template
-│   │   ├── 01-clusterrole.yaml       # Cluster role template
-│   │   └── 02-clusterrolebinding.yaml # Cluster role binding template
-│   └── OLMv1 Resources/              # Core OLMv1 resource templates
-│       ├── 01-clustercatalog.yaml    # ClusterCatalog example
-│       └── 02-clusterextension.yaml  # ClusterExtension example
 ├── tools/                            # Development and management tools
-│   └── rbac-manager/                 # RBAC Manager tool (see README.md for detailed structure)
 ├── config/                           # Configuration files (future use)
 ├── scripts/                          # Utility scripts (future use)
 ├── tests/                            # Test files (future use)
