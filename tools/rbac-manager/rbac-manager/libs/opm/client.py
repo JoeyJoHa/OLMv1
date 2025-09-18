@@ -80,6 +80,27 @@ class OPMClient:
         
         raise OPMError(ErrorMessages.OPM_BINARY_NOT_FOUND)
     
+    def _build_render_command(self, image: str) -> List[str]:
+        """
+        Build the opm render command with common options
+        
+        Args:
+            image: Container image URL
+            
+        Returns:
+            List of command arguments for opm render
+            
+        Raises:
+            OPMError: If OPM binary not found
+        """
+        opm_binary = self._find_opm_binary()
+        cmd = [opm_binary, 'render', image]
+        
+        if self.skip_tls:
+            cmd.extend(['--skip-tls-verify'])
+        
+        return cmd
+    
     def validate_image(self, image: str) -> bool:
         """
         Validate if image is accessible and is a valid bundle/index
@@ -96,13 +117,8 @@ class OPMClient:
         try:
             validate_image_url(image)
             
-            opm_binary = self._find_opm_binary()
-            
-            # For bundle images, use 'opm render' to validate
-            cmd = [opm_binary, 'render', image]
-            
-            if self.skip_tls:
-                cmd.extend(['--skip-tls-verify'])
+            # Build render command using centralized helper
+            cmd = self._build_render_command(image)
             
             logger.debug(f"Validating bundle image with command: {' '.join(cmd)}")
             
@@ -184,13 +200,9 @@ class OPMClient:
         """
         try:
             validate_image_url(image)
-            opm_binary = self._find_opm_binary()
             
-            # Use opm render to get JSON output
-            cmd = [opm_binary, 'render', image]
-            
-            if self.skip_tls:
-                cmd.extend(['--skip-tls-verify'])
+            # Build render command using centralized helper
+            cmd = self._build_render_command(image)
             
             # Set up environment for registry authentication
             env = {}
