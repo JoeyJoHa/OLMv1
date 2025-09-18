@@ -877,7 +877,8 @@ class CatalogdTestSuite:
     
     def save_results(self, filename: str = "catalogd_test_results.json") -> None:
         """Save test results to JSON file"""
-        results_file = Path(__file__).parent / filename
+        results_dir = TestUtilities.get_results_dir()
+        results_file = Path(results_dir) / filename
         
         summary = {
             "test_suite": "catalogd",

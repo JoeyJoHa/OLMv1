@@ -186,3 +186,6 @@ secrets/
 rbac-output/
 bundle-cache/
 opm-cache/
+
+# Test results
+tools/rbac-manager/tests/results/

@@ -1221,7 +1221,12 @@ global:
         """Save test results to JSON file"""
         if not results_file:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            results_file = f"opm_test_results_{timestamp}.json"
+            results_dir = TestUtilities.get_results_dir()
+            results_file = str(Path(results_dir) / f"opm_test_results_{timestamp}.json")
+        else:
+            # If a specific filename is provided, still save it in the results directory
+            results_dir = TestUtilities.get_results_dir()
+            results_file = str(Path(results_dir) / results_file)
         
         summary = {
             "test_suite": "opm",

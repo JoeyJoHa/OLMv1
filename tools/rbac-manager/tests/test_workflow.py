@@ -18,7 +18,7 @@ import tempfile
 import time
 import yaml
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 # Import shared test constants and setup path
 from test_constants import CommonTestConstants, TestUtilities
@@ -702,7 +702,8 @@ global:
     def save_results(self) -> str:
         """Save test results to JSON file"""
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        results_file = f"workflow_test_results_{timestamp}.json"
+        results_dir = TestUtilities.get_results_dir()
+        results_file = Path(results_dir) / f"workflow_test_results_{timestamp}.json"
         
         summary = {
             "test_suite": "complete_workflow",
@@ -722,7 +723,7 @@ global:
             json.dump(summary, f, indent=2)
         
         print(f"📄 Test results saved to: {results_file}")
-        return results_file
+        return str(results_file)
 
 
 def main():

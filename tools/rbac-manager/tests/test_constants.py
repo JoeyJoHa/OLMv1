@@ -21,6 +21,9 @@ class CommonTestConstants:
     MASKED_TOKEN = "***MASKED***"
     TEMP_DIR_PLACEHOLDER = "/tmp/placeholder-output-dir"
     
+    # Test results directory
+    RESULTS_DIR = "tests/results"
+    
     # Common validation keywords
     ERROR_KEYWORDS = ["image", "bundle", "failed", "error"]
     SUCCESS_KEYWORDS = ["success", "completed", "finished"]
@@ -150,3 +153,22 @@ class TestUtilities:
             "duration": duration,
             "details": details
         }
+    
+    @staticmethod
+    def get_results_dir() -> str:
+        """
+        Get the full path to the test results directory, creating it if needed
+        
+        Returns:
+            Full path to the results directory
+        """
+        from pathlib import Path
+        
+        # Get the directory where this file is located (tests/)
+        tests_dir = Path(__file__).parent
+        results_dir = tests_dir / "results"
+        
+        # Create the directory if it doesn't exist
+        results_dir.mkdir(exist_ok=True)
+        
+        return str(results_dir)
