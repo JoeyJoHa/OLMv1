@@ -213,7 +213,12 @@ class ConfigManager:
             if output_dir:
                 output_path = Path(output_dir)
                 output_path.mkdir(parents=True, exist_ok=True)
-                config_file = output_path / FileConstants.DEFAULT_CONFIG_FILE
+                # Extract filename from default_path or use fallback
+                if default_path:
+                    filename = Path(default_path).name
+                else:
+                    filename = FileConstants.DEFAULT_CONFIG_FILE
+                config_file = output_path / filename
             else:
                 config_file = Path(default_path or FileConstants.DEFAULT_CONFIG_FILE)
                 config_file.parent.mkdir(parents=True, exist_ok=True)
@@ -362,7 +367,7 @@ class ConfigManager:
             operator_image=extracted_data.get('bundle_image', 'image-url'),
             operator_namespace=namespace,
             operator_channel=extracted_data.get('channel', 'channel-name'),
-            operator_package=extracted_data.get('package', 'package-name'),
+            operator_package=extracted_data.get('packageName') or extracted_data.get('package', 'package-name'),
             operator_version=extracted_data.get('version', 'version'),
             output_mode=output_mode,
             output_type=output_type
@@ -420,7 +425,8 @@ class ConfigManager:
         )
         
         # Generate filename based on package name (DRY approach)
-        package_name = extracted_data.get('package', None)
+        # Try both 'packageName' (from config file) and 'package' (from command args)
+        package_name = extracted_data.get('packageName') or extracted_data.get('package')
         config_filename = self._generate_config_filename(package_name)
         default_path = f'./config/{config_filename}'
         
