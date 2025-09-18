@@ -20,8 +20,9 @@ import yaml
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-# Add the rbac-manager directory to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent / "rbac-manager"))
+# Import shared test constants and setup path
+from test_constants import CommonTestConstants, TestUtilities
+TestUtilities.setup_test_path()
 
 class WorkflowTestSuite:
     """Test suite for complete catalogd -> opm workflow"""
@@ -60,7 +61,7 @@ class WorkflowTestSuite:
         self.test_channel = None
         self.test_version = None
     
-    def run_command(self, cmd: List[str], timeout: int = 120) -> Dict[str, Any]:
+    def run_command(self, cmd: List[str], timeout: int = CommonTestConstants.DEFAULT_TIMEOUT) -> Dict[str, Any]:
         """Run a command and return results"""
         try:
             result = subprocess.run(
@@ -96,7 +97,68 @@ class WorkflowTestSuite:
     
     def _mask_token_in_command(self, command: str) -> str:
         """Mask token in command for logging"""
-        return command.replace(self.openshift_token, "***TOKEN***")
+        return TestUtilities.mask_sensitive_data(command, self.openshift_url, self.openshift_token)
+    
+    def get_available_tests(self) -> Dict[str, str]:
+        """Get dictionary of available test methods and their descriptions"""
+        return {
+            "complete_yaml_workflow": "Test complete workflow: catalogd generate-config -> opm config (YAML)",
+            "complete_helm_workflow": "Test complete workflow: catalogd generate-config -> opm config (Helm)",
+            "config_validation_workflow": "Test config validation with invalid config file"
+        }
+    
+    def run_specific_test(self, test_name: str) -> Dict[str, Any]:
+        """Run a specific test by name"""
+        start_time = time.time()
+        
+        # Map test names to methods
+        test_methods = {
+            "complete_yaml_workflow": self.test_complete_yaml_workflow,
+            "complete_helm_workflow": self.test_complete_helm_workflow,
+            "config_validation_workflow": self.test_config_validation_workflow
+        }
+        
+        if test_name not in test_methods:
+            print(f"❌ Unknown test: {test_name}")
+            return {"error": f"Unknown test: {test_name}"}
+        
+        # Discover test parameters first
+        if not self.discover_test_parameters():
+            return {
+                "test_name": test_name,
+                "success": False,
+                "duration": 0,
+                "error": "Failed to discover test parameters from cluster"
+            }
+        
+        print(f"🎯 Running specific test: {test_name}")
+        print("=" * 50)
+        
+        try:
+            # Execute the test method
+            result = test_methods[test_name]()
+            end_time = time.time()
+            
+            result["duration"] = end_time - start_time
+            
+            print(f"\n📊 Test '{test_name}' Results:")
+            print(f"Status: {'✅ PASSED' if result['success'] else '❌ FAILED'}")
+            print(f"Duration: {result['duration']:.2f}s")
+            
+            if not result["success"] and "details" in result:
+                print(f"Details: {result['details']}")
+            
+            return result
+            
+        except Exception as e:
+            end_time = time.time()
+            print(f"❌ Test '{test_name}' failed with exception: {e}")
+            return {
+                "test_name": test_name,
+                "success": False,
+                "duration": end_time - start_time,
+                "error": str(e)
+            }
     
     def discover_test_parameters(self) -> bool:
         """Discover test parameters from the cluster"""
@@ -229,19 +291,18 @@ class WorkflowTestSuite:
             
             step1_result = self.run_command(cmd)
             
-            test_result = {
-                "test": "complete_yaml_workflow",
-                "description": "Complete workflow: catalogd generate-config -> opm config (YAML)",
-                "success": step1_result["success"],
-                "duration": 0,
-                "details": {
+            test_result = TestUtilities.create_test_result(
+                "complete_yaml_workflow", 
+                step1_result["success"], 
+                {
                     "step1_generate_config": {
                         "success": step1_result["success"],
                         "command": self._mask_token_in_command(step1_result["command"]),
                         "returncode": step1_result["returncode"]
                     }
                 }
-            }
+            )
+            test_result["description"] = "Complete workflow: catalogd generate-config -> opm config (YAML)"
             
             if not step1_result["success"]:
                 test_result["details"]["step1_generate_config"]["error"] = step1_result["stderr"]
@@ -291,7 +352,7 @@ class WorkflowTestSuite:
                 yaml_files.extend(list(Path(temp_dir).glob("*-clusterrole-*.yaml")))
                 yaml_files.extend(list(Path(temp_dir).glob("*-role-*.yaml")))
                 
-                test_result["details"]["step2_omp_config"]["yaml_files_created"] = len(yaml_files)
+                test_result["details"]["step2_opm_config"]["yaml_files_created"] = len(yaml_files)
                 test_result["details"]["step2_opm_config"]["files_created"] = len(yaml_files) > 0
                 
                 # Overall success
@@ -555,6 +616,13 @@ global:
 
 def main():
     """Main test runner"""
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Complete Workflow Test Suite")
+    parser.add_argument("--unit", nargs="?", const="", help="Run specific test (use without argument to list available tests)")
+    args = parser.parse_args()
+    
     print("🧪 Complete Workflow Test Suite")
     print("Testing RBAC Manager complete workflow functionality")
     print("=" * 60)
@@ -569,6 +637,18 @@ def main():
     openshift_url = os.getenv("OPENSHIFT_URL")
     openshift_token = os.getenv("TOKEN")
     
+    # Handle --unit flag for listing tests (doesn't require authentication)
+    if args.unit is not None and args.unit == "":
+        dummy_suite = WorkflowTestSuite("https://example.com", "dummy-token")
+        available_tests = dummy_suite.get_available_tests()
+        print("\n📋 Available Workflow Tests:")
+        print("=" * 60)
+        for test_name, description in available_tests.items():
+            print(f"  {test_name:30} - {description}")
+        print(f"\nUsage: python3 {Path(__file__).name} --unit <test_name>")
+        print("Note: Workflow tests require OPENSHIFT_URL and TOKEN environment variables")
+        sys.exit(0)
+    
     if not openshift_url or not openshift_token:
         print("❌ Error: Missing authentication")
         print("   Please set OPENSHIFT_URL and TOKEN environment variables")
@@ -580,14 +660,35 @@ def main():
     print(f"🔗 Using cluster: {openshift_url}")
     print(f"🔑 Token: {openshift_token[:20]}...")
     
-    # Initialize and run test suite
+    # Initialize test suite
     test_suite = WorkflowTestSuite(
         openshift_url=openshift_url,
         openshift_token=openshift_token,
         skip_tls=True
     )
     
-    # Run tests
+    # Handle --unit flag for running specific test
+    if args.unit is not None and args.unit != "":
+        available_tests = test_suite.get_available_tests()
+        if args.unit not in available_tests:
+            print(f"❌ Unknown test: {args.unit}")
+            print(f"\nAvailable tests: {', '.join(available_tests.keys())}")
+            sys.exit(1)
+        
+        # Run specific test
+        result = test_suite.run_specific_test(args.unit)
+        
+        if "error" in result:
+            sys.exit(1)
+        
+        # Save results
+        test_suite.test_results = [result]
+        test_suite.save_results()
+        
+        # Exit with appropriate code
+        sys.exit(0 if result["success"] else 1)
+    
+    # Run all tests
     results = test_suite.run_all_tests()
     
     # Save results
