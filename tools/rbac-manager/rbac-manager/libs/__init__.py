@@ -12,10 +12,10 @@ from .core import OpenShiftAuth, ConfigManager
 from .core.exceptions import RBACManagerError, AuthenticationError, ConfigurationError
 
 # Catalogd libraries
-from .catalogd import CatalogdService, CatalogdClient, NDJSONParser
+from .catalogd import CatalogdService, CatalogdClient, NDJSONParser, CatalogdCache, CatalogdSession
 
 # OPM libraries
-from .opm import BundleProcessor, YAMLManifestGenerator, HelmValuesGenerator
+from .opm import BundleProcessor, YAMLManifestGenerator, HelmValuesGenerator, OPMClient
 
 # Main application and help
 from .help_manager import HelpManager
@@ -32,10 +32,13 @@ __all__ = [
     'CatalogdService',
     'CatalogdClient',
     'NDJSONParser',
+    'CatalogdCache',
+    'CatalogdSession',
     # OPM
     'BundleProcessor', 
     'YAMLManifestGenerator',
     'HelmValuesGenerator',
+    'OPMClient',
     # Main
     'HelpManager',
     'RBACManager',

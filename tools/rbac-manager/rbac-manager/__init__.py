@@ -9,13 +9,36 @@ Helm values for OLMv1 operators.
 __version__ = "1.0.0"
 __author__ = "OLMv1 Project"
 
-from .libs import CatalogManager, BundleProcessor, YAMLGenerator, HelmGenerator, HelpManager, RBACManager, main
+from .libs import (
+    # Core
+    OpenShiftAuth, ConfigManager, RBACManagerError, AuthenticationError, ConfigurationError,
+    # Catalogd
+    CatalogdService, CatalogdClient, NDJSONParser, CatalogdCache, CatalogdSession,
+    # OPM
+    BundleProcessor, YAMLManifestGenerator, HelmValuesGenerator, OPMClient,
+    # Main
+    HelpManager, RBACManager, main
+)
 
 __all__ = [
-    'CatalogManager',
-    'BundleProcessor', 
-    'YAMLGenerator',
-    'HelmGenerator',
+    # Core
+    'OpenShiftAuth',
+    'ConfigManager',
+    'RBACManagerError',
+    'AuthenticationError',
+    'ConfigurationError',
+    # Catalogd
+    'CatalogdService',
+    'CatalogdClient',
+    'NDJSONParser',
+    'CatalogdCache',
+    'CatalogdSession',
+    # OPM
+    'BundleProcessor',
+    'YAMLManifestGenerator',
+    'HelmValuesGenerator',
+    'OPMClient',
+    # Main
     'HelpManager',
     'RBACManager',
     'main'
