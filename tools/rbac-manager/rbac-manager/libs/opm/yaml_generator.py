@@ -4,7 +4,6 @@ YAML Manifest Generator
 Generates Kubernetes YAML manifests from OPM bundle metadata.
 """
 
-import yaml
 from typing import Dict, Any, Optional, List
 from .base_generator import BaseGenerator, ManifestTemplates, FlowStyleList
 from ..core.constants import OPMConstants, KubernetesConstants

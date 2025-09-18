@@ -4,7 +4,6 @@ Helm Values Generator
 Generates Helm values.yaml content from OPM bundle metadata.
 """
 
-import yaml
 from typing import Dict, List, Any, Optional
 from .base_generator import BaseGenerator, PermissionStructure, HelmValueTemplates, FlowStyleList
 
