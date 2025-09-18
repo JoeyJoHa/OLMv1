@@ -75,6 +75,22 @@ class YAMLManifestGenerator(BaseGenerator):
         
         return self._dump_yaml_with_flow_arrays(sa_manifest)
     
+    def _join_manifests_to_yaml(self, manifests: list) -> str:
+        """
+        Convert a list of manifest dictionaries into a multi-document YAML string
+        
+        Args:
+            manifests: List of manifest dictionaries
+            
+        Returns:
+            Multi-document YAML string with '---' separators
+        """
+        yaml_parts = []
+        for manifest in manifests:
+            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
+        
+        return '\n---\n'.join(yaml_parts)
+    
     def _generate_cluster_roles(self, bundle_metadata: Dict[str, Any], 
                               operator_name: str) -> str:
         """Generate ClusterRole YAML manifests with security header"""
@@ -120,12 +136,8 @@ class YAMLManifestGenerator(BaseGenerator):
             )
             manifests.append(grantor_cr)
         
-        # Convert to YAML with document separator using shared formatting
-        yaml_parts = []
-        for manifest in manifests:
-            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
-        
-        yaml_content = '\n---\n'.join(yaml_parts)
+        # Convert to YAML using shared helper method
+        yaml_content = self._join_manifests_to_yaml(manifests)
         
         return f"{header}\n{yaml_content}"
     
@@ -152,12 +164,8 @@ class YAMLManifestGenerator(BaseGenerator):
         )
         manifests.append(grantor_crb)
         
-        # Convert to YAML with document separator using shared formatting
-        yaml_parts = []
-        for manifest in manifests:
-            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
-        
-        return '\n---\n'.join(yaml_parts)
+        # Convert to YAML using shared helper method
+        return self._join_manifests_to_yaml(manifests)
     
     def _generate_roles(self, bundle_metadata: Dict[str, Any], 
                        operator_name: str, namespace: str) -> str:
@@ -201,12 +209,8 @@ class YAMLManifestGenerator(BaseGenerator):
                 )
                 manifests.append(role_manifest)
         
-        # Convert to YAML with document separator using shared formatting
-        yaml_parts = []
-        for manifest in manifests:
-            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
-        
-        return '\n---\n'.join(yaml_parts)
+        # Convert to YAML using shared helper method
+        return self._join_manifests_to_yaml(manifests)
     
     def _generate_role_bindings(self, operator_name: str, namespace: str) -> str:
         """Generate RoleBinding YAML manifests"""
@@ -222,9 +226,5 @@ class YAMLManifestGenerator(BaseGenerator):
         )
         manifests.append(role_binding)
         
-        # Convert to YAML with document separator using shared formatting
-        yaml_parts = []
-        for manifest in manifests:
-            yaml_parts.append(self._dump_yaml_with_flow_arrays(manifest))
-        
-        return '\n---\n'.join(yaml_parts)
+        # Convert to YAML using shared helper method
+        return self._join_manifests_to_yaml(manifests)
