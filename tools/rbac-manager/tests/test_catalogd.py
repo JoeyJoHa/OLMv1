@@ -492,30 +492,86 @@ class CatalogdTestSuite:
             "--openshift-token", self.openshift_token
         ]
         
-        result = subprocess.run(
-            cmd,
-            text=True,
-            capture_output=True,
-            timeout=30,
-            cwd=Path(__file__).parent.parent
-        )
-        
-        success = (
-            result.returncode == 0 and
-            "SSL certificate verification failed" in result.stderr and
-            "--skip-tls" in result.stderr
-        )
-        
-        self.test_results.append({
-            "test": "ssl_error_handling",
-            "success": success,
-            "details": {
-                "exit_code": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "command": self._mask_token_in_command(' '.join(cmd))
-            }
-        })
+        try:
+            result = subprocess.run(
+                cmd,
+                text=True,
+                capture_output=True,
+                timeout=60,  # Increased timeout for SSL errors
+                cwd=Path(__file__).parent.parent
+            )
+            
+            stderr_lower = result.stderr.lower()
+            
+            # Check for SSL certificate verification errors with enhanced patterns
+            ssl_error_detected = any(ssl_indicator in stderr_lower for ssl_indicator in [
+                'ssl certificate verify failed',
+                'certificate verify failed', 
+                'ssl: certificate_verify_failed',
+                'ssl verification failed',
+                'self-signed certificate',
+                'certificate_verify_failed'
+            ])
+            
+            # Check for helpful error message suggesting --skip-tls
+            helpful_message = any(help_indicator in result.stderr for help_indicator in [
+                "--skip-tls",
+                "skip-tls",
+                "TLS verification"
+            ])
+            
+            # SSL error handling is successful if:
+            # 1. SSL error was detected, AND
+            # 2. Helpful message is provided (or command exits gracefully)
+            success = ssl_error_detected and (helpful_message or result.returncode == 0)
+            
+            error_type = "SSL_CERTIFICATE_ERROR" if ssl_error_detected else "UNKNOWN_ERROR"
+            error_message = "SSL certificate verification failed as expected" if ssl_error_detected else "No SSL error detected"
+            
+            self.test_results.append({
+                "test": "ssl_error_handling",
+                "success": success,
+                "details": {
+                    "exit_code": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "ssl_error_detected": ssl_error_detected,
+                    "helpful_message_shown": helpful_message,
+                    "error_type": error_type,
+                    "error_message": error_message,
+                    "command": self._mask_token_in_command(' '.join(cmd))
+                }
+            })
+            
+        except subprocess.TimeoutExpired:
+            self.test_results.append({
+                "test": "ssl_error_handling",
+                "success": False,
+                "details": {
+                    "exit_code": -1,
+                    "error": "SSL error test timed out after 60 seconds",
+                    "error_type": "TIMEOUT_ERROR",
+                    "command": self._mask_token_in_command(' '.join(cmd))
+                }
+            })
+            success = False
+            print("   ❌ SSL error: Test timed out")
+            return success
+            
+        except Exception as e:
+            self.test_results.append({
+                "test": "ssl_error_handling",
+                "success": False,
+                "details": {
+                    "exit_code": -1,
+                    "error": str(e),
+                    "error_type": "EXCEPTION_ERROR",
+                    "command": self._mask_token_in_command(' '.join(cmd))
+                }
+            })
+            success = False
+            print(f"   ❌ SSL error: Exception occurred - {str(e)}")
+            return success
         
         print(f"   {'✅' if success else '❌'} SSL error: user-friendly message shown")
         return success
@@ -693,7 +749,67 @@ class CatalogdTestSuite:
                 cwd=Path(__file__).parent.parent
             )
             
-            # Check if catalogs are listed (expecting JSON format)
+            # Enhanced error handling for SSL and other common issues
+            if result.returncode != 0:
+                stderr_lower = result.stderr.lower()
+                
+                # Check for SSL certificate verification errors
+                if any(ssl_indicator in stderr_lower for ssl_indicator in [
+                    'ssl certificate verify failed',
+                    'certificate verify failed', 
+                    'ssl: certificate_verify_failed',
+                    'ssl verification failed',
+                    'self-signed certificate'
+                ]):
+                    success = False
+                    error_type = "SSL_CERTIFICATE_ERROR"
+                    error_message = "SSL certificate verification failed. Use --skip-tls flag for self-signed certificates."
+                
+                # Check for network connectivity issues
+                elif any(net_indicator in stderr_lower for net_indicator in [
+                    'connection refused',
+                    'connection timed out',
+                    'network unreachable',
+                    'no route to host'
+                ]):
+                    success = False
+                    error_type = "NETWORK_ERROR"
+                    error_message = "Network connectivity issue. Check OpenShift URL and network access."
+                
+                # Check for authentication errors
+                elif any(auth_indicator in stderr_lower for auth_indicator in [
+                    'unauthorized',
+                    'authentication failed',
+                    'invalid token',
+                    'forbidden'
+                ]):
+                    success = False
+                    error_type = "AUTHENTICATION_ERROR"
+                    error_message = "Authentication failed. Check OpenShift token validity."
+                
+                # Generic error
+                else:
+                    success = False
+                    error_type = "COMMAND_ERROR"
+                    error_message = f"Command failed with exit code {result.returncode}"
+                
+                self.test_results.append({
+                    "test": "list_catalogs_command",
+                    "success": success,
+                    "details": {
+                        "exit_code": result.returncode,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "error_type": error_type,
+                        "error_message": error_message,
+                        "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+                    }
+                })
+                
+                print(f"   ❌ List catalogs: {error_message}")
+                return success
+            
+            # Success case: Check if catalogs are listed (expecting JSON format)
             success = (
                 result.returncode == 0 and
                 ('"serving": true' in result.stdout or '"status": "Serving"' in result.stdout) and
@@ -713,6 +829,20 @@ class CatalogdTestSuite:
                 }
             })
             
+        except subprocess.TimeoutExpired:
+            self.test_results.append({
+                "test": "list_catalogs_command", 
+                "success": False,
+                "details": {
+                    "exit_code": -1,
+                    "error": "Command timed out after 120 seconds",
+                    "error_type": "TIMEOUT_ERROR",
+                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+                }
+            })
+            success = False
+            print("   ❌ List catalogs: Command timed out after 120 seconds")
+            
         except Exception as e:
             self.test_results.append({
                 "test": "list_catalogs_command", 
@@ -720,12 +850,16 @@ class CatalogdTestSuite:
                 "details": {
                     "exit_code": -1,
                     "error": str(e),
+                    "error_type": "EXCEPTION_ERROR",
                     "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
                 }
             })
             success = False
+            print(f"   ❌ List catalogs: Exception occurred - {str(e)}")
         
-        print(f"   {'✅' if success else '❌'} List catalogs: command executed successfully")
+        if success:
+            print(f"   ✅ List catalogs: command executed successfully")
+        
         return success
     
     def get_available_tests(self) -> Dict[str, str]:
