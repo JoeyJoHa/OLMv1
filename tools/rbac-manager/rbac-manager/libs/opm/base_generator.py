@@ -1271,6 +1271,7 @@ e        Generate installer service account Role permissions - ONLY installer-sp
     
     def _generate_helm_header_comment(self, formatted_name: str, package_name: str) -> str:
         """Generate header comment for Helm values file"""
+        values_file = FileConstants.HELM_VALUES_FILE
         return f"""# IMPORTANT: Verify Correct Channel Before Deployment
 # ====================================================
 # The 'channel' field below is set to 'stable' by default, but many operators
@@ -1301,7 +1302,7 @@ e        Generate installer service account Role permissions - ONLY installer-sp
 #
 # SECURITY NOTICE: Post-Installation RBAC Hardening Required
 # =========================================================
-# This values.yaml contains installer permissions with INTENTIONALLY BROAD SCOPE
+# This {values_file} contains installer permissions with INTENTIONALLY BROAD SCOPE
 # for successful initial deployment. The installer ClusterRole uses wildcard
 # permissions (no resourceNames specified) which defaults to '*' behavior.
 #
@@ -1315,7 +1316,7 @@ e        Generate installer service account Role permissions - ONLY installer-sp
 #
 # Step 2: Update Installer Permissions  
 # ------------------------------------
-# In this values.yaml, look for rules with 'resourceNames: []' (empty arrays).
+# In this {values_file}, look for rules with 'resourceNames: []' (empty arrays).
 # These are the rules that need hardening after the operator is installed:
 #
 # For ClusterRole/ClusterRoleBinding management rules:
@@ -1330,7 +1331,7 @@ e        Generate installer service account Role permissions - ONLY installer-sp
 #
 # Step 3: Redeploy with Hardened Permissions
 # ------------------------------------------
-#   helm upgrade <release-name> <chart-path> -f <this-values.yaml>
+#   helm upgrade <release-name> <chart-path> -f <this-{values_file}>
 #
 # =========================================================
 #
