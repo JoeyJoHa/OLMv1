@@ -1143,87 +1143,47 @@ global:
         print("=" * 60)
         
         start_time = time.time()
-        all_results = []
         
-        # Test bundle processing for each available bundle
-        for bundle_name, bundle_image in self.test_bundles.items():
-            # Basic bundle processing
-            result = self.test_bundle_processing(bundle_name, bundle_image)
-            all_results.append(result)
-            self.test_results.append(result)
+        # Get all available tests and run each one
+        available_tests = self.get_available_tests()
+        total_passed = 0
+        total_failed = 0
+        total_duration = 0.0
+        
+        for test_name in available_tests.keys():
+            print(f"\n🎯 Running test group: {test_name}")
+            print("-" * 40)
             
-            # Helm generation
-            result = self.test_helm_generation(bundle_name, bundle_image)
-            all_results.append(result)
-            self.test_results.append(result)
+            test_result = self.run_specific_test(test_name)
             
-            # RBAC component analysis
-            result = self.test_rbac_component_analysis(bundle_name, bundle_image)
-            all_results.append(result)
-            self.test_results.append(result)
-            
-            # DRY deduplication
-            result = self.test_dry_deduplication(bundle_name, bundle_image)
-            all_results.append(result)
-            self.test_results.append(result)
-            
-            # Output directory
-            result = self.test_output_directory(bundle_name, bundle_image)
-            all_results.append(result)
-            self.test_results.append(result)
-        
-        # Permission scenario detection test
-        permission_results = self.test_permission_detection()
-        all_results.extend(permission_results)
-        self.test_results.extend(permission_results)
-        
-        # Config file tests
-        config_results = self.test_config_functionality()
-        all_results.extend(config_results)
-        self.test_results.extend(config_results)
-        
-        # FlowStyleList and channel placeholder tests
-        formatting_results = self.test_formatting_features()
-        all_results.extend(formatting_results)
-        self.test_results.extend(formatting_results)
-        
-        # Error handling tests
-        result = self.test_error_handling()
-        all_results.append(result)
-        self.test_results.append(result)
-        
-        # Permission scenario tests
-        scenario_results = self.test_permission_scenarios()
-        all_results.extend(scenario_results)
-        self.test_results.extend(scenario_results)
+            if "error" not in test_result:
+                total_passed += test_result["passed"]
+                total_failed += test_result["failed"]
+                total_duration += test_result["duration"]
         
         end_time = time.time()
-        
-        # Calculate summary
-        total_tests = len(all_results)
-        passed_tests = sum(1 for r in all_results if r["success"])
-        failed_tests = total_tests - passed_tests
+        total_tests = total_passed + total_failed
         
         print("\n" + "=" * 60)
         print("📊 OPM Test Results Summary")
         print("=" * 60)
         print(f"Total Tests: {total_tests}")
-        print(f"Passed: {passed_tests} ✅")
-        print(f"Failed: {failed_tests} ❌")
-        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        print(f"Passed: {total_passed} ✅")
+        print(f"Failed: {total_failed} ❌")
+        print(f"Success Rate: {(total_passed/total_tests)*100:.1f}%" if total_tests > 0 else "Success Rate: 0.0%")
         print(f"Duration: {end_time - start_time:.2f}s")
         
-        if failed_tests > 0:
+        if total_failed > 0:
             print("\n❌ Failed Tests:")
-            for result in all_results:
+            for result in self.test_results:
                 if not result["success"]:
                     print(f"  - {result['test']}: {result.get('details', {}).get('error', 'Unknown error')}")
         
         return {
             "total": total_tests,
-            "passed": passed_tests,
-            "failed": failed_tests,
-            "success_rate": (passed_tests/total_tests)*100,
+            "passed": total_passed,
+            "failed": total_failed,
+            "success_rate": (total_passed/total_tests)*100 if total_tests > 0 else 0,
             "duration": end_time - start_time
         }
     
