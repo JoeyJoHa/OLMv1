@@ -7,7 +7,7 @@ Handles loading and managing configuration files for the RBAC Manager tool.
 import logging
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from .exceptions import ConfigurationError
 from .constants import KubernetesConstants, FileConstants

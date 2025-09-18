@@ -18,8 +18,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import yaml
 from pathlib import Path
-from typing import Dict, List, Any, Optional, NamedTuple
+from typing import Dict, List, Any, NamedTuple
 
 # Add the rbac-manager directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "rbac-manager"))
@@ -676,7 +677,6 @@ class CatalogdTestSuite:
             config_content_valid = False
             if config_files:
                 try:
-                    import yaml
                     with open(config_files[0], 'r') as f:
                         config_data = yaml.safe_load(f)
                     config_content_valid = (

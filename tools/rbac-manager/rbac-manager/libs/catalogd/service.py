@@ -7,7 +7,8 @@ High-level service for catalogd operations including catalog listing and queryin
 import json
 import logging
 import sys
-from typing import Dict, List, Any, Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Any
 
 from kubernetes import client
 from kubernetes.client.rest import ApiException
@@ -342,8 +343,6 @@ class CatalogdService:
             Human-readable age string
         """
         try:
-            from datetime import datetime, timezone
-            
             # Parse the timestamp
             created = datetime.fromisoformat(creation_timestamp.replace('Z', '+00:00'))
             now = datetime.now(timezone.utc)

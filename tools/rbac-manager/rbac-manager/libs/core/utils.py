@@ -8,7 +8,7 @@ import logging
 import re
 import sys
 import urllib3
-from typing import Optional, Type
+from typing import Type
 from .exceptions import ConfigurationError, RBACManagerError, AuthenticationError, CatalogdError, NetworkError
 from .constants import ErrorMessages
 
@@ -264,8 +264,6 @@ def handle_api_error(error: Exception, exception_class: Type[RBACManagerError] =
     Raises:
         RBACManagerError: Appropriate error type with user-friendly message
     """
-    from .exceptions import CatalogdError  # Import here to avoid circular imports
-    
     if exception_class is None:
         exception_class = CatalogdError
     

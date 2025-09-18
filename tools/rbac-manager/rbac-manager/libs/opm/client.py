@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+import platform
 
 from ..core.exceptions import OPMError, BundleProcessingError
 from ..core.utils import validate_image_url
@@ -193,18 +194,33 @@ class OPMClient:
             
             # Set up environment for registry authentication
             env = {}
+            auth_file_path = None
+            
+            # Enhanced registry authentication handling
             if registry_token:
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    env['REGISTRY_AUTH_FILE'] = self._create_auth_file(registry_token, Path(temp_dir))
+                # Use provided token
+                 with tempfile.TemporaryDirectory() as temp_dir:
+                    auth_file_path = self._create_auth_file_from_token(registry_token, image, Path(temp_dir))
+                    env['REGISTRY_AUTH_FILE'] = auth_file_path
+            else:
+                # Auto-discover authentication from standard locations
+                discovered_auth = self._discover_registry_auth(image)
+                if discovered_auth:
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        auth_file_path = self._create_auth_file_from_discovered(discovered_auth, image, Path(temp_dir))
+                        env['REGISTRY_AUTH_FILE'] = auth_file_path
+                        logger.info(f"Using discovered registry authentication for {self._extract_registry_from_image(image)}")
             
             logger.debug(f"Rendering bundle with command: {' '.join(cmd)}")
+            if auth_file_path:
+                logger.debug(f"Using authentication file: {auth_file_path}")
             
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=NetworkConstants.BUNDLE_EXTRACTION_TIMEOUT,
-                env={**subprocess.os.environ, **env} if env else None
+                env={**os.environ, **env} if env else None
             )
             
             if result.returncode != 0:
@@ -224,35 +240,289 @@ class OPMClient:
                 raise
             raise BundleProcessingError(f"Failed to extract bundle metadata: {e}")
     
-    def _create_auth_file(self, registry_token: str, temp_path: Path) -> str:
+    def _discover_registry_auth(self, image: str) -> Optional[Dict[str, Any]]:
         """
-        Create registry authentication file
+        Auto-discover registry authentication from standard Docker/Podman locations
         
         Args:
-            registry_token: Registry authentication token
+            image: Container image URL to determine target registry
+            
+        Returns:
+            Dict containing authentication data if found, None otherwise
+        """
+        registry_host = self._extract_registry_from_image(image)
+        if not registry_host:
+            return None
+        
+        # Standard locations for authentication files
+        auth_locations = self._get_auth_file_locations()
+        
+        logger.debug(f"Searching for authentication for registry: {registry_host}")
+        logger.debug(f"Checking locations: {auth_locations}")
+        
+        for auth_path in auth_locations:
+            try:
+                if auth_path.exists():
+                    logger.debug(f"Found auth file: {auth_path}")
+                    with open(auth_path, 'r') as f:
+                        auth_data = json.load(f)
+                    
+                    # Look for matching registry in auths
+                    auths = auth_data.get('auths', {})
+                    
+                    # Try exact match first
+                    if registry_host in auths:
+                        auth_entry = auths[registry_host]
+                        if auth_entry.get('auth'):
+                            logger.debug(f"Found exact match for {registry_host}")
+                            return {
+                                'registry': registry_host,
+                                'auth_data': auth_entry,
+                                'source_file': str(auth_path)
+                            }
+                    
+                    # Try partial matches for common registries
+                    for auth_registry, auth_entry in auths.items():
+                        if self._is_registry_match(registry_host, auth_registry) and auth_entry.get('auth'):
+                            logger.debug(f"Found partial match: {auth_registry} for {registry_host}")
+                            return {
+                                'registry': registry_host,
+                                'auth_data': auth_entry,
+                                'source_file': str(auth_path)
+                            }
+                            
+            except (json.JSONDecodeError, IOError, PermissionError) as e:
+                logger.debug(f"Could not read auth file {auth_path}: {e}")
+                continue
+        
+        logger.debug(f"No authentication found for registry: {registry_host}")
+        return None
+    
+    def _get_auth_file_locations(self) -> List[Path]:
+        """
+        Get standard locations for Docker/Podman authentication files
+        
+        Returns:
+            List of Path objects to check for auth files
+        """
+        home = Path.home()
+        locations = []
+        
+        # Docker locations
+        locations.extend([
+            home / '.docker' / 'config.json',
+            home / '.dockercfg',
+        ])
+        
+        # Podman locations
+        if platform.system() == 'Darwin':  # macOS
+            locations.extend([
+                home / '.config' / 'containers' / 'auth.json',
+                home / 'Library' / 'Containers' / 'com.docker.docker' / 'Data' / 'vms' / '0' / 'tty' / 'root' / '.docker' / 'config.json'
+            ])
+        else:  # Linux
+            locations.extend([
+                home / '.config' / 'containers' / 'auth.json',
+                Path('/etc/containers/auth.json'),
+                Path('/run/containers/0/auth.json'),
+            ])
+        
+        # XDG locations
+        xdg_runtime_dir = os.getenv('XDG_RUNTIME_DIR')
+        if xdg_runtime_dir:
+            locations.append(Path(xdg_runtime_dir) / 'containers' / 'auth.json')
+        
+        # Environment variable override
+        registry_auth_file = os.getenv('REGISTRY_AUTH_FILE')
+        if registry_auth_file:
+            locations.insert(0, Path(registry_auth_file))  # Highest priority
+        
+        return locations
+    
+    def _extract_registry_from_image(self, image: str) -> Optional[str]:
+        """
+        Extract registry hostname from container image URL
+        
+        Args:
+            image: Container image URL
+            
+        Returns:
+            Registry hostname or None if cannot be determined
+        """
+        try:
+            # Handle various image formats:
+            # registry.redhat.io/ubi8/ubi:latest
+            # quay.io/operator-framework/opm:latest
+            # docker.io/library/ubuntu:latest
+            # ubuntu:latest (implies docker.io)
+            
+            if '/' not in image:
+                # Just a simple image name, assume docker.io
+                return 'docker.io'
+            
+            parts = image.split('/')
+            
+            # If first part contains a dot or colon, it's likely a registry
+            first_part = parts[0]
+            if '.' in first_part or ':' in first_part:
+                return first_part
+            
+            # Otherwise, it's likely docker.io (e.g., "ubuntu/something")
+            return 'docker.io'
+            
+        except Exception as e:
+            logger.debug(f"Could not extract registry from image {image}: {e}")
+            return None
+    
+    def _is_registry_match(self, target_registry: str, auth_registry: str) -> bool:
+        """
+        Check if two registry hostnames match (with fuzzy matching for common cases)
+        
+        Args:
+            target_registry: The registry we're looking for auth
+            auth_registry: The registry in the auth file
+            
+        Returns:
+            bool: True if they match
+        """
+        if target_registry == auth_registry:
+            return True
+        
+        # Common registry aliases
+        registry_aliases = {
+            'docker.io': ['index.docker.io', 'registry-1.docker.io'],
+            'registry.redhat.io': ['registry.access.redhat.com'],
+            'quay.io': ['quay.io'],
+        }
+        
+        # Check if target matches any aliases of auth_registry
+        for canonical, aliases in registry_aliases.items():
+            if auth_registry == canonical and target_registry in aliases:
+                return True
+            if target_registry == canonical and auth_registry in aliases:
+                return True
+        
+        return False
+    
+    def _create_auth_file_from_token(self, registry_token: str, image: str, temp_path: Path) -> str:
+        """
+        Create registry authentication file from provided token
+        
+        Args:
+            registry_token: Registry authentication token (can be base64 or username:password)
+            image: Container image URL to determine target registry
             temp_path: Temporary directory path
             
         Returns:
             str: Path to auth file
         """
         auth_file = temp_path / "auth.json"
+        registry_host = self._extract_registry_from_image(image) or 'registry.redhat.io'
         
-        # Create basic auth file structure
+        # Handle different token formats
+        auth_token = self._process_auth_token(registry_token)
+        
+        # Create auth file structure
         auth_data = {
             "auths": {
-                "registry.redhat.io": {
-                    "auth": registry_token
-                },
-                "quay.io": {
-                    "auth": registry_token
+                registry_host: {
+                    "auth": auth_token
                 }
             }
         }
         
-        with open(auth_file, 'w') as f:
-            json.dump(auth_data, f)
+        # Add common registry fallbacks
+        if registry_host not in ['quay.io', 'registry.redhat.io']:
+            auth_data["auths"]["registry.redhat.io"] = {"auth": auth_token}
+            auth_data["auths"]["quay.io"] = {"auth": auth_token}
         
+        with open(auth_file, 'w') as f:
+            json.dump(auth_data, f, indent=2)
+        
+        logger.debug(f"Created auth file for registry: {registry_host}")
         return str(auth_file)
+    
+    def _create_auth_file_from_discovered(self, discovered_auth: Dict[str, Any], image: str, temp_path: Path) -> str:
+        """
+        Create registry authentication file from discovered credentials
+        
+        Args:
+            discovered_auth: Discovered authentication data
+            image: Container image URL
+            temp_path: Temporary directory path
+            
+        Returns:
+            str: Path to auth file
+        """
+        auth_file = temp_path / "auth.json"
+        registry_host = discovered_auth['registry']
+        auth_entry = discovered_auth['auth_data']
+        
+        # Create minimal auth file with just the needed registry
+        auth_data = {
+            "auths": {
+                registry_host: auth_entry
+            }
+        }
+        
+        with open(auth_file, 'w') as f:
+            json.dump(auth_data, f, indent=2)
+        
+        logger.debug(f"Created auth file from discovered credentials for: {registry_host}")
+        logger.debug(f"Source: {discovered_auth['source_file']}")
+        return str(auth_file)
+    
+    def _process_auth_token(self, token: str) -> str:
+        """
+        Process authentication token, handling different formats
+        
+        Args:
+            token: Authentication token (base64 encoded or username:password)
+            
+        Returns:
+            str: Base64 encoded authentication token
+        """
+        try:
+            # If it's already base64 encoded, validate it
+            if self._is_base64_encoded(token):
+                # Try to decode to verify it's valid base64
+                decoded = base64.b64decode(token).decode('utf-8')
+                if ':' in decoded:  # Valid username:password format
+                    logger.debug("Using provided base64-encoded token")
+                    return token
+            
+            # If it contains ':', assume it's username:password and encode it
+            if ':' in token:
+                encoded_token = base64.b64encode(token.encode('utf-8')).decode('utf-8')
+                logger.debug("Encoded username:password to base64")
+                return encoded_token
+            
+            # Otherwise, assume it's already a token and use as-is
+            logger.debug("Using token as-is")
+            return token
+            
+        except Exception as e:
+            logger.debug(f"Error processing auth token: {e}")
+            # Fallback: use as-is
+            return token
+    
+    def _is_base64_encoded(self, s: str) -> bool:
+        """
+        Check if string is base64 encoded
+        
+        Args:
+            s: String to check
+            
+        Returns:
+            bool: True if appears to be base64 encoded
+        """
+        try:
+            if len(s) % 4 != 0:
+                return False
+            base64.b64decode(s, validate=True)
+            return True
+        except Exception:
+            return False
     
     def _parse_opm_render_output(self, output: str) -> Dict[str, Any]:
         """

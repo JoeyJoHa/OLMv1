@@ -7,7 +7,6 @@ Implements intelligent caching for catalogd responses to improve performance.
 import hashlib
 import json
 import logging
-import os
 import tempfile
 import time
 from pathlib import Path

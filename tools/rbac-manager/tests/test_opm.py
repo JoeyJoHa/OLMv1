@@ -19,7 +19,7 @@ import tempfile
 import time
 import yaml
 from pathlib import Path
-from typing import Dict, List, Any, Optional, NamedTuple
+from typing import Dict, List, Any, NamedTuple
 
 # Add the rbac-manager directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "rbac-manager"))
@@ -32,10 +32,10 @@ class OPMTestConstants:
     PRODUCTION_NAMESPACE = "production"
     OUTPUT_SUBDIR = "test-output"
     
-    # Test bundle images
-    ARGOCD_BUNDLE = "registry.redhat.io/argocd/argocd-operator-bundle@sha256:9c5c2d1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+    # Test bundle images - Real operator bundles for comprehensive testing
+    ARGOCD_BUNDLE = "quay.io/openshift-community-operators/argocd-operator@sha256:3edc4f132ee4ac9378e331f8eba14a3371132e3274295bfa99c554631e38e8b5"
+    GITOPS_BUNDLE = "registry.redhat.io/openshift-gitops-1/gitops-operator-bundle@sha256:53daa863b16b421cc1d9bc7e042cf1ecce9de9913b978561145b319c2a1a8ae5"
     QUAY_BUNDLE = "registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2"
-    CLUSTER_BUNDLE = "registry.redhat.io/example/cluster-operator-bundle@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
     INVALID_BUNDLE = "invalid-registry.com/nonexistent/bundle:latest"
     
     # Expected document types
@@ -137,14 +137,12 @@ class OPMTestSuite:
         
         self.test_results = []
         
-        # Test bundle images for different scenarios (using constants)
+        # Test bundle images for different scenarios (using real operator bundles)
         self.test_bundles = {
-            # ArgoCD operator - has both cluster and namespace permissions
-            "argocd_both": OPMTestConstants.ARGOCD_BUNDLE,
-            # Quay operator - has only namespace permissions (treated as cluster)
-            "quay_namespace": OPMTestConstants.QUAY_BUNDLE,
-            # Example cluster-only operator
-            "cluster_only": OPMTestConstants.CLUSTER_BUNDLE,
+            "openshift-gitops": OPMTestConstants.GITOPS_BUNDLE,
+            "quay-operator": OPMTestConstants.QUAY_BUNDLE,
+            "argocd-community": OPMTestConstants.ARGOCD_BUNDLE,
+            "invalid-bundle": OPMTestConstants.INVALID_BUNDLE, # Mock test to ensure error handling
         }
         
         # Test scenarios for comprehensive coverage (using constants)
@@ -235,7 +233,8 @@ class OPMTestSuite:
     
     def _is_placeholder_bundle(self, bundle_image: str) -> bool:
         """Check if bundle image is a placeholder"""
-        return "1234567890" in bundle_image or "example" in bundle_image
+        # All our test bundles are now real, so only check for the invalid test bundle
+        return bundle_image == OPMTestConstants.INVALID_BUNDLE
     
     def _extract_yaml_content(self, output: str, start_marker: str = "apiVersion:") -> str:
         """Extract YAML content from command output"""
@@ -353,7 +352,16 @@ class OPMTestSuite:
     
     def _validate_helm_structure(self, helm_values: Dict[str, Any]) -> Dict[str, Any]:
         """Validate Helm values structure"""
-        found_keys = list(helm_values.keys()) if helm_values else []
+        # Handle None or empty helm_values
+        if not helm_values:
+            return {
+                "found_keys": [],
+                "has_required_structure": False,
+                "cluster_roles_count": 0,
+                "roles_count": 0
+            }
+        
+        found_keys = list(helm_values.keys())
         has_required_structure = all(key in found_keys for key in OPMTestConstants.EXPECTED_HELM_KEYS)
         
         validation = {
@@ -366,8 +374,62 @@ class OPMTestSuite:
             perms = helm_values["permissions"]
             validation["cluster_roles_count"] = len(perms.get("clusterRoles", []))
             validation["roles_count"] = len(perms.get("roles", []))
+        else:
+            validation["cluster_roles_count"] = 0
+            validation["roles_count"] = 0
         
         return validation
+    
+    def _analyze_permission_structure(self, helm_values: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze permission structure to determine operator permission patterns"""
+        analysis = {
+            "has_cluster_permissions": False,
+            "has_namespace_permissions": False,
+            "permission_scenario": "unknown",
+            "cluster_roles_count": 0,
+            "roles_count": 0,
+            "total_permissions": 0
+        }
+        
+        # Handle None or empty helm_values
+        if not helm_values or "permissions" not in helm_values:
+            return analysis
+        
+        permissions = helm_values["permissions"]
+        
+        # Analyze cluster roles
+        cluster_roles = permissions.get("clusterRoles", [])
+        if cluster_roles:
+            analysis["has_cluster_permissions"] = True
+            analysis["cluster_roles_count"] = len(cluster_roles)
+            
+            # Count total cluster permissions
+            for cluster_role in cluster_roles:
+                rules = cluster_role.get("customRules", [])
+                analysis["total_permissions"] += len(rules)
+        
+        # Analyze namespace roles
+        roles = permissions.get("roles", [])
+        if roles:
+            analysis["has_namespace_permissions"] = True
+            analysis["roles_count"] = len(roles)
+            
+            # Count total namespace permissions
+            for role in roles:
+                rules = role.get("customRules", [])
+                analysis["total_permissions"] += len(rules)
+        
+        # Determine permission scenario
+        if analysis["has_cluster_permissions"] and analysis["has_namespace_permissions"]:
+            analysis["permission_scenario"] = "both_cluster_and_namespace"
+        elif analysis["has_cluster_permissions"]:
+            analysis["permission_scenario"] = "cluster_only"
+        elif analysis["has_namespace_permissions"]:
+            analysis["permission_scenario"] = "namespace_only"
+        else:
+            analysis["permission_scenario"] = "no_permissions"
+        
+        return analysis
     
     def _create_config_file(self, temp_dir: str, bundle_image: str, output_type: str = "yaml", 
                            channel: str = OPMTestConstants.STABLE_CHANNEL) -> str:
@@ -492,6 +554,10 @@ global:
                 
                 details.update(validation)
                 
+                # Analyze permission structure for this bundle
+                permission_analysis = self._analyze_permission_structure(helm_values)
+                details.update(permission_analysis)
+                
                 # Check for channel guidance comment in output
                 has_channel_guidance = OPMTestConstants.CHANNEL_GUIDANCE in result["stdout"]
                 details["has_channel_guidance"] = has_channel_guidance
@@ -521,6 +587,7 @@ global:
         try:
             from libs.opm.processor import BundleProcessor  # pyright: ignore[reportMissingImports]
             from libs.opm.helm_generator import HelmValuesGenerator  # pyright: ignore[reportMissingImports]
+            from libs.core.exceptions import BundleProcessingError  # pyright: ignore[reportMissingImports]
             
             processor = BundleProcessor()
             generator = HelmValuesGenerator()
@@ -566,6 +633,18 @@ global:
                 test_result["success"] = False
                 test_result["details"]["error"] = f"Missing component flags: {missing_components}"
             
+        except BundleProcessingError as e:
+            test_result = {
+                "test": f"rbac_analysis_{bundle_name}",
+                "description": f"Test centralized RBAC component analysis for {bundle_name}",
+                "success": False,
+                "duration": 0,
+                "details": {
+                    "bundle_image": bundle_image,
+                    "error": f"Bundle processing failed: {str(e)}",
+                    "error_type": "BundleProcessingError"
+                }
+            }
         except Exception as e:
             test_result = {
                 "test": f"rbac_analysis_{bundle_name}",
@@ -574,7 +653,8 @@ global:
                 "duration": 0,
                 "details": {
                     "bundle_image": bundle_image,
-                    "error": str(e)
+                    "error": f"Unexpected error: {str(e)}",
+                    "error_type": type(e).__name__
                 }
             }
         
@@ -871,6 +951,63 @@ global:
         
         return results
     
+    def test_permission_detection(self) -> List[Dict[str, Any]]:
+        """Test permission scenario detection for each bundle type"""
+        print("🔍 Testing permission scenario detection")
+        
+        results = []
+        
+        for bundle_name, bundle_image in self.test_bundles.items():
+            print(f"   📋 Analyzing permissions for: {bundle_name}")
+            
+            # Generate Helm values to analyze permissions
+            cmd = OPMCommandBuilder(self.base_cmd).with_image(bundle_image).with_helm().build()
+            result = self.run_command(cmd)
+            
+            details = {
+                "bundle_name": bundle_name,
+                "bundle_image": bundle_image,
+                "command": result["command"],
+                "returncode": result["returncode"]
+            }
+            
+            if result["success"]:
+                try:
+                    # Extract and analyze Helm content
+                    helm_content = self._extract_helm_content(result["stdout"])
+                    if helm_content.strip():  # Only analyze if we have content
+                        helm_values = yaml.safe_load(helm_content)
+                        permission_analysis = self._analyze_permission_structure(helm_values)
+                        details.update(permission_analysis)
+                        
+                        # Log the detected scenario
+                        scenario = permission_analysis["permission_scenario"]
+                        cluster_count = permission_analysis["cluster_roles_count"]
+                        role_count = permission_analysis["roles_count"]
+                        total_perms = permission_analysis["total_permissions"]
+                        
+                        print(f"      └─ Scenario: {scenario}")
+                        print(f"      └─ ClusterRoles: {cluster_count}, Roles: {role_count}, Total Rules: {total_perms}")
+                    else:
+                        details["error"] = "No Helm content extracted"
+                        result["success"] = False
+                        
+                except Exception as e:
+                    result["success"] = False
+                    details["error"] = f"Failed to analyze permissions: {e}"
+            else:
+                details["error"] = result["stderr"]
+            
+            test_result = self._create_test_result(
+                f"permission_detection_{bundle_name}",
+                f"Detect permission scenario for {bundle_name}",
+                result["success"],
+                details
+            )
+            results.append(test_result)
+        
+        return results
+    
     def test_permission_scenarios(self) -> List[Dict[str, Any]]:
         """Test different permission scenarios comprehensively"""
         print("🎯 Testing permission scenarios")
@@ -947,11 +1084,6 @@ global:
         
         # Test bundle processing for each available bundle
         for bundle_name, bundle_image in self.test_bundles.items():
-            # Skip placeholder bundles
-            if "1234567890" in bundle_image or "example" in bundle_image:
-                print(f"⏭️ Skipping placeholder bundle: {bundle_name}")
-                continue
-            
             # Basic bundle processing
             result = self.test_bundle_processing(bundle_name, bundle_image)
             all_results.append(result)
@@ -976,6 +1108,11 @@ global:
             result = self.test_output_directory(bundle_name, bundle_image)
             all_results.append(result)
             self.test_results.append(result)
+        
+        # Permission scenario detection test
+        permission_results = self.test_permission_detection()
+        all_results.extend(permission_results)
+        self.test_results.extend(permission_results)
         
         # Config file tests
         config_results = self.test_config_functionality()

@@ -44,7 +44,7 @@ This document outlines comprehensive best practices and coding standards for Pyt
 * **Variables and Functions:** Use snake_case (e.g., user_profile, calculate_total()).
 * **Classes:** Use PascalCase or CapWords (e.g., UserProfile, DatabaseConnection).
 * **Constants:** Use UPPER_SNAKE_CASE (e.g., MAX_CONNECTIONS = 10).
-* **Protected/Private:** Use a single leading underscore _ for protected members and a double leading underscore __ for name mangling (_internal_method, __private_attribute).
+* **Protected/Private:** Use a single leading underscore _for protected members and a double leading underscore __for name mangling (_internal_method,__private_attribute).
 
 ### 1.3. Module Organization Best Practices
 

@@ -6,8 +6,9 @@ YAML manifests and Helm values from OPM bundle metadata.
 """
 
 import logging
+import re
 import yaml
-from typing import Dict, List, Any, Optional, NamedTuple
+from typing import Dict, List, Any, NamedTuple
 from abc import ABC, abstractmethod
 from enum import Enum
 
@@ -141,8 +142,6 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         Returns:
             List of RBAC rules for installer service account Role (minimal, no overlaps)
         """
-        from ..core.constants import KubernetesConstants, OPMConstants
-        
         rules = []
         deployments = bundle_metadata.get(OPMConstants.CSV_DEPLOYMENTS_SECTION, [])
         
@@ -359,11 +358,47 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         # Deduplicate broad rules (merge verbs)
         deduplicated_broad = self._merge_broad_rules(broad_rules)
         
-        # Keep specific rules as-is (they don't conflict with broad rules)
-        # But deduplicate among themselves if needed
+        # Check if broad rules supersede specific rules
+        if deduplicated_broad and specific_rules:
+            # For each broad rule, check if it covers the specific rules
+            filtered_specific_rules = []
+            for specific_rule in specific_rules:
+                is_superseded = False
+                for broad_rule in deduplicated_broad:
+                    if self._broad_rule_supersedes_specific(broad_rule, specific_rule):
+                        is_superseded = True
+                        break
+                if not is_superseded:
+                    filtered_specific_rules.append(specific_rule)
+            specific_rules = filtered_specific_rules
+        
+        # Deduplicate remaining specific rules among themselves
         deduplicated_specific = self._deduplicate_specific_rules(specific_rules)
         
         return deduplicated_broad + deduplicated_specific
+    
+    def _broad_rule_supersedes_specific(self, broad_rule: Dict[str, Any], specific_rule: Dict[str, Any]) -> bool:
+        """
+        Check if a broad rule (without resourceNames) supersedes a specific rule (with resourceNames)
+        
+        Args:
+            broad_rule: Rule without resourceNames
+            specific_rule: Rule with resourceNames
+            
+        Returns:
+            True if the broad rule covers all permissions of the specific rule
+        """
+        # Both rules should have the same apiGroups and resources (they're in the same group)
+        broad_verbs = set(broad_rule.get('verbs', []))
+        specific_verbs = set(specific_rule.get('verbs', []))
+        
+        # Check if broad rule has all verbs of the specific rule (or more)
+        # If broad rule has wildcard (*) verb, it supersedes everything
+        if '*' in broad_verbs:
+            return True
+        
+        # If broad rule verbs are a superset of specific rule verbs, it supersedes
+        return specific_verbs.issubset(broad_verbs)
     
     def _merge_broad_rules(self, broad_rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -711,8 +746,6 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         
         # Convert PascalCase/CamelCase to lowercase with word boundaries
         # This handles cases like 'ServiceAccount' -> 'service account' -> 'serviceaccounts'
-        import re
-        
         # Insert spaces before capital letters (except the first one)
         spaced = re.sub(r'(?<!^)(?=[A-Z])', ' ', kind)
         
@@ -1411,7 +1444,6 @@ e        Generate installer service account Role permissions - ONLY installer-sp
             
             # Generate grantor ClusterRole rules
             cluster_grantor_rules = []
-            from ..core.constants import OPMConstants
             for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             
@@ -1455,7 +1487,6 @@ e        Generate installer service account Role permissions - ONLY installer-sp
             
             # Generate grantor ClusterRole rules
             cluster_grantor_rules = []
-            from ..core.constants import OPMConstants
             for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
                 cluster_grantor_rules.extend(perm.get('rules', []))
             

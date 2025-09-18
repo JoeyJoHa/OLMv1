@@ -4,7 +4,6 @@ Help Manager
 Manages granular help text for different commands and operations.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 

@@ -4,11 +4,13 @@ Main Application
 Orchestrates the microservice-like architecture with core, catalogd, and opm libraries.
 """
 
+import argparse
 import json
 import logging
+import os
 import sys
+import tempfile
 import time
-from pathlib import Path
 from typing import Dict, Any, Optional
 
 # Core libraries
@@ -359,8 +361,6 @@ class RBACManager:
                     print(content)
         else:
             # Save to files with operator name and timestamp
-            import os
-            import time
             os.makedirs(output_dir, exist_ok=True)
             
             # Generate timestamp string
@@ -410,7 +410,6 @@ class RBACManager:
             # For very large output, we might want to use sys.stdout.write
             # to avoid potential buffering issues with print()
             if len(json_str) > 1000000:  # 1MB threshold
-                import sys
                 sys.stdout.write(json_str)
                 sys.stdout.write('\n')
                 sys.stdout.flush()
@@ -441,8 +440,6 @@ def create_rbac_manager(skip_tls: bool = False, debug: bool = False) -> RBACMana
 # Command-line interface functions (keeping existing structure)
 def create_argument_parser():
     """Create and configure argument parser with subcommands"""
-    import argparse
-    
     parser = argparse.ArgumentParser(
         description='RBAC Manager - Extract RBAC permissions from operator bundles and query catalogs',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -559,9 +556,6 @@ def generate_config_file(args, extracted_data=None, output_path=None, stdout=Fal
         # Generate config content and output to stdout
         if extracted_data:
             # Create temporary config to get the YAML content
-            import tempfile
-            import os
-            
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file = config_manager.generate_config_with_values(
                     extracted_data=extracted_data,
@@ -574,8 +568,6 @@ def generate_config_file(args, extracted_data=None, output_path=None, stdout=Fal
                     print(f.read())
         else:
             # Create temporary template config to get the YAML content
-            import tempfile
-            
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file = config_manager.generate_config_template(output_dir=temp_dir)
                 with open(temp_file, 'r') as f:

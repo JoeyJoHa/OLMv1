@@ -6,8 +6,9 @@ Handles OpenShift authentication and context discovery.
 
 import logging
 import os
+import urllib3
 import yaml
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -61,6 +62,9 @@ class OpenShiftAuth:
             # Try to discover from kubeconfig or in-cluster config
             return self._discover_from_context()
             
+        except ConfigurationError:
+            # Re-raise ConfigurationError as-is (from validate_openshift_url)
+            raise
         except Exception as e:
             raise AuthenticationError(f"Failed to configure authentication: {e}")
     
@@ -84,7 +88,6 @@ class OpenShiftAuth:
             if self.skip_tls:
                 configuration.verify_ssl = False
                 configuration.ssl_ca_cert = None
-                import urllib3
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             
             # Set the configuration as default
@@ -175,7 +178,6 @@ class OpenShiftAuth:
                 configuration = self.k8s_client.configuration
                 configuration.verify_ssl = False
                 configuration.ssl_ca_cert = None
-                import urllib3
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             
             logger.info("Successfully discovered authentication from context")

@@ -4,6 +4,8 @@ Bundle Processor
 High-level processing of operator bundles including metadata extraction and validation.
 """
 
+import base64
+import json
 import logging
 from typing import Dict, Any, Optional
 
@@ -55,6 +57,9 @@ class BundleProcessor:
             
         Returns:
             Dict containing processed bundle metadata, None if extraction fails
+            
+        Raises:
+            BundleProcessingError: When bundle processing fails
         """
         try:
             # Validate image first
@@ -68,9 +73,12 @@ class BundleProcessor:
             
             return processed_metadata
             
+        except BundleProcessingError:
+            # Re-raise BundleProcessingError as-is
+            raise
         except Exception as e:
             logger.error(f"Failed to extract bundle metadata: {e}")
-            return None
+            raise BundleProcessingError(f"Bundle metadata extraction failed for image '{image}': {e}") from e
     
     def _process_metadata(self, raw_metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -108,6 +116,9 @@ class BundleProcessor:
         
         Args:
             metadata: Bundle metadata dictionary to update
+            
+        Raises:
+            BundleProcessingError: When bundle object processing fails critically
         """
         try:
             # Initialize resource collections
@@ -124,9 +135,6 @@ class BundleProcessor:
                     if prop.get('type') == OPMConstants.OLM_BUNDLE_OBJECT_PROPERTY:
                         try:
                             # Decode base64 data
-                            import base64
-                            import json
-                            
                             data = prop.get('value', {}).get('data', '')
                             if data:
                                 decoded_data = base64.b64decode(data).decode('utf-8')
@@ -143,8 +151,11 @@ class BundleProcessor:
                                     elif self._is_namespace_scoped_resource(kind):
                                         namespace_scoped_resources.append(resource_info)
                                     
-                        except Exception as e:
+                        except (ValueError, KeyError, UnicodeDecodeError) as e:
                             logger.debug(f"Failed to decode bundle object: {e}")
+                            continue
+                        except Exception as e:
+                            logger.warning(f"Unexpected error processing bundle object: {e}")
                             continue
             
             # Store processed resources
@@ -155,9 +166,8 @@ class BundleProcessor:
                         f"{len(namespace_scoped_resources)} namespace-scoped")
             
         except Exception as e:
-            logger.warning(f"Failed to process bundle objects: {e}")
-            metadata['cluster_scoped_resources'] = []
-            metadata['namespace_scoped_resources'] = []
+            logger.error(f"Critical failure in bundle object processing: {e}")
+            raise BundleProcessingError(f"Failed to process bundle objects: {e}") from e
     
     def _create_resource_info(self, resource: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -348,8 +358,15 @@ class BundleProcessor:
             
         Returns:
             Helm values YAML string
+            
+        Raises:
+            BundleProcessingError: When Helm values generation fails
         """
-        return self.helm_generator.generate(bundle_metadata, operator_name, channel=channel)
+        try:
+            return self.helm_generator.generate(bundle_metadata, operator_name, channel=channel)
+        except Exception as e:
+            logger.error(f"Failed to generate Helm values: {e}")
+            raise BundleProcessingError(f"Helm values generation failed: {e}") from e
     
     def generate_yaml_manifests(self, bundle_metadata: Dict[str, Any], namespace: str = KubernetesConstants.DEFAULT_NAMESPACE, 
                               operator_name: Optional[str] = None) -> Dict[str, str]:
@@ -363,5 +380,12 @@ class BundleProcessor:
             
         Returns:
             Dict mapping manifest names to YAML content
+            
+        Raises:
+            BundleProcessingError: When YAML manifest generation fails
         """
-        return self.yaml_generator.generate(bundle_metadata, namespace, operator_name)
+        try:
+            return self.yaml_generator.generate(bundle_metadata, namespace, operator_name)
+        except Exception as e:
+            logger.error(f"Failed to generate YAML manifests: {e}")
+            raise BundleProcessingError(f"YAML manifest generation failed: {e}") from e

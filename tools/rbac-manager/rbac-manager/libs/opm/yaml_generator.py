@@ -5,7 +5,7 @@ Generates Kubernetes YAML manifests from OPM bundle metadata.
 """
 
 import yaml
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 from .base_generator import BaseGenerator, ManifestTemplates
 from ..core.constants import OPMConstants, KubernetesConstants
 
@@ -169,7 +169,6 @@ class YAMLManifestGenerator(BaseGenerator):
         csv_namespace_rules = self._generate_namespace_rules(bundle_metadata)
         
         # Get cluster rules to filter overlaps (use the deduplicated version)
-        from ..core.constants import OPMConstants
         cluster_grantor_rules = []
         for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
             cluster_grantor_rules.extend(perm.get('rules', []))

@@ -4,10 +4,8 @@ Catalogd Client
 Handles low-level communication with catalogd service including port-forwarding and HTTP requests.
 """
 
-import json
 import logging
 import socket
-import time
 from typing import Dict, Any, Tuple, Optional
 
 from kubernetes import client
@@ -234,7 +232,6 @@ class CatalogdClient:
             service_name, service_port, target_port, is_https = self.discover_catalogd_service()
             
             # Find an available local port
-            import socket
             sock = socket.socket()
             sock.bind(('', 0))
             local_port = sock.getsockname()[1]

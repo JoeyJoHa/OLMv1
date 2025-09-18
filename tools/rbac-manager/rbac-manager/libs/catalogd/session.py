@@ -4,10 +4,12 @@ Catalogd Session Manager
 Manages persistent connections and sessions for improved performance.
 """
 
+import gzip
 import logging
 import socket
 import ssl
 import time
+import zlib
 from typing import Dict, Any, Optional, Tuple
 
 from ..core.exceptions import NetworkError
@@ -364,7 +366,6 @@ class CatalogdSession:
             bytes: Decompressed data
         """
         if compression_type == 'gzip':
-            import gzip
             # Check if data is actually gzipped
             if data.startswith(b'\x1f\x8b'):
                 return gzip.decompress(data)
@@ -372,7 +373,6 @@ class CatalogdSession:
                 logger.debug("Data not gzipped despite Content-Encoding header")
                 return data
         elif compression_type == 'deflate':
-            import zlib
             try:
                 return zlib.decompress(data)
             except zlib.error:
