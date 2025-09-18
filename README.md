@@ -101,9 +101,6 @@ OLMv1/
 ├── scripts/                          # Utility scripts (future use)
 ├── tests/                            # Test files (future use)
 ├── workflows/                        # Workflow definitions (future use)
-├── CHANGELOG.md                      # Project changelog
-├── CONTRIBUTING.md                   # Contribution guidelines
-├── LICENSE                           # MIT license
 └── README.md                         # This documentation
 ```
 
