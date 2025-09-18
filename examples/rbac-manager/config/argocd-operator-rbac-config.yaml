@@ -9,8 +9,8 @@ operator:
   version: "0.7.0"
 output:
   mode: "file"
-  type: "helm"
-  path: "/files"
+  type: "yaml"
+  path: "./output"
 global:
   skip_tls: False
   debug: False
