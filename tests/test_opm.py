@@ -107,7 +107,7 @@ class OPMTestSuite:
         self.debug = debug
         
         # Build base command using builder pattern
-        builder = OPMCommandBuilder(["python3", "rbac-manager.py", "opm"])
+        builder = OPMCommandBuilder(["python3", "tools/rbac-manager/rbac-manager.py", "opm"])
         if skip_tls:
             builder = builder.with_skip_tls()
         if debug:
@@ -1229,9 +1229,9 @@ def main():
     print("=" * 60)
     
     # Check if we're in the right directory
-    if not Path("rbac-manager.py").exists():
+    if not Path("tools/rbac-manager/rbac-manager.py").exists():
         print("❌ Error: rbac-manager.py not found")
-        print("   Please run this test from the tools/rbac-manager directory")
+        print("   Please run this test from the project root directory")
         sys.exit(1)
     
     # Initialize test suite

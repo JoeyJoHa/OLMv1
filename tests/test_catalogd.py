@@ -98,11 +98,11 @@ class CatalogdTestSuite:
         self.skip_tls = skip_tls
         
         # Build commands using CommandBuilder to eliminate duplication
-        self.base_cmd = (CommandBuilder(["python3", "rbac-manager.py", "catalogd"])
+        self.base_cmd = (CommandBuilder(["python3", "tools/rbac-manager/rbac-manager.py", "catalogd"])
                         .add_auth(openshift_url, openshift_token, skip_tls)
                         .build())
         
-        self.list_catalogs_cmd = (CommandBuilder(["python3", "rbac-manager.py", "list-catalogs"])
+        self.list_catalogs_cmd = (CommandBuilder(["python3", "tools/rbac-manager/rbac-manager.py", "list-catalogs"])
                                  .add_auth(openshift_url, openshift_token, skip_tls)
                                  .build())
         
@@ -173,8 +173,7 @@ class CatalogdTestSuite:
                 input=input_data,
                 text=True,
                 capture_output=True,
-                timeout=timeout,
-                cwd=Path(__file__).parent.parent
+                timeout=timeout
             )
             
             # Try to parse JSON from stdout
@@ -475,7 +474,7 @@ class CatalogdTestSuite:
         
         # Run command without --skip-tls to trigger SSL error
         cmd = [
-            "python3", "rbac-manager.py", "catalogd",
+            "python3", "tools/rbac-manager/rbac-manager.py", "catalogd",
             "--catalog-name", self.test_catalog,
             "--openshift-url", self.openshift_url,
             "--openshift-token", self.openshift_token
@@ -486,8 +485,7 @@ class CatalogdTestSuite:
                 cmd,
                 text=True,
                 capture_output=True,
-                timeout=60,  # Increased timeout for SSL errors
-                cwd=Path(__file__).parent.parent
+                timeout=60  # Increased timeout for SSL errors
             )
             
             stderr_lower = result.stderr.lower()
@@ -734,8 +732,7 @@ class CatalogdTestSuite:
                 self.list_catalogs_cmd,
                 text=True,
                 capture_output=True,
-                timeout=120,
-                cwd=Path(__file__).parent.parent
+                timeout=120
             )
             
             # Enhanced error handling for SSL and other common issues

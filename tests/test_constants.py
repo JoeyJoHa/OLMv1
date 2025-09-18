@@ -86,7 +86,7 @@ class TestUtilities:
         """Setup Python path for test imports"""
         
         # Add the rbac-manager directory to Python path
-        rbac_manager_path = Path(__file__).parent.parent / "rbac-manager"
+        rbac_manager_path = Path(__file__).parent / "tools" / "rbac-manager"
         if str(rbac_manager_path) not in sys.path:
             sys.path.insert(0, str(rbac_manager_path))
     

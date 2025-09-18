@@ -44,7 +44,7 @@ class WorkflowTestSuite:
         
         # Base commands
         self.catalogd_cmd = [
-            "python3", "rbac-manager.py", "catalogd",
+            "python3", "tools/rbac-manager/rbac-manager.py", "catalogd",
             "--openshift-url", self.openshift_url,
             "--openshift-token", self.openshift_token
         ]
@@ -53,7 +53,7 @@ class WorkflowTestSuite:
         if self.debug:
             self.catalogd_cmd.append("--debug")
         
-        self.opm_cmd = ["python3", "rbac-manager.py", "opm"]
+        self.opm_cmd = ["python3", "tools/rbac-manager/rbac-manager.py", "opm"]
         if self.skip_tls:
             self.opm_cmd.append("--skip-tls")
         if self.debug:
@@ -171,7 +171,7 @@ class WorkflowTestSuite:
         print("🔍 Discovering test parameters from cluster...")
         
         # List catalogs
-        cmd = ["python3", "rbac-manager.py", "list-catalogs"] + self.catalogd_cmd[3:]  # Skip catalogd subcommand
+        cmd = ["python3", "tools/rbac-manager/rbac-manager.py", "list-catalogs"] + self.catalogd_cmd[3:]  # Skip catalogd subcommand
         if self.debug:
             # Import the core utility for masking (use TestUtilities for consistency)
             masked_cmd = TestUtilities.mask_sensitive_data(' '.join(cmd), self.openshift_url, self.openshift_token)
@@ -742,9 +742,9 @@ def main():
     print("=" * 60)
     
     # Check if we're in the right directory
-    if not Path("rbac-manager.py").exists():
+    if not Path("tools/rbac-manager/rbac-manager.py").exists():
         print("❌ Error: rbac-manager.py not found")
-        print("   Please run this test from the tools/rbac-manager directory")
+        print("   Please run this test from the project root directory")
         sys.exit(1)
     
     # Get authentication from environment
