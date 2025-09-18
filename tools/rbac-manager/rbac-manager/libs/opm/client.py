@@ -103,7 +103,7 @@ class OPMClient:
     
     def _run_opm_command(self, image: str, registry_token: str = None) -> subprocess.CompletedProcess:
         """
-        Centralized helper method to run opm commands with authentication (DRY principle)
+        Centralized helper method to run opm commands with robust two-attempt authentication
         
         Args:
             image: Container image URL
@@ -121,35 +121,17 @@ class OPMClient:
             # Build render command using centralized helper
             cmd = self._build_render_command(image)
             
-            # Set up environment for registry authentication
-            env = {}
-            auth_file_path = None
-            
             # Enhanced registry authentication handling
             if registry_token:
-                # Use provided token
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    auth_file_path = self._create_auth_file_from_token(registry_token, image, Path(temp_dir))
-                    env['REGISTRY_AUTH_FILE'] = auth_file_path
-                    
-                    logger.debug(f"Running opm command with authentication: {' '.join(cmd)}")
-                    logger.debug(f"Using authentication file: {auth_file_path}")
-                    
-                    result = subprocess.run(
-                        cmd,
-                        capture_output=True,
-                        text=True,
-                        timeout=NetworkConstants.BUNDLE_EXTRACTION_TIMEOUT,
-                        env={**os.environ, **env}
-                    )
-                    return result
+                # Two-attempt authentication strategy for robust token handling
+                return self._run_with_two_attempt_auth(cmd, image, registry_token)
             else:
                 # Auto-discover authentication from standard locations
                 discovered_auth = self._discover_registry_auth(image)
                 if discovered_auth:
                     with tempfile.TemporaryDirectory() as temp_dir:
                         auth_file_path = self._create_auth_file_from_discovered(discovered_auth, image, Path(temp_dir))
-                        env['REGISTRY_AUTH_FILE'] = auth_file_path
+                        env = {'REGISTRY_AUTH_FILE': auth_file_path}
                         logger.info(f"Using discovered registry authentication for {self._extract_registry_from_image(image)}")
                         
                         logger.debug(f"Running opm command with discovered auth: {' '.join(cmd)}")
@@ -181,6 +163,159 @@ class OPMClient:
             if isinstance(e, BundleProcessingError):
                 raise
             raise BundleProcessingError(f"Failed to run opm command: {e}")
+    
+    def _run_with_two_attempt_auth(self, cmd: List[str], image: str, registry_token: str) -> subprocess.CompletedProcess:
+        """
+        Robust two-attempt authentication strategy with Docker config fallback
+        
+        Args:
+            cmd: OPM command to execute
+            image: Container image URL
+            registry_token: Registry authentication token
+            
+        Returns:
+            subprocess.CompletedProcess: Result of successful command execution
+            
+        Raises:
+            BundleProcessingError: If both authentication attempts fail
+        """
+        # First Attempt: Use REGISTRY_AUTH_FILE environment variable
+        logger.debug("Attempting authentication via REGISTRY_AUTH_FILE environment variable")
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            auth_file_path = self._create_auth_file_from_token(registry_token, image, Path(temp_dir))
+            env = {'REGISTRY_AUTH_FILE': auth_file_path}
+            
+            logger.debug(f"First attempt - Running opm command with auth file: {' '.join(cmd)}")
+            logger.debug(f"Using authentication file: {auth_file_path}")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=NetworkConstants.BUNDLE_EXTRACTION_TIMEOUT,
+                env={**os.environ, **env}
+            )
+            
+            # Check if first attempt succeeded
+            if result.returncode == 0:
+                logger.debug("First attempt succeeded with REGISTRY_AUTH_FILE")
+                return result
+            
+            # Check if failure is due to authentication (unauthorized error)
+            if "unauthorized" not in result.stderr.lower():
+                logger.debug("First attempt failed, but not due to authentication - returning result")
+                return result
+            
+            logger.warning("First attempt failed with unauthorized error, trying Docker config fallback")
+            
+            # Second Attempt: Fallback to Docker config file manipulation
+            return self._run_with_docker_config_fallback(cmd, image, registry_token)
+    
+    def _run_with_docker_config_fallback(self, cmd: List[str], image: str, registry_token: str) -> subprocess.CompletedProcess:
+        """
+        Fallback authentication method using Docker config file manipulation
+        
+        Args:
+            cmd: OPM command to execute
+            image: Container image URL
+            registry_token: Registry authentication token
+            
+        Returns:
+            subprocess.CompletedProcess: Result of command execution
+            
+        Raises:
+            BundleProcessingError: If fallback authentication fails
+        """
+        # Define Docker config file paths
+        docker_config_dir = Path.home() / '.docker'
+        docker_config_file = docker_config_dir / 'config.json'
+        backup_config_file = docker_config_dir / 'config.json.bak'
+        
+        # Track if we created a backup for proper cleanup
+        backup_created = False
+        original_existed = docker_config_file.exists()
+        
+        try:
+            # Ensure .docker directory exists
+            docker_config_dir.mkdir(exist_ok=True)
+            
+            # Safely back up original config.json if it exists
+            if original_existed:
+                logger.debug(f"Backing up original Docker config: {docker_config_file} -> {backup_config_file}")
+                docker_config_file.rename(backup_config_file)
+                backup_created = True
+            
+            # Create new config.json with authentication token
+            registry_host = self._extract_registry_from_image(image) or 'registry.redhat.io'
+            auth_token = self._process_auth_token(registry_token)
+            
+            auth_data = {
+                "auths": {
+                    registry_host: {
+                        "auth": auth_token
+                    }
+                }
+            }
+            
+            # Add common registry fallbacks for better compatibility
+            if registry_host not in ['quay.io', 'registry.redhat.io', 'docker.io']:
+                auth_data["auths"]["registry.redhat.io"] = {"auth": auth_token}
+                auth_data["auths"]["quay.io"] = {"auth": auth_token}
+            
+            # Write new Docker config
+            with open(docker_config_file, 'w') as f:
+                json.dump(auth_data, f, indent=2)
+            
+            logger.debug(f"Created temporary Docker config for registry: {registry_host}")
+            
+            # Run OPM command without REGISTRY_AUTH_FILE (forces use of default Docker config)
+            logger.debug(f"Second attempt - Running opm command with Docker config fallback: {' '.join(cmd)}")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=NetworkConstants.BUNDLE_EXTRACTION_TIMEOUT
+                # No env override - let opm use default Docker config location
+            )
+            
+            if result.returncode == 0:
+                logger.info("Docker config fallback authentication succeeded")
+            else:
+                logger.warning("Docker config fallback authentication also failed")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error during Docker config fallback: {e}")
+            raise BundleProcessingError(f"Docker config fallback failed: {e}")
+            
+        finally:
+            # GUARANTEE: Always restore original config, regardless of success/failure
+            try:
+                # Remove our temporary config file
+                if docker_config_file.exists():
+                    docker_config_file.unlink()
+                    logger.debug("Removed temporary Docker config file")
+                
+                # Restore original config if we backed it up
+                if backup_created and backup_config_file.exists():
+                    backup_config_file.rename(docker_config_file)
+                    logger.debug("Restored original Docker config from backup")
+                elif not original_existed and docker_config_dir.exists():
+                    # If original didn't exist and directory is empty, clean up
+                    try:
+                        if not any(docker_config_dir.iterdir()):
+                            docker_config_dir.rmdir()
+                            logger.debug("Cleaned up empty .docker directory")
+                    except OSError:
+                        # Directory not empty or other issue, ignore
+                        pass
+                        
+            except Exception as cleanup_error:
+                logger.error(f"Error during Docker config cleanup: {cleanup_error}")
+                # Don't raise here - we want to return the original command result
     
     def validate_image(self, image: str, registry_token: str = None) -> bool:
         """
