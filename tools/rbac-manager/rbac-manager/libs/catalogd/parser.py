@@ -6,7 +6,7 @@ Handles parsing of newline-delimited JSON responses from catalogd service.
 
 import json
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Callable, Optional
 
 from ..core.exceptions import ParsingError
 
@@ -81,6 +81,32 @@ class NDJSONParser:
         except Exception as e:
             raise ParsingError(f"Failed to filter items by schema '{schema}': {e}")
     
+    def _filter_and_extract(self, items: List[Dict[str, Any]], filter_func: Callable[[Dict[str, Any]], bool], 
+                           key_to_extract: str, transform_func: Optional[Callable[[str], str]] = None) -> List[str]:
+        """
+        Generic helper method to filter items and extract unique values
+        
+        Args:
+            items: List of dictionaries to process
+            filter_func: Function that takes an item and returns True if it should be included
+            key_to_extract: Key name to extract from matching items
+            transform_func: Optional function to transform extracted values
+            
+        Returns:
+            Sorted list of unique extracted values
+        """
+        values = set()
+        
+        for item in items:
+            if filter_func(item):
+                value = item.get(key_to_extract)
+                if value:
+                    if transform_func:
+                        value = transform_func(value)
+                    values.add(value)
+        
+        return sorted(list(values))
+    
     def extract_packages(self, items: List[Dict[str, Any]]) -> List[str]:
         """
         Extract package names from parsed catalog data
@@ -92,15 +118,11 @@ class NDJSONParser:
             List of unique package names
         """
         try:
-            packages = set()
-            
-            for item in items:
-                if item.get('schema') == 'olm.package':
-                    package_name = item.get('name')
-                    if package_name:
-                        packages.add(package_name)
-            
-            package_list = sorted(list(packages))
+            package_list = self._filter_and_extract(
+                items, 
+                lambda item: item.get('schema') == 'olm.package', 
+                'name'
+            )
             logger.debug(f"Extracted {len(package_list)} unique packages")
             return package_list
             
@@ -119,16 +141,12 @@ class NDJSONParser:
             List of channel names for the package
         """
         try:
-            channels = set()
-            
-            for item in items:
-                if (item.get('schema') == 'olm.channel' and 
-                    item.get('package') == package_name):
-                    channel_name = item.get('name')
-                    if channel_name:
-                        channels.add(channel_name)
-            
-            channel_list = sorted(list(channels))
+            channel_list = self._filter_and_extract(
+                items,
+                lambda item: (item.get('schema') == 'olm.channel' and 
+                             item.get('package') == package_name),
+                'name'
+            )
             logger.debug(f"Extracted {len(channel_list)} channels for package '{package_name}'")
             return channel_list
             
