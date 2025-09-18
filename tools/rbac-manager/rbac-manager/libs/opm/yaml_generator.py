@@ -5,7 +5,7 @@ Generates Kubernetes YAML manifests from OPM bundle metadata.
 """
 
 import yaml
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from .base_generator import BaseGenerator, ManifestTemplates
 from ..core.constants import OPMConstants, KubernetesConstants
 
@@ -30,38 +30,38 @@ class YAMLManifestGenerator(BaseGenerator):
         package_name = bundle_metadata.get('package_name', 'my-operator')
         operator_name = operator_name or package_name
         
+        # Perform centralized RBAC analysis once
+        rbac_analysis = self.analyze_rbac_components(bundle_metadata)
+        components_needed = rbac_analysis['components_needed']
+        rules = rbac_analysis['rules']
+        
         manifests = {}
         
-        # Generate ServiceAccount
+        # Generate ServiceAccount (always needed)
         manifests[f'{operator_name}-serviceaccount'] = self._generate_service_account(
             operator_name, namespace
         )
         
-        # Generate ClusterRoles
+        # Generate ClusterRoles using pre-calculated rules
         manifests[f'{operator_name}-clusterrole'] = self._generate_cluster_roles(
-            bundle_metadata, operator_name
+            rules, operator_name, package_name, components_needed
         )
         
-        # Generate ClusterRoleBindings
+        # Generate ClusterRoleBindings using components analysis
         manifests[f'{operator_name}-clusterrolebinding'] = self._generate_cluster_role_bindings(
-            operator_name, namespace
+            operator_name, namespace, components_needed
         )
-        
-        # Generate Roles and RoleBindings using centralized component analysis
-        rbac_analysis = self.analyze_rbac_components(bundle_metadata)
-        components_needed = rbac_analysis['components_needed']
         
         # Generate namespace Role and RoleBinding if needed
         if components_needed['namespace_role']:
             manifests[f'{operator_name}-role'] = self._generate_roles(
-                bundle_metadata, operator_name, namespace
+                rules['namespace_role'], operator_name, namespace
             )
             
             if components_needed['role_bindings']:
                 manifests[f'{operator_name}-rolebinding'] = self._generate_role_bindings(
                     operator_name, namespace
                 )
-        # For cluster-only permissions (Quay) or permissions-only (legacy), no Roles needed
         
         return manifests
     
@@ -91,48 +91,40 @@ class YAMLManifestGenerator(BaseGenerator):
         
         return '\n---\n'.join(yaml_parts)
     
-    def _generate_cluster_roles(self, bundle_metadata: Dict[str, Any], 
-                              operator_name: str) -> str:
-        """Generate ClusterRole YAML manifests with security header"""
-        package_name = bundle_metadata.get('package_name', operator_name)
+    def _generate_cluster_roles(self, rules: Dict[str, Any], operator_name: str, 
+                              package_name: str, components_needed: Dict[str, bool]) -> str:
+        """
+        Generate ClusterRole YAML manifests from pre-calculated rules
         
+        Args:
+            rules: Pre-calculated rules dictionary from analyze_rbac_components
+            operator_name: Name of the operator
+            package_name: Package name for header comment
+            components_needed: Dictionary indicating which components are needed
+            
+        Returns:
+            YAML string containing ClusterRole manifests
+        """
         # Generate security header comment for YAML manifests
         header = self._generate_security_header_comment(operator_name, package_name, 'yaml')
         
         manifests = []
         
-        # Operator ClusterRole (installer management permissions + bundled cluster resources)
-        operator_rules = self._generate_operator_rules(bundle_metadata)
+        # Installer ClusterRole (always needed - operator management permissions)
+        if components_needed['installer_cluster_role'] and rules['installer_cluster_role']:
+            operator_cr_name = f"{operator_name}-installer-clusterrole"
+            
+            operator_cr = ManifestTemplates.cluster_role_template(
+                operator_cr_name, operator_name, rules['installer_cluster_role']
+            )
+            manifests.append(operator_cr)
         
-        # Add bundled cluster-scoped resource permissions (including specific ClusterRole rules)
-        bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
-        combined_operator_rules = operator_rules + bundled_cluster_rules
-        
-        # Apply DRY deduplication to combined operator rules
-        deduplicated_operator_rules = self._process_and_deduplicate_rules(combined_operator_rules)
-        
-        operator_cr_name = f"{operator_name}-installer-clusterrole"
-        
-        operator_cr = ManifestTemplates.cluster_role_template(
-            operator_cr_name, operator_name, deduplicated_operator_rules
-        )
-        manifests.append(operator_cr)
-        
-        # Grantor ClusterRole (CSV permissions + bundled cluster resources EXCLUDING ClusterRoles)
-        grantor_rules = self._generate_grantor_rules(bundle_metadata)
-        
-        # Add bundled cluster-scoped resource permissions (excluding ClusterRoles)
-        bundled_cluster_rules = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
-        combined_grantor_rules = grantor_rules + bundled_cluster_rules
-        
-        # Apply DRY deduplication to combined grantor rules
-        deduplicated_grantor_rules = self._process_and_deduplicate_rules(combined_grantor_rules)
-        
-        if deduplicated_grantor_rules:
+        # Grantor ClusterRole (if needed - application-specific permissions)
+        if components_needed['grantor_cluster_role'] and rules['grantor_cluster_role']:
             grantor_cr_name = f"{operator_name}-installer-rbac-clusterrole"
             
             grantor_cr = ManifestTemplates.cluster_role_template(
-                grantor_cr_name, operator_name, deduplicated_grantor_rules
+                grantor_cr_name, operator_name, rules['grantor_cluster_role']
             )
             manifests.append(grantor_cr)
         
@@ -141,73 +133,68 @@ class YAMLManifestGenerator(BaseGenerator):
         
         return f"{header}\n{yaml_content}"
     
-    def _generate_cluster_role_bindings(self, operator_name: str, namespace: str) -> str:
-        """Generate ClusterRoleBinding YAML manifests"""
+    def _generate_cluster_role_bindings(self, operator_name: str, namespace: str, 
+                                       components_needed: Dict[str, bool]) -> str:
+        """
+        Generate ClusterRoleBinding YAML manifests from components analysis
+        
+        Args:
+            operator_name: Name of the operator
+            namespace: Target namespace
+            components_needed: Dictionary indicating which components are needed
+            
+        Returns:
+            YAML string containing ClusterRoleBinding manifests
+        """
         manifests = []
         sa_name = f"{operator_name}-installer"
         
-        # Operator ClusterRoleBinding
-        operator_crb_name = f"{operator_name}-installer-clusterrolebinding"
-        operator_cr_name = f"{operator_name}-installer-clusterrole"
+        # Installer ClusterRoleBinding (always needed)
+        if components_needed['installer_cluster_role']:
+            operator_crb_name = f"{operator_name}-installer-clusterrolebinding"
+            operator_cr_name = f"{operator_name}-installer-clusterrole"
+            
+            operator_crb = ManifestTemplates.cluster_role_binding_template(
+                operator_crb_name, operator_name, operator_cr_name, sa_name, namespace
+            )
+            manifests.append(operator_crb)
         
-        operator_crb = ManifestTemplates.cluster_role_binding_template(
-            operator_crb_name, operator_name, operator_cr_name, sa_name, namespace
-        )
-        manifests.append(operator_crb)
-        
-        # Grantor ClusterRoleBinding (if grantor rules exist)
-        grantor_crb_name = f"{operator_name}-installer-rbac-clusterrolebinding"
-        grantor_cr_name = f"{operator_name}-installer-rbac-clusterrole"
-        
-        grantor_crb = ManifestTemplates.cluster_role_binding_template(
-            grantor_crb_name, operator_name, grantor_cr_name, sa_name, namespace
-        )
-        manifests.append(grantor_crb)
+        # Grantor ClusterRoleBinding (if grantor ClusterRole exists)
+        if components_needed['grantor_cluster_role']:
+            grantor_crb_name = f"{operator_name}-installer-rbac-clusterrolebinding"
+            grantor_cr_name = f"{operator_name}-installer-rbac-clusterrole"
+            
+            grantor_crb = ManifestTemplates.cluster_role_binding_template(
+                grantor_crb_name, operator_name, grantor_cr_name, sa_name, namespace
+            )
+            manifests.append(grantor_crb)
         
         # Convert to YAML using shared helper method
         return self._join_manifests_to_yaml(manifests)
     
-    def _generate_roles(self, bundle_metadata: Dict[str, Any], 
+    def _generate_roles(self, role_rules: List[Dict[str, Any]], 
                        operator_name: str, namespace: str) -> str:
-        """Generate Role YAML manifests"""
+        """
+        Generate Role YAML manifests from pre-calculated rules
+        
+        Args:
+            role_rules: Pre-calculated role rules from analyze_rbac_components
+            operator_name: Name of the operator
+            namespace: Target namespace
+            
+        Returns:
+            YAML string containing Role manifests
+        """
         manifests = []
         
-        # Generate Role with CSV namespace permissions + installer-specific permissions
-        # Import CSV namespace permissions as-is
-        csv_namespace_rules = self._generate_namespace_rules(bundle_metadata)
-        
-        # Get cluster rules to filter overlaps (use the deduplicated version)
-        cluster_grantor_rules = []
-        for perm in bundle_metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []):
-            cluster_grantor_rules.extend(perm.get('rules', []))
-        
-        # Add bundled cluster rules and deduplicate (to match what was done for ClusterRole)
-        bundled_cluster_rules = self._generate_bundled_cluster_resource_rules(bundle_metadata)
-        combined_cluster_rules = cluster_grantor_rules + bundled_cluster_rules
-        deduplicated_cluster_rules = self._process_and_deduplicate_rules(combined_cluster_rules)
-        
-        # Filter out any namespace rules that overlap with cluster rules
-        unique_namespace_rules = self._filter_unique_role_rules(csv_namespace_rules, deduplicated_cluster_rules)
-        
-        # Add installer-specific permissions
-        installer_rules = self._generate_installer_service_account_rules(bundle_metadata)
-        
-        # Combine unique namespace rules with installer rules
-        combined_role_rules = unique_namespace_rules + installer_rules
-        
-        # Apply DRY deduplication to combined role rules
-        if combined_role_rules:
-            deduplicated_role_rules = self._process_and_deduplicate_rules(combined_role_rules)
-            # Filter again against cluster rules to remove any remaining overlaps
-            final_role_rules = self._filter_unique_role_rules(deduplicated_role_rules, deduplicated_cluster_rules)
+        # Generate Role only if we have rules
+        if role_rules:
+            role_name = f"{operator_name}-installer-role"
             
-            if final_role_rules:
-                role_name = f"{operator_name}-installer-role"
-                
-                role_manifest = ManifestTemplates.role_template(
-                    role_name, namespace, operator_name, final_role_rules
-                )
-                manifests.append(role_manifest)
+            role_manifest = ManifestTemplates.role_template(
+                role_name, namespace, operator_name, role_rules
+            )
+            manifests.append(role_manifest)
         
         # Convert to YAML using shared helper method
         return self._join_manifests_to_yaml(manifests)
