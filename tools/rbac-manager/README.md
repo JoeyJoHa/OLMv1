@@ -49,7 +49,7 @@ pip install -r requirements.txt
 - **Option 1**: Valid kubeconfig file configured for your OpenShift/Kubernetes cluster
 - **Option 2**: Provide OpenShift URL and token for direct API access (`--openshift-url` and `--openshift-token`)
 
-> **💡 Note**: Kubernetes access is only required for catalogd integration (listing catalogs, querying packages). The core `--opm` functionality works offline with just the bundle image URL.
+> **💡 Note**: Kubernetes access is only required for catalogd integration (listing catalogs, querying packages). The core `opm` command functionality works offline with just the bundle image URL.
 
 ## Tool Structure
 
@@ -395,7 +395,7 @@ The RBAC Manager implements intelligent permission optimization to create clean,
 
 The tool generates different outputs based on the command used:
 
-#### YAML Manifests (default `--opm` output)
+#### YAML Manifests (default `opm` command output)
 
 - `01-serviceaccount.yaml`: ServiceAccount for the operator installer
 - `02-clusterrole.yaml`: ClusterRoles for operator management and grantor permissions
@@ -464,7 +464,7 @@ generated-quay-operator/
 Enable debug logging for troubleshooting:
 
 ```bash
-python3 rbac-manager.py --debug --catalogd --catalog-name test-catalog
+python3 rbac-manager.py catalogd --debug --catalog-name test-catalog
 ```
 
 ### Skip TLS Verification
@@ -472,7 +472,7 @@ python3 rbac-manager.py --debug --catalogd --catalog-name test-catalog
 For development environments with self-signed certificates:
 
 ```bash
-python3 rbac-manager.py --skip-tls --catalogd \
+python3 rbac-manager.py catalogd --skip-tls \
   --openshift-url https://api.dev-cluster.local:6443 \
   --openshift-token your-token
 ```
@@ -515,7 +515,7 @@ The generated Helm values files are designed to work with the generic OLMv1 Helm
    - Try using direct API access with `--openshift-url` and `--openshift-token`
 
 4. **"Image appears to be an index image"**
-   - Use --catalogd instead of --opm for index images
+   - Use `catalogd` command instead of `opm` command for index images
    - Create a ClusterCatalog resource first
 
 5. **"Kubernetes client not initialized"**
@@ -527,5 +527,5 @@ The generated Helm values files are designed to work with the generic OLMv1 Helm
 Use `--debug` flag to see detailed logging:
 
 ```bash
-python3 rbac-manager.py --debug --opm --image your-bundle-image
+python3 rbac-manager.py opm --debug --image your-bundle-image
 ```
