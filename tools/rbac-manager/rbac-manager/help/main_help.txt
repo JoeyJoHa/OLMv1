@@ -1,38 +1,47 @@
-RBAC Manager - Operator Bundle Metadata and RBAC Resource Generator
+RBAC Manager - Extract RBAC permissions from operator bundles and query catalogs
 
 USAGE:
     rbac-manager [GLOBAL OPTIONS] <COMMAND> [COMMAND OPTIONS]
 
 DESCRIPTION:
-    A comprehensive tool to fetch operator bundle metadata using opm binary
-    and interact with OpenShift catalogs. Generates RBAC resources and 
-    Helm values for OLMv1 operators.
+    A Python tool for extracting and managing RBAC permissions from operator bundles 
+    using the opm binary and interacting with OpenShift catalogs via the catalogd service.
+    Automates the generation of secure RBAC resources and Helm values for OLMv1 operators.
 
 COMMANDS:
-    list-catalogs         List all available ClusterCatalogs with serving status and age                                                              
-    catalogd              Query catalogd service for package information
-    opm                   Extract metadata from operator bundle images
+    list-catalogs         List all ClusterCatalogs in the cluster
+    catalogd              Query catalogd service for package information and generate configs
+    opm                   Extract RBAC from bundle using OPM and generate manifests
 
 GLOBAL OPTIONS:
-    --help                Show this help message
-    --config FILE         Use configuration file for default values
+    -h, --help            Show this help message and exit
+    --debug               Enable debug logging
+    --examples            Show usage examples for specific commands
 
 EXAMPLES:
-    # List all catalogs with serving status and age
-    rbac-manager list-catalogs --skip-tls
+    # List all catalogs
+    rbac-manager list-catalogs --openshift-url https://api.cluster.com:6443 --openshift-token TOKEN
 
-    # Query catalogd interactively
-    rbac-manager catalogd
+    # Query catalogd for packages
+    rbac-manager catalogd --catalog-name openshift-community-operators
 
-    # Extract bundle metadata
-    rbac-manager opm --image quay.io/redhat/quay-operator-bundle:v3.10.13
+    # Generate configuration template
+    rbac-manager catalogd --generate-config
 
-    # Generate configuration from catalogd data
-    rbac-manager catalogd --generate-config --package argocd-operator --channel alpha
+    # Generate config with real data
+    rbac-manager catalogd --generate-config --catalog-name openshift-community-operators \
+        --package argocd-operator --channel alpha --version 0.8.0 --output ./config
+
+    # Extract RBAC using configuration file
+    rbac-manager opm --config argocd-operator-rbac-config.yaml
+
+    # Extract RBAC directly from bundle image
+    rbac-manager opm --image quay.io/redhat/quay-operator-bundle@sha256:abc123... --helm
 
     # Show examples for specific commands
-    rbac-manager opm --examples
+    rbac-manager list-catalogs --examples
     rbac-manager catalogd --examples
+    rbac-manager opm --examples
 
-For more information about a specific command, use:
+For detailed help on a specific command, use:
     rbac-manager <command> --help

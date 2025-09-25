@@ -1,6 +1,6 @@
 # RBAC Manager Tool
 
-A Python tool for extracting and managing RBAC permissions from operator bundles using the `opm` binary and interacting with OpenShift catalogs via `catalogd`. This tool automates the generation of secure RBAC resources and Helm values for OLMv1 operator deployments.
+A Python tool for extracting and managing RBAC permissions from operator bundles using the `opm` binary and interacting with OpenShift catalogs via the `catalogd` service. The tool uses `opm` to interact with bundle images stored at container registries, and communicates with the catalogd service inside the `openshift-catalogd` namespace using HTTP requests. This tool automates the generation of secure RBAC resources and Helm values for OLMv1 operator deployments.
 
 ## Features
 

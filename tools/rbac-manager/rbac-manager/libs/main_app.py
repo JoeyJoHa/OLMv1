@@ -9,7 +9,6 @@ import json
 import logging
 import os
 import sys
-import tempfile
 import time
 from typing import Dict, Any, Optional
 
@@ -458,25 +457,24 @@ def create_argument_parser():
     output_parser = argparse.ArgumentParser(add_help=False)
     output_parser.add_argument('--output', help='Output directory for generated files')
     
-    # Main parser
+    # Main parser with custom help override
     parser = argparse.ArgumentParser(
         description='RBAC Manager - Extract RBAC permissions from operator bundles and query catalogs',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  rbac-manager list-catalogs --skip-tls
-  rbac-manager catalogd --generate-config --package argocd-operator --channel alpha
-  rbac-manager opm --config config.yaml
-  
-Use --help with specific commands for detailed help.
-        """
+        add_help=False  # Disable default help to override behavior
+    )
+    
+    # Add custom help argument that shows main_help.txt
+    parser.add_argument(
+        '-h', '--help', 
+        action='store_true',
+        help='Show this help message and exit'
     )
     
     # Create subparsers for commands
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # list-catalogs subcommand: inherits from common_parser and auth_parser
-    list_parser = subparsers.add_parser(
+    _ = subparsers.add_parser(
         'list-catalogs',
         parents=[common_parser, auth_parser],
         help='List all ClusterCatalogs',
@@ -818,6 +816,12 @@ def main():
         
         parser = create_argument_parser()
         args = parser.parse_args()
+        
+        # Handle custom help behavior - show main_help.txt when --help used without subcommand
+        if hasattr(args, 'help') and args.help and not args.command:
+            help_manager = HelpManager()
+            help_manager.show_help()
+            return
         
         # Handle openshift-namespace (alias for namespace) if available
         if hasattr(args, 'openshift_namespace') and args.openshift_namespace:
