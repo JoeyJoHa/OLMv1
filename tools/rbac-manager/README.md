@@ -515,8 +515,8 @@ The generated Helm values files are designed to work with the generic OLMv1 Helm
    - Try using direct API access with `--openshift-url` and `--openshift-token`
 
 4. **"Image appears to be an index image"**
-   - Use `catalogd` command instead of `opm` command for index images
    - Create a ClusterCatalog resource first
+   - Use `catalogd` command instead of `opm` command for index images
 
 5. **"Kubernetes client not initialized"**
    - Either configure kubeconfig, OR
