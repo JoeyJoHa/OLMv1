@@ -17,7 +17,8 @@
 
 ## Overview
 
-The Operator Lifecycle Manager V1 (OLMv1) is a declarative, pull-based system designed for managing Kubernetes operators with a focus on simplicity and security. This document provides a comprehensive guide to understanding OLMv1's architecture, deployment flow, and practical usage.
+The Operator Lifecycle Manager V1 (OLMv1) is a declarative, pull-based system designed for managing Kubernetes operators with a focus on simplicity and security. This repository provides a comprehensive guide to understanding OLMv1's architecture, deployment flow, and practical usage.
+for more information visit the official documentation [openshift/operator-framework-operator-controller](https://github.com/openshift/operator-framework-operator-controller)
 
 ## Architecture
 
@@ -27,11 +28,9 @@ OLMv1 follows a declarative architecture where administrators define desired sta
 
 | Component | Description | Purpose |
 |-----------|-------------|---------|
-| **Administrator/GitOps Tool** | Human operator or automation tool | Creates ClusterExtension CRs to define desired operator states |
 | **Operator Controller** | Core OLMv1 component | Watches ClusterExtension CRs and orchestrates operator lifecycle |
 | **catalogd** | Metadata service | Hosts and serves operator metadata from File-Based Catalogs |
 | **File-Based Catalogs (FBCs)** | Lightweight metadata collections | Source of truth for operator bundles, channels, and update graphs |
-| **Installed Operator Bundle** | Deployed operator resources | Includes deployment, ServiceAccount, RBAC, and CRDs |
 
 ## Deployment Flow
 
@@ -117,7 +116,7 @@ The guide covers:
 
 ## Using Templates
 
-The `templates/CustomRoles/` directory contains reusable templates for custom RBAC configurations that can be adapted for different operators.
+The `templates/` directory contains reusable templates for custom RBAC configurations that can be adapted for different operators.
 
 ## RBAC Manager Tool
 
@@ -126,11 +125,9 @@ The project includes an RBAC Manager tool that automates the extraction and proc
 ### Key Features
 
 - **Catalog Discovery**: List and query available operators from cluster catalogs
-- **Permission Extraction**: Extract RBAC permissions from operator bundle images
-- **Smart RBAC Generation**: Generate appropriate ClusterRoles and Roles based on operator requirements
+- **Smart RBAC Extraction and Generation**: Extract RBAC permissions from operator bundle images and generate appropriate ClusterRoles and Roles based on operator requirements
 - **Multiple Output Formats**: Support for both Kubernetes YAML manifests and Helm values
 - **Configuration Management**: Generate and reuse configuration files for consistent deployments
-- **Live Cluster Integration**: Extract metadata from live OpenShift clusters
 
 ### Integration with OLMv1 Workflow
 
@@ -150,9 +147,7 @@ This project includes comprehensive documentation to help you understand and use
 ### Core Documentation
 
 - **[Deployment Guide](docs/DEPLOYMENT.md)**: Step-by-step instructions for deploying operators with OLMv1
-- **[API Reference](docs/API.md)**: Complete API documentation for all components
-- **[Command Reference](docs/COMMAND_REFERENCE.md)**: Practical OPM and catalogd commands for operator analysis
-- **[Project Structure](docs/PROJECT_STRUCTURE.md)**: Repository organization and development guidelines
+- **[Manual Command Reference](docs/COMMAND_REFERENCE.md)**: Manual OPM render and curl commands for advanced users and automation
 
 ### Tool Documentation
 

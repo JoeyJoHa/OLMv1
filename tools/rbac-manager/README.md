@@ -4,33 +4,27 @@ A Python tool for extracting and managing RBAC permissions from operator bundles
 
 ## Features
 
-- **🔍 Catalog Discovery**: List and query OpenShift ClusterCatalogs for available operators
-- **📡 Catalogd Integration**: Port-forward to catalogd service and fetch real-time package information
-- **⚙️ Configuration Management**: Generate and reuse configuration files for consistent deployments
-- **🌐 Real Cluster Integration**: Extract actual bundle images and metadata from live OpenShift clusters
-- **📦 Bundle Analysis**: Extract comprehensive metadata from operator bundle images using `opm render`
-- **🔐 Smart RBAC Generation**: Auto-generate secure RBAC resources with intelligent permissions logic:
-  - **Both `clusterPermissions` + `permissions`**: ClusterRoles + grantor Roles (e.g., ArgoCD)
-  - **Only `permissions`**: Treat as ClusterRoles (e.g., Quay operator)
+- **Catalog Discovery**: List and query OpenShift ClusterCatalogs for available operators
+- **Configuration Management**: Generate and reuse configuration files for consistent deployments
+- **Bundle Analysis**: Extract comprehensive metadata from operator bundle images using `opm render`
+- **Smart RBAC Generation**: Auto-generate secure RBAC resources with intelligent permissions logic:
+  - **Both `clusterPermissions` + `permissions`**: ClusterRoles + grantor Roles
+  - **Only `permissions`**: Treat as ClusterRoles
   - **Only `clusterPermissions`**: ClusterRoles only
-- **🧹 Permission Optimization**: Advanced permission deduplication eliminates redundant rules:
+- **Permission Optimization**: Advanced permission deduplication eliminates redundant rules:
   - Removes duplicate permissions between ClusterRoles and Roles
   - Preserves resource-specific rules with `resourceNames`
   - Handles wildcard permissions intelligently
   - Reduces RBAC complexity and improves security posture
-- **🎨 Enhanced YAML Formatting**: Clean formatting for readable Helm values with channel guidance:
+- **Enhanced YAML Formatting**: Clean formatting for readable Helm values with channel guidance:
   - Consistent flow-style arrays in both YAML and Helm outputs
   - Clean manifests without YAML anchors/aliases
   - Shared formatting logic for consistency
-- **🏗️ Clean Architecture**: Well-structured codebase with modular design:
-  - Centralized error handling with consistent patterns
-  - Shared helper methods and base classes
-  - Atomic file operations and caching improvements
-- **🛡️ Security Best Practices**: Implements OLMv1 security patterns with comprehensive RBAC optimization
-- **📋 Comprehensive Output**: ServiceAccount, ClusterRole, ClusterRoleBinding, Role, RoleBinding manifests
-- **🔧 Interactive Mode**: User-friendly prompts for catalog and package selection
-- **📊 Debug Logging**: Detailed logging for troubleshooting and analysis
-- **🧪 Comprehensive Test Suite**: Extensive test coverage with consistent patterns:
+- **Security Best Practices**: Implements OLMv1 security patterns with comprehensive RBAC optimization
+- **Comprehensive Output**: ServiceAccount, ClusterRole, ClusterRoleBinding, Role, RoleBinding manifests
+- **Interactive Mode**: User-friendly prompts for catalog and package selection
+- **Debug Logging**: Detailed logging for troubleshooting and analysis
+- **Comprehensive Test Suite**: Extensive test coverage with consistent patterns:
   - Well-structured test methods using helper patterns
   - Consistent test execution across catalogd and OPM tests
   - Improved maintainability and reliability
@@ -49,7 +43,6 @@ pip install -r requirements.txt
 
 1. **opm**: Operator Package Manager CLI tool
    - Download from [operator-framework/operator-registry releases](https://github.com/operator-framework/operator-registry/releases)
-   - Or install via package manager (e.g., `brew install operator-framework/tap/opm`)
 
 ### Kubernetes Access (for catalogd features only)
 
@@ -63,18 +56,15 @@ pip install -r requirements.txt
 ```tree
 tools/rbac-manager/
 ├── rbac-manager/                     # Main tool package
+│   ├── __init__.py                   # Package initialization
 │   ├── help/                         # Help text files
 │   │   ├── catalogd_examples_help.txt # Catalogd command examples
-│   │   ├── catalogd_help.txt         # Catalogd command help
-│   │   ├── config_help.txt           # Configuration help
 │   │   ├── examples_help.txt         # Comprehensive examples
-│   │   ├── generate_config_examples_help.txt # Config generation examples
 │   │   ├── list_catalogs_examples_help.txt # List catalogs examples
-│   │   ├── list_catalogs_help.txt    # List catalogs help
 │   │   ├── main_help.txt             # Main command help
-│   │   ├── opm_examples_help.txt     # OPM command examples
-│   │   └── opm_help.txt              # OPM command help
+│   │   └── opm_examples_help.txt     # OPM command examples
 │   └── libs/                         # Core libraries
+│       ├── __init__.py               # Library exports
 │       ├── catalogd/                 # Catalogd integration
 │       │   ├── __init__.py           # Comprehensive module exports
 │       │   ├── cache.py              # Caching functionality
@@ -97,7 +87,6 @@ tools/rbac-manager/
 │       │   ├── helm_generator.py     # Helm values generation
 │       │   ├── processor.py          # Bundle processing logic
 │       │   └── yaml_generator.py     # YAML manifest generation
-│       ├── __init__.py               # Library exports
 │       ├── help_manager.py           # Help system manager
 │       └── main_app.py               # Main application logic
 ├── rbac-manager.py                   # CLI entry point
@@ -273,25 +262,52 @@ python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle
 python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --output ./rbac-files
 ```
 
-### Configuration-Based Workflow
+### Configuration-Based Workflow (Recommended)
 
 ```bash
 # Step 1: List available catalogs
-python3 rbac-manager.py list-catalogs --openshift-url https://api.cluster.example.com:6443 --openshift-token sha256~token --skip-tls
+python3 rbac-manager.py list-catalogs \
+  --openshift-url https://api.cluster.example.com:6443 \
+  --openshift-token sha256~token
 
 # Step 2: Generate configuration with real cluster data  
 python3 rbac-manager.py catalogd --generate-config \
   --catalog-name openshift-community-operators \
   --package argocd-operator --channel alpha --version 0.8.0 \
   --openshift-url https://api.cluster.example.com:6443 \
-  --openshift-token sha256~token --skip-tls \
+  --openshift-token sha256~token \
   --output ./config
 
 # Step 3: Extract RBAC using configuration (filename auto-generated from operator name)
 python3 rbac-manager.py opm --config ./config/argocd-operator-rbac-config.yaml
 
-# Step 4: For Helm values, modify config file to set output.type: helm, then:
-python3 rbac-manager.py opm --config ./config/argocd-operator-rbac-config.yaml
+# Step 4: Deploy RBAC resources
+kubectl apply -f argocd-operator-serviceaccount-*.yaml
+kubectl apply -f argocd-operator-clusterrole-*.yaml
+kubectl apply -f argocd-operator-clusterrolebinding-*.yaml
+kubectl apply -f argocd-operator-role-*.yaml
+kubectl apply -f argocd-operator-rolebinding-*.yaml
+```
+
+### Alternative Workflows
+
+#### Direct Bundle Extraction Workflow
+
+```bash
+# Step 1: Extract RBAC directly from bundle image
+python3 rbac-manager.py opm \
+  --image quay.io/openshift-community-operators/argocd-operator@sha256:abc123... \
+  --namespace argocd-operator
+
+# Step 2: Generate Helm values
+python3 rbac-manager.py opm \
+  --image quay.io/openshift-community-operators/argocd-operator@sha256:abc123... \
+  --helm
+
+# Step 3: Save RBAC to files
+python3 rbac-manager.py opm \
+  --image quay.io/openshift-community-operators/argocd-operator@sha256:abc123... \
+  --output ./rbac-files
 ```
 
 ### Command-Specific Flags
@@ -369,10 +385,9 @@ The RBAC Manager implements intelligent permission optimization to create clean,
 
 ### Benefits
 
-- **🔒 Enhanced Security**: Eliminates permission redundancy and potential conflicts
-- **📉 Reduced Complexity**: Fewer RBAC rules to manage and audit
-- **🎯 Precise Permissions**: Preserves granular resource-specific access controls
-- **🚀 Automatic**: No manual intervention required - works out of the box
+- **Enhanced Security**: Eliminates permission redundancy and potential conflicts
+- **Reduced Complexity**: Fewer RBAC rules to manage and audit
+- **Precise Permissions**: Preserves granular resource-specific access controls
 
 ## Output
 
@@ -514,11 +529,3 @@ Use `--debug` flag to see detailed logging:
 ```bash
 python3 rbac-manager.py --debug --opm --image your-bundle-image
 ```
-
-## Contributing
-
-This tool is part of the OLMv1 project. Please follow the project's contribution guidelines and coding standards.
-
-## License
-
-This tool is part of the OLMv1 project and follows the same license terms.
