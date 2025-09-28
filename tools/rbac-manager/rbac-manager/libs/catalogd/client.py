@@ -8,12 +8,15 @@ import logging
 import socket
 from typing import Dict, Any, Tuple, Optional
 
-from kubernetes import client
-from kubernetes.client.rest import ApiException
-from kubernetes.stream import portforward
+try:
+    from kubernetes import client
+    from kubernetes.client.rest import ApiException
+    from kubernetes.stream import portforward
+except ImportError:
+    raise ImportError("kubernetes library is required. Install with: pip install kubernetes")
 
 from ..core.exceptions import CatalogdError, NetworkError
-from ..core.utils import format_bytes, handle_ssl_error
+from ..core.utils import handle_api_error
 from ..core.constants import KubernetesConstants, NetworkConstants, ErrorMessages
 from .cache import CatalogdCache
 from .session import CatalogdSession
@@ -210,7 +213,7 @@ class CatalogdClient:
             raise CatalogdError(f"Failed to discover catalogd service: {e}")
         except Exception as e:
             # Use centralized SSL error handler
-            handle_ssl_error(e, CatalogdError)
+            handle_api_error(e, "Port forwarding failed", CatalogdError)
     
     def create_port_forward(self) -> Tuple[PortForwardManager, int, bool]:
         """
@@ -251,7 +254,7 @@ class CatalogdClient:
             
             # Initialize session manager for performance
             self._session = CatalogdSession(service_name, KubernetesConstants.OPENSHIFT_CATALOGD_NAMESPACE, target_port)
-            self._session.set_port_forward(pf_manager._pf, pf_manager._socket)
+            self._session.set_port_forward(pf_manager._pf, pf_manager._socket, local_port)
             
             logger.info(f"Port-forward established to service/{service_name} ({service_port}->{target_port}) on local port {local_port}")
             return pf_manager, local_port, is_https

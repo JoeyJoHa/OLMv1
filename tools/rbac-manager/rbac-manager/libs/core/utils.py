@@ -7,8 +7,7 @@ Common utility functions used across the RBAC Manager tool.
 import logging
 import re
 import sys
-import urllib3
-from typing import Type
+from typing import Type, Optional
 from urllib.parse import urlparse
 from .exceptions import ConfigurationError, RBACManagerError, AuthenticationError, CatalogdError, NetworkError
 from .constants import ErrorMessages
@@ -17,6 +16,7 @@ from .constants import ErrorMessages
 def setup_logging(debug: bool = False) -> None:
     """
     Set up logging configuration for the application.
+    Separates WARNING/INFO to stdout and ERROR to stderr.
     
     Args:
         debug: Enable debug logging level
@@ -31,28 +31,31 @@ def setup_logging(debug: bool = False) -> None:
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
     
-    # Create console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(level)
-    
     # Create formatter
     formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    console_handler.setFormatter(formatter)
     
-    # Add handler to root logger
-    root_logger.addHandler(console_handler)
+    # Create stdout handler for INFO, WARNING, DEBUG
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(level)
+    stdout_handler.setFormatter(formatter)
+    # Filter to only handle INFO, WARNING, DEBUG (not ERROR)
+    stdout_handler.addFilter(lambda record: record.levelno < logging.ERROR)
+    
+    # Create stderr handler for ERROR and CRITICAL only
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.ERROR)
+    stderr_handler.setFormatter(formatter)
+    
+    # Add handlers to root logger
+    root_logger.addHandler(stdout_handler)
+    root_logger.addHandler(stderr_handler)
     
     if debug:
         logger = logging.getLogger(__name__)
         logger.debug("Debug mode enabled")
-
-
-def disable_ssl_warnings() -> None:
-    """Disable SSL warnings when --skip-tls is used"""
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def is_output_piped() -> bool:
@@ -65,7 +68,7 @@ def is_output_piped() -> bool:
     return not sys.stdout.isatty()
 
 
-def mask_sensitive_info(text: str, url: str = None, token: str = None) -> str:
+def mask_sensitive_info(text: str, url: Optional[str] = None, token: Optional[str] = None) -> str:
     """
     Mask sensitive information in text for logging and debug output.
     
@@ -131,6 +134,66 @@ def mask_sensitive_info(text: str, url: str = None, token: str = None) -> str:
     return masked_text
 
 
+class ValidationConfig:
+    """
+    Configuration-driven validation patterns.
+    
+    Centralizes validation patterns, error messages, and constraints
+    to eliminate code duplication across validation functions.
+    """
+    
+    IMAGE_URL = {
+        'pattern': r'^([a-zA-Z0-9.-]+(?:\:[0-9]+)?\/)?[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)?(?:\:[a-zA-Z0-9._-]+|@sha256\:[a-fA-F0-9]{64})?$',
+        'error': ErrorMessages.ConfigError.INVALID_IMAGE_URL,
+        'name': 'Image',
+        'description': 'Container image URL (registry.com/namespace/image:tag or @sha256:hash)'
+    }
+    
+    NAMESPACE = {
+        'pattern': r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$',
+        'error': ErrorMessages.ConfigError.INVALID_NAMESPACE,
+        'name': 'Namespace',
+        'max_length': 63,
+        'description': 'Kubernetes namespace (lowercase alphanumeric with hyphens)'
+    }
+    
+    OPENSHIFT_URL = {
+        'pattern': r'^https?:\/\/[a-zA-Z0-9.-]+(?:\:[0-9]+)?(?:\/.*)?$',
+        'error': ErrorMessages.ConfigError.INVALID_OPENSHIFT_URL,
+        'name': 'URL',
+        'description': 'OpenShift API URL (https://api.cluster.com:6443)'
+    }
+
+
+def _validate_with_config(value: str, config: dict) -> bool:
+    """
+    Generic validation using configuration-driven approach.
+    
+    Uses a single validation function
+    with configuration objects instead of multiple similar functions.
+    
+    Args:
+        value: The string to validate
+        config: Validation configuration dictionary
+        
+    Returns:
+        bool: True if validation passes
+        
+    Raises:
+        ConfigurationError: If validation fails
+    """
+    # Use the existing helper for pattern validation
+    _validate_input(value, config['pattern'], str(config['error']), config['name'])
+    
+    # Handle additional constraints (e.g., max_length)
+    if 'max_length' in config and len(value) > config['max_length']:
+        raise ConfigurationError(
+            f"{config['name']} too long (max {config['max_length']} chars): {value}"
+        )
+    
+    return True
+
+
 def _validate_input(value: str, pattern: str, error_template: str, name: str) -> bool:
     """
     Private helper function to validate input against a regex pattern.
@@ -169,12 +232,7 @@ def validate_image_url(image: str) -> bool:
     Raises:
         ConfigurationError: If image URL is invalid
     """
-    # Basic validation for container image format
-    # registry.com/namespace/image:tag or registry.com/namespace/image@sha256:hash
-    # Also supports localhost:port/image:tag format
-    image_pattern = r'^([a-zA-Z0-9.-]+(?:\:[0-9]+)?\/)?[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)?(?:\:[a-zA-Z0-9._-]+|@sha256\:[a-fA-F0-9]{64})?$'
-    
-    return _validate_input(image, image_pattern, str(ErrorMessages.ConfigError.INVALID_IMAGE_URL), "Image")
+    return _validate_with_config(image, ValidationConfig.IMAGE_URL)
 
 
 def validate_namespace(namespace: str) -> bool:
@@ -190,18 +248,7 @@ def validate_namespace(namespace: str) -> bool:
     Raises:
         ConfigurationError: If namespace is invalid
     """
-    # Kubernetes namespace validation
-    # Must be lowercase alphanumeric with hyphens, max 63 chars
-    namespace_pattern = r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
-    
-    # First validate the pattern
-    _validate_input(namespace, namespace_pattern, str(ErrorMessages.ConfigError.INVALID_NAMESPACE), "Namespace")
-    
-    # Additional length validation specific to namespaces
-    if len(namespace) > 63:
-        raise ConfigurationError(f"Namespace too long (max 63 chars): {namespace}")
-    
-    return True
+    return _validate_with_config(namespace, ValidationConfig.NAMESPACE)
 
 
 def validate_openshift_url(url: str) -> bool:
@@ -217,10 +264,7 @@ def validate_openshift_url(url: str) -> bool:
     Raises:
         ConfigurationError: If URL is invalid
     """
-    # Basic URL validation for OpenShift API
-    url_pattern = r'^https?:\/\/[a-zA-Z0-9.-]+(?:\:[0-9]+)?(?:\/.*)?$'
-    
-    return _validate_input(url, url_pattern, str(ErrorMessages.ConfigError.INVALID_OPENSHIFT_URL), "URL")
+    return _validate_with_config(url, ValidationConfig.OPENSHIFT_URL)
 
 
 def sanitize_filename(filename: str) -> str:
@@ -288,95 +332,73 @@ def truncate_string(text: str, max_length: int = 100, suffix: str = "...") -> st
     return text[:max_length - len(suffix)] + suffix
 
 
-def handle_ssl_error(error: Exception, exception_class: Type[RBACManagerError] = AuthenticationError) -> None:
+def handle_api_error(
+    error: Exception, 
+    context: str = "", 
+    exception_class: Optional[Type[RBACManagerError]] = None
+) -> None:
     """
-    Centralized SSL error handling with user-friendly messages
+    Unified error handling function that inspects exceptions and raises appropriate custom exceptions
+    
+    This function consolidates SSL, network, and API error handling into a single, comprehensive
+    error handler that can determine the appropriate exception type and user-friendly message
+    based on the error characteristics.
     
     Args:
-        error: The caught exception
-        exception_class: The specific exception class to raise
+        error: The caught exception to analyze and handle
+        context: Optional context information for better error messages
+        exception_class: The specific exception class to raise (defaults based on error type)
         
     Raises:
-        RBACManagerError: Appropriate error type with user-friendly message
-    """
-    error_str = str(error)
-    
-    if "certificate verify failed" in error_str or "CERTIFICATE_VERIFY_FAILED" in error_str:
-        raise exception_class(str(ErrorMessages.SSLError.CERT_VERIFICATION_FAILED))
-    elif "SSLError" in error_str or "SSL:" in error_str:
-        raise exception_class(str(ErrorMessages.SSLError.CONNECTION_ERROR).format(error=error))
-    else:
-        # Re-raise original error if not SSL-related
-        raise exception_class(f"Connection error: {error}")
-
-
-def handle_network_error(error: Exception, context: str = "", exception_class: Type[RBACManagerError] = NetworkError) -> None:
-    """
-    Centralized network error handling with context-specific messages
-    
-    Args:
-        error: The caught exception
-        context: Context information for better error messages
-        exception_class: The specific exception class to raise
-        
-    Raises:
-        RBACManagerError: Appropriate error type with user-friendly message
+        RBACManagerError: Appropriate error type with user-friendly message from ErrorMessages constants
     """
     error_str = str(error).lower()
     
-    if "timeout" in error_str or "connection" in error_str:
-        raise exception_class(f"{context}\n{str(ErrorMessages.NetworkError.CONNECTION_TIMEOUT)}")
-    elif "connection refused" in error_str:
-        raise exception_class(f"{context}\n{str(ErrorMessages.NetworkError.CONNECTION_REFUSED)}")
-    elif "ssl" in error_str and "certificate" in error_str:
-        handle_ssl_error(error, exception_class)
-    else:
-        raise exception_class(f"{context}: {error}")
-
-
-def handle_api_error(error: Exception, exception_class: Type[RBACManagerError] = None) -> None:
-    """
-    Centralized API error handling for Kubernetes API exceptions
-    
-    Args:
-        error: The caught exception (ApiException or other)
-        exception_class: The specific exception class to raise (defaults to CatalogdError)
-        
-    Raises:
-        RBACManagerError: Appropriate error type with user-friendly message
-    """
+    # Determine default exception class based on error type if not provided
     if exception_class is None:
-        exception_class = CatalogdError
+        if any(auth_indicator in error_str for auth_indicator in ["unauthorized", "401", "forbidden", "403"]):
+            exception_class = AuthenticationError
+        elif any(net_indicator in error_str for net_indicator in ["connection", "timeout", "refused", "ssl", "certificate"]):
+            exception_class = NetworkError
+        else:
+            exception_class = CatalogdError
     
-    error_str = str(error).lower()
-    
-    # Check for authentication/authorization errors
-    if "unauthorized" in error_str or "401" in error_str:
-        raise exception_class(
-            "Unauthorized (401). Verify that your token is valid and has permissions. "
-            "If passing via shell, ensure correct syntax (zsh/bash: $TOKEN, PowerShell: $env:TOKEN)."
-        )
-    
-    # Check for forbidden errors
-    if "forbidden" in error_str or "403" in error_str:
-        raise exception_class(
-            "Forbidden (403). Your credentials are valid but lack necessary permissions. "
-            "Contact your cluster administrator to grant appropriate RBAC permissions."
-        )
-    
-    # Check for SSL/TLS related errors
+    # Handle SSL/TLS related errors
     if any(ssl_indicator in error_str for ssl_indicator in ["ssl", "certificate", "tls"]):
-        handle_ssl_error(error, exception_class)
+        if "certificate verify failed" in error_str or "certificate_verify_failed" in error_str:
+            raise exception_class(str(ErrorMessages.SSLError.CERT_VERIFICATION_FAILED))
+        else:
+            raise exception_class(str(ErrorMessages.SSLError.CONNECTION_ERROR).format(error=error))
     
-    # Check for connection-related errors
-    if any(conn_indicator in error_str for conn_indicator in ["connection", "timeout", "refused"]):
-        handle_network_error(error, "API connection failed", exception_class)
+    # Handle authentication/authorization errors
+    if "unauthorized" in error_str or "401" in error_str:
+        raise exception_class(str(ErrorMessages.AuthError.TOKEN_EXPIRED))
     
-    # For other errors, re-raise with the original message
-    raise exception_class(f"API error: {error}")
+    if "forbidden" in error_str or "403" in error_str:
+        raise exception_class(str(ErrorMessages.AuthError.INSUFFICIENT_PERMISSIONS))
+    
+    # Handle network connection errors
+    if "timeout" in error_str:
+        context_msg = f"{context}\n" if context else ""
+        raise exception_class(f"{context_msg}{str(ErrorMessages.NetworkError.CONNECTION_TIMEOUT)}")
+    
+    if "connection refused" in error_str:
+        context_msg = f"{context}\n" if context else ""
+        raise exception_class(f"{context_msg}{str(ErrorMessages.NetworkError.CONNECTION_REFUSED)}")
+    
+    # Handle general connection errors
+    if "connection" in error_str:
+        context_msg = f"{context}: " if context else ""
+        raise exception_class(f"{context_msg}Connection error: {error}")
+    
+    # For other errors, re-raise with context and original message
+    context_msg = f"{context}: " if context else ""
+    raise exception_class(f"{context_msg}{error}")
 
 
-def create_user_friendly_error(error_type: str, details: str, suggestions: list = None) -> str:
+
+
+def create_user_friendly_error(error_type: str, details: str, suggestions: Optional[list] = None) -> str:
     """
     Create a user-friendly error message with suggestions
     

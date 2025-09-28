@@ -16,9 +16,9 @@ from .exceptions import (
 )
 from .protocols import AuthProvider, ConfigProvider, BundleProvider, CatalogdProvider, HelpProvider
 from .utils import (
-    setup_logging, validate_image_url, disable_ssl_warnings,
+    setup_logging, validate_image_url,
     validate_namespace, validate_openshift_url, format_bytes,
-    handle_ssl_error, mask_sensitive_info
+    handle_api_error, mask_sensitive_info
 )
 
 __all__ = [
@@ -49,10 +49,9 @@ __all__ = [
     # Utilities
     'setup_logging',
     'validate_image_url',
-    'disable_ssl_warnings',
     'validate_namespace',
     'validate_openshift_url',
     'format_bytes',
-    'handle_ssl_error',
+    'handle_api_error',
     'mask_sensitive_info'
 ]

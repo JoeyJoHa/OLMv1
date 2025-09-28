@@ -289,7 +289,7 @@ class BundleProcessor:
     
     def _extract_rbac_rules(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Extract and organize RBAC rules using DRY principle
+        Extract and organize RBAC rules
         
         Args:
             metadata: Bundle metadata
@@ -306,14 +306,14 @@ class BundleProcessor:
         # Use set for efficient unique service account collection
         service_accounts_set = set()
         
-        # Extract namespace-scoped rules using helper method (DRY principle)
+        # Extract namespace-scoped rules using helper method
         self._process_permission_block(
             metadata.get(OPMConstants.BUNDLE_PERMISSIONS_KEY, []),
             rbac_rules['namespace_rules'],
             service_accounts_set
         )
         
-        # Extract cluster-scoped rules using helper method (DRY principle)
+        # Extract cluster-scoped rules using helper method
         self._process_permission_block(
             metadata.get(OPMConstants.BUNDLE_CLUSTER_PERMISSIONS_KEY, []),
             rbac_rules['cluster_rules'],
@@ -327,7 +327,7 @@ class BundleProcessor:
     
     def _process_permission_block(self, permissions: List[Dict[str, Any]], rules_list: List[Dict[str, Any]], service_accounts_set: set) -> None:
         """
-        Process a block of permissions and extract rules and service accounts (DRY helper)
+        Process a block of permissions and extract rules and service accounts
         
         Args:
             permissions: List of permission objects to process

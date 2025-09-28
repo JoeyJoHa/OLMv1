@@ -8,6 +8,18 @@ and improve maintainability.
 from enum import Enum, IntEnum
 
 
+class BaseStrEnum(str, Enum):
+    """Base enum class that inherits from str"""
+    
+    def __str__(self) -> str:
+        """Return the enum value as string"""
+        return self.value
+    
+    def __repr__(self) -> str:
+        """Return a detailed representation of the enum"""
+        return f"{self.__class__.__name__}.{self.name}"
+
+
 class KubernetesConstants:
     """Kubernetes-related constants with improved enum-based structure"""
     
@@ -33,7 +45,7 @@ class KubernetesConstants:
     # Channel constants - simple attributes for configurable values
     DEFAULT_CHANNEL = "stable"
     
-    class RBACVerb(str, Enum):
+    class RBACVerb(BaseStrEnum):
         """RBAC verbs used in Kubernetes role definitions"""
         CREATE = "create"
         GET = "get"
@@ -43,10 +55,6 @@ class KubernetesConstants:
         PATCH = "patch"
         DELETE = "delete"
         WILDCARD = "*"
-        
-        def __str__(self) -> str:
-            """Return the verb value for use in RBAC rules"""
-            return self.value
         
         @classmethod
         def get_read_verbs(cls) -> list:
@@ -61,9 +69,12 @@ class KubernetesConstants:
         @classmethod
         def get_all_verbs(cls) -> list:
             """Get all RBAC verbs except wildcard"""
-            return [cls.CREATE, cls.GET, cls.LIST, cls.WATCH, cls.UPDATE, cls.PATCH, cls.DELETE]
+            return [
+                cls.CREATE, cls.GET, cls.LIST, cls.WATCH, 
+                cls.UPDATE, cls.PATCH, cls.DELETE
+            ]
     
-    class ResourceName(str, Enum):
+    class ResourceName(BaseStrEnum):
         """Kubernetes resource names used in the RBAC Manager tool"""
         # Core RBAC resources
         CLUSTER_ROLES = "clusterroles"
@@ -78,10 +89,6 @@ class KubernetesConstants:
         
         # Application resources
         DEPLOYMENTS = "deployments"
-        
-        def __str__(self) -> str:
-            """Return the resource name for use in Kubernetes API calls"""
-            return self.value
         
         @classmethod
         def get_rbac_resources(cls) -> list:
@@ -107,41 +114,32 @@ class OPMConstants:
     BUNDLE_PERMISSIONS_KEY = "permissions"
     BUNDLE_CLUSTER_PERMISSIONS_KEY = "cluster_permissions"
     
-    class BundleSchema(str, Enum):
+    class BundleSchema(BaseStrEnum):
         """OLM bundle schema types"""
         BUNDLE = "olm.bundle"
         PACKAGE = "olm.package"
         CHANNEL = "olm.channel"
-        
-        def __str__(self) -> str:
-            """Return the schema value for use in bundle metadata"""
-            return self.value
     
-    class PropertyType(str, Enum):
+    class PropertyType(BaseStrEnum):
         """OLM property types used in bundle metadata"""
         GVK = "olm.gvk"
         BUNDLE_OBJECT = "olm.bundle.object"
         PACKAGE = "olm.package"
-        
-        def __str__(self) -> str:
-            """Return the property type value for use in bundle processing"""
-            return self.value
     
-    class ManifestKind(str, Enum):
+    class ManifestKind(BaseStrEnum):
         """Kubernetes manifest kinds used in operator bundles"""
         CLUSTER_SERVICE_VERSION = "ClusterServiceVersion"
         CUSTOM_RESOURCE_DEFINITION = "CustomResourceDefinition"
         
-        def __str__(self) -> str:
-            """Return the manifest kind for use in Kubernetes API calls"""
-            return self.value
-        
         @classmethod
         def get_operator_kinds(cls) -> list:
             """Get all operator-related manifest kinds"""
-            return [cls.CLUSTER_SERVICE_VERSION, cls.CUSTOM_RESOURCE_DEFINITION]
+            return [
+                cls.CLUSTER_SERVICE_VERSION, 
+                cls.CUSTOM_RESOURCE_DEFINITION
+            ]
     
-    class CSVSection(str, Enum):
+    class CSVSection(BaseStrEnum):
         """ClusterServiceVersion (CSV) sections used in operator manifests"""
         SPEC = "spec"
         METADATA = "metadata"
@@ -151,10 +149,6 @@ class OPMConstants:
         CRD = "customresourcedefinitions"
         OWNED_CRDS = "owned"
         DEPLOYMENTS = "deployments"
-        
-        def __str__(self) -> str:
-            """Return the CSV section name for use in manifest parsing"""
-            return self.value
         
         @classmethod
         def get_permission_sections(cls) -> list:
@@ -203,17 +197,13 @@ class NetworkConstants:
             }
             return f"{self.value} {descriptions.get(self.value, 'Unknown')}"
     
-    class ContentType(Enum):
+    class ContentType(BaseStrEnum):
         """Content-Type header values"""
         JSON = "application/json"
         YAML = "application/yaml"
         TEXT_PLAIN = "text/plain"
-        
-        def __str__(self) -> str:
-            """Return the content type value for use in headers"""
-            return self.value
     
-    class HTTPHeader(Enum):
+    class HTTPHeader(BaseStrEnum):
         """Standard HTTP header names"""
         AUTHORIZATION = "Authorization"
         CONTENT_TYPE = "Content-Type"
@@ -221,21 +211,17 @@ class NetworkConstants:
         CONTENT_ENCODING = "Content-Encoding"
         USER_AGENT = "User-Agent"
         ACCEPT = "Accept"
-        
-        def __str__(self) -> str:
-            """Return the header name for use in HTTP requests"""
-            return self.value
 
 
 class ErrorMessages:
     """Centralized error message templates with improved enum-based structure"""
     
-    class SSLError(str, Enum):
+    class SSLError(BaseStrEnum):
         """SSL-related error message templates"""
         CERT_VERIFICATION_FAILED = (
             "SSL certificate verification failed. The OpenShift cluster is using self-signed certificates.\n"
             "To resolve this issue, add the --skip-tls flag to your command.\n"
-            "Example: python3 rbac-manager.py --catalogd --skip-tls [other options]"
+            "Example: python3 rbac-manager.py catalogd --skip-tls [other options]"
         )
         
         CONNECTION_ERROR = (
@@ -243,21 +229,18 @@ class ErrorMessages:
             "Original error: {error}"
         )
         
-        def __str__(self) -> str:
-            """Return the error message template"""
-            return self.value
+        VERIFICATION_DISABLED_WARNING = (
+            "SSL verification disabled - connections will not verify certificates. "
+            "This is insecure and should only be used in development environments"
+        )
     
-    class AuthError(str, Enum):
+    class AuthError(BaseStrEnum):
         """Authentication-related error message templates"""
         NOT_CONFIGURED = "Authentication not configured. Configure authentication first."
         TOKEN_EXPIRED = "Authentication token has expired or is invalid."
         INSUFFICIENT_PERMISSIONS = "Insufficient permissions to access the requested resource."
-        
-        def __str__(self) -> str:
-            """Return the error message template"""
-            return self.value
     
-    class CatalogdError(str, Enum):
+    class CatalogdError(BaseStrEnum):
         """Catalogd service error message templates"""
         SERVICE_NOT_FOUND = "No catalogd service found in openshift-catalogd namespace"
         SERVICE_NOT_INITIALIZED = "Catalogd service not initialized. Configure authentication first."
@@ -272,23 +255,15 @@ class ErrorMessages:
             "To list all available catalogs, run:\n"
             "  python3 rbac-manager.py list-catalogs"
         )
-        
-        def __str__(self) -> str:
-            """Return the error message template"""
-            return self.value
     
-    class OPMError(str, Enum):
+    class OPMError(BaseStrEnum):
         """OPM tool error message templates"""
         BINARY_NOT_FOUND = (
             "OPM binary not found. Please install the OPM CLI tool and ensure it's in your PATH. "
             "Visit: https://github.com/operator-framework/operator-registry/releases"
         )
-        
-        def __str__(self) -> str:
-            """Return the error message template"""
-            return self.value
     
-    class NetworkError(str, Enum):
+    class NetworkError(BaseStrEnum):
         """Network-related error message templates"""
         CONNECTION_TIMEOUT = (
             "Connection timeout or network error occurred.\n"
@@ -313,26 +288,22 @@ class ErrorMessages:
             "  • Verifying service: kubectl get svc -n openshift-catalogd\n"
             "  • Retrying with --debug for detailed logs"
         )
-        
-        def __str__(self) -> str:
-            """Return the error message template"""
-            return self.value
     
-    class ConfigError(str, Enum):
+    class ConfigError(BaseStrEnum):
         """Configuration-related error message templates"""
         INVALID_IMAGE_URL = "Invalid container image URL format: {image}"
         INVALID_NAMESPACE = "Invalid Kubernetes namespace format: {namespace}"
         INVALID_OPENSHIFT_URL = "Invalid OpenShift URL format: {url}"
         CONFIG_FILE_NOT_FOUND = "Configuration file not found: {config_path}"
         
-        def __str__(self) -> str:
-            """Return the error message template"""
-            return self.value
-        
         @classmethod
         def get_validation_errors(cls) -> list:
             """Get all validation-related error templates"""
-            return [cls.INVALID_IMAGE_URL, cls.INVALID_NAMESPACE, cls.INVALID_OPENSHIFT_URL]
+            return [
+                cls.INVALID_IMAGE_URL, 
+                cls.INVALID_NAMESPACE, 
+                cls.INVALID_OPENSHIFT_URL
+            ]
 
 
 class FileConstants:
@@ -346,17 +317,13 @@ class FileConstants:
     # Directory constants - simple attributes for configurable values
     CACHE_DIR_NAME = "rbac-manager-cache"
     
-    class OutputFilePrefix(str, Enum):
+    class OutputFilePrefix(BaseStrEnum):
         """Output file prefixes for generated RBAC manifests"""
         SERVICE_ACCOUNT = "01-serviceaccount"
         CLUSTER_ROLE = "02-clusterrole"
         CLUSTER_ROLE_BINDING = "03-clusterrolebinding"
         ROLE = "04-role"
         ROLE_BINDING = "05-rolebinding"
-        
-        def __str__(self) -> str:
-            """Return the prefix value for use in file naming"""
-            return self.value
         
         @classmethod
         def get_rbac_prefixes(cls) -> list:
@@ -379,15 +346,11 @@ class FileConstants:
             """Get namespace-scoped RBAC file prefixes"""
             return [cls.SERVICE_ACCOUNT, cls.ROLE, cls.ROLE_BINDING]
     
-    class FileExtension(str, Enum):
+    class FileExtension(BaseStrEnum):
         """File extensions used in the RBAC Manager tool"""
         YAML = ".yaml"
         JSON = ".json"
         YML = ".yml"
-        
-        def __str__(self) -> str:
-            """Return the extension value for use in file operations"""
-            return self.value
         
         @classmethod
         def get_config_extensions(cls) -> list:

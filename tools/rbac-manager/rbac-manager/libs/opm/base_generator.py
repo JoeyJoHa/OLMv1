@@ -7,9 +7,13 @@ YAML manifests and Helm values from OPM bundle metadata.
 
 import logging
 import re
-import yaml
 from typing import Dict, List, Any, NamedTuple
 from abc import ABC, abstractmethod
+
+try:
+    import yaml
+except ImportError:
+    raise ImportError("PyYAML is required. Install with: pip install PyYAML")
 from enum import Enum
 
 from ..core.constants import (
@@ -41,6 +45,148 @@ class PermissionAnalysis(NamedTuple):
     has_namespace_permissions: bool
     cluster_rules: List[Dict[str, Any]]
     namespace_rules: List[Dict[str, Any]]
+
+
+class RBACStrategy(ABC):
+    """Abstract base class for RBAC generation strategies"""
+    
+    def __init__(self, generator: 'BaseGenerator'):
+        """
+        Initialize strategy with reference to generator for helper methods
+        
+        Args:
+            generator: BaseGenerator instance providing helper methods
+        """
+        self.generator = generator
+    
+    @abstractmethod
+    def execute(self, bundle_metadata: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute the RBAC generation strategy
+        
+        Args:
+            bundle_metadata: Bundle metadata from OPM
+            result: Current result dictionary to modify
+            
+        Returns:
+            Modified result dictionary with strategy-specific RBAC components
+        """
+        pass
+
+
+class BothPermissionsStrategy(RBACStrategy):
+    """Strategy for operators with both cluster and namespace permissions (e.g., ArgoCD)"""
+    
+    def execute(self, bundle_metadata: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle scenario with both clusterPermissions and permissions
+        - installer ClusterRole: operator management + bundled cluster resources
+        - grantor ClusterRole: CSV cluster permissions + bundled cluster resources (excluding ClusterRoles)
+        - namespace Role: CSV namespace permissions (deduplicated against cluster rules)
+        """
+        result['permission_scenario'] = 'both_cluster_and_namespace'
+        result['components_needed']['namespace_role'] = True
+        result['components_needed']['role_bindings'] = True
+        result['components_needed']['grantor_cluster_role'] = True
+        
+        # Generate grantor ClusterRole rules using centralized helper
+        grantor_rules = self.generator._prepare_grantor_rules(bundle_metadata)
+        if grantor_rules:
+            result['rules']['grantor_cluster_role'] = grantor_rules
+        else:
+            result['components_needed']['grantor_cluster_role'] = False
+        
+        # Generate namespace Role rules (deduplicated against cluster rules)
+        namespace_rules = self.generator._generate_namespace_rules(bundle_metadata)
+        installer_rules = self.generator._generate_installer_service_account_rules(bundle_metadata)
+        combined_role_rules = namespace_rules + installer_rules
+        
+        if combined_role_rules:
+            deduplicated_role_rules = self.generator._process_and_deduplicate_rules(combined_role_rules)
+            
+            # Get cluster rules for filtering (combine installer + grantor)
+            all_cluster_rules = result['rules']['installer_cluster_role'] + result['rules']['grantor_cluster_role']
+            final_role_rules = self.generator._filter_unique_role_rules(deduplicated_role_rules, all_cluster_rules)
+            
+            if final_role_rules:
+                result['rules']['namespace_role'] = final_role_rules
+            else:
+                result['components_needed']['namespace_role'] = False
+                result['components_needed']['role_bindings'] = False
+        else:
+            result['components_needed']['namespace_role'] = False
+            result['components_needed']['role_bindings'] = False
+        
+        return result
+
+
+class ClusterOnlyStrategy(RBACStrategy):
+    """Strategy for cluster-only operators with only clusterPermissions"""
+    
+    def execute(self, bundle_metadata: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle scenario with only clusterPermissions (cluster-only operator)
+        - installer ClusterRole: operator management + bundled cluster resources
+        - grantor ClusterRole: CSV cluster permissions + bundled cluster resources (excluding ClusterRoles)
+        - No namespace Role needed
+        """
+        result['permission_scenario'] = 'cluster_only'
+        result['components_needed']['grantor_cluster_role'] = True
+        
+        # Generate grantor ClusterRole rules using centralized helper
+        grantor_rules = self.generator._prepare_grantor_rules(bundle_metadata)
+        if grantor_rules:
+            result['rules']['grantor_cluster_role'] = grantor_rules
+        else:
+            result['components_needed']['grantor_cluster_role'] = False
+        
+        return result
+
+
+class NamespaceAsClusterStrategy(RBACStrategy):
+    """Strategy for operators with only namespace permissions treated as cluster-scoped (e.g., Quay)"""
+    
+    def execute(self, bundle_metadata: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle scenario with only permissions (treat as ClusterRoles)
+        - installer ClusterRole: operator management + bundled cluster resources
+        - grantor ClusterRole: CSV namespace permissions (treated as cluster-scoped) + bundled cluster resources
+        - No namespace Role needed
+        """
+        result['permission_scenario'] = 'namespace_treated_as_cluster'
+        result['components_needed']['grantor_cluster_role'] = True
+        
+        # Generate grantor ClusterRole rules (treat namespace permissions as cluster-scoped)
+        namespace_rules = self.generator._generate_namespace_rules(bundle_metadata)
+        bundled_cluster_rules_grantor = self.generator._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
+        combined_rules = namespace_rules + bundled_cluster_rules_grantor
+        
+        if combined_rules:
+            result['rules']['grantor_cluster_role'] = combined_rules
+        else:
+            result['components_needed']['grantor_cluster_role'] = False
+        
+        return result
+
+
+class NoPermissionsStrategy(RBACStrategy):
+    """Strategy for operators with no permissions defined (unusual case)"""
+    
+    def execute(self, bundle_metadata: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle scenario with no permissions defined
+        - installer ClusterRole: operator management + bundled cluster resources only
+        - No grantor ClusterRole needed
+        - Add empty namespace Role for Helm compatibility
+        """
+        result['permission_scenario'] = 'no_permissions'
+        # grantor_cluster_role already False
+        # For Helm compatibility, we might need an empty Role
+        result['components_needed']['namespace_role'] = True  # Empty role for Helm
+        result['components_needed']['role_bindings'] = True
+        result['rules']['namespace_role'] = []  # Empty rules
+        
+        return result
 
 class BaseGenerator(ABC):
     """Base class for all generators with common functionality"""
@@ -253,7 +399,7 @@ e        Generate installer service account Role permissions - ONLY installer-sp
     
     def _process_and_deduplicate_rules(self, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Process and deduplicate RBAC rules using DRY principle
+        Process and deduplicate RBAC rules
         
         This method implements comprehensive deduplication logic:
         1. Removes exact duplicates
@@ -1262,10 +1408,10 @@ e        Generate installer service account Role permissions - ONLY installer-sp
     
     def analyze_rbac_components(self, bundle_metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Analyze bundle metadata and determine which RBAC components are needed.
+        Analyze bundle metadata and determine which RBAC components are needed using Strategy pattern.
         
-        This method centralizes the decision-making logic for RBAC component creation,
-        eliminating duplication between HelmValuesGenerator and YAMLManifestGenerator.
+        This method acts as a factory that selects the appropriate strategy based on permission analysis
+        and delegates the specific RBAC generation logic to the strategy implementation.
         
         Args:
             bundle_metadata: Bundle metadata from OPM
@@ -1289,12 +1435,12 @@ e        Generate installer service account Role permissions - ONLY installer-sp
                 'analysis': dict             # Result from analyze_permissions method
             }
         """
-        # Use existing analyze_permissions method
+        # Perform initial permission analysis
         analysis = self.analyze_permissions(bundle_metadata)
         has_cluster_permissions = analysis.has_cluster_permissions
         has_namespace_permissions = analysis.has_namespace_permissions
         
-        # Initialize result structure
+        # Initialize result structure with common components
         result = {
             'components_needed': {
                 'installer_cluster_role': True,  # Always needed for operator management
@@ -1318,88 +1464,29 @@ e        Generate installer service account Role permissions - ONLY installer-sp
         combined_operator_rules = operator_rules + bundled_cluster_rules
         result['rules']['installer_cluster_role'] = self._process_and_deduplicate_rules(combined_operator_rules)
         
-        # Decision logic based on permission types
+        # Select and execute appropriate strategy based on permission analysis
+        strategy = self._select_rbac_strategy(has_cluster_permissions, has_namespace_permissions)
+        return strategy.execute(bundle_metadata, result)
+    
+    def _select_rbac_strategy(self, has_cluster_permissions: bool, has_namespace_permissions: bool) -> RBACStrategy:
+        """
+        Factory method to select the appropriate RBAC generation strategy
         
-        # Handle scenarios that need grantor ClusterRole with cluster permissions
-        if has_cluster_permissions:
-            result['components_needed']['grantor_cluster_role'] = True
+        Args:
+            has_cluster_permissions: Whether bundle has cluster permissions
+            has_namespace_permissions: Whether bundle has namespace permissions
             
-            # Generate grantor ClusterRole rules using centralized helper
-            grantor_rules = self._prepare_grantor_rules(bundle_metadata)
-            if grantor_rules:
-                result['rules']['grantor_cluster_role'] = grantor_rules
-            else:
-                result['components_needed']['grantor_cluster_role'] = False
-        
-        # Scenario-specific logic
+        Returns:
+            RBACStrategy: Appropriate strategy instance for the permission scenario
+        """
         if has_cluster_permissions and has_namespace_permissions:
-            # Scenario 1: Both clusterPermissions and permissions (e.g., ArgoCD)
-            # - installer ClusterRole: operator management + bundled cluster resources
-            # - grantor ClusterRole: CSV cluster permissions + bundled cluster resources (excluding ClusterRoles)
-            # - namespace Role: CSV namespace permissions (deduplicated against cluster rules)
-            result['permission_scenario'] = 'both_cluster_and_namespace'
-            result['components_needed']['namespace_role'] = True
-            result['components_needed']['role_bindings'] = True
-            
-            # Generate namespace Role rules (deduplicated against cluster rules)
-            namespace_rules = self._generate_namespace_rules(bundle_metadata)
-            installer_rules = self._generate_installer_service_account_rules(bundle_metadata)
-            combined_role_rules = namespace_rules + installer_rules
-            
-            if combined_role_rules:
-                deduplicated_role_rules = self._process_and_deduplicate_rules(combined_role_rules)
-                
-                # Get cluster rules for filtering (combine installer + grantor)
-                all_cluster_rules = result['rules']['installer_cluster_role'] + result['rules']['grantor_cluster_role']
-                final_role_rules = self._filter_unique_role_rules(deduplicated_role_rules, all_cluster_rules)
-                
-                if final_role_rules:
-                    result['rules']['namespace_role'] = final_role_rules
-                else:
-                    result['components_needed']['namespace_role'] = False
-                    result['components_needed']['role_bindings'] = False
-            else:
-                result['components_needed']['namespace_role'] = False
-                result['components_needed']['role_bindings'] = False
-                
+            return BothPermissionsStrategy(self)
         elif has_cluster_permissions:
-            # Scenario 2: Only clusterPermissions (cluster-only operator)
-            # - installer ClusterRole: operator management + bundled cluster resources
-            # - grantor ClusterRole: CSV cluster permissions + bundled cluster resources (excluding ClusterRoles)
-            # - No namespace Role needed
-            result['permission_scenario'] = 'cluster_only'
-                
+            return ClusterOnlyStrategy(self)
         elif has_namespace_permissions:
-            # Scenario 3: Only permissions (e.g., Quay operator - treat as ClusterRoles)
-            # - installer ClusterRole: operator management + bundled cluster resources
-            # - grantor ClusterRole: CSV namespace permissions (treated as cluster-scoped) + bundled cluster resources
-            # - No namespace Role needed
-            result['permission_scenario'] = 'namespace_treated_as_cluster'
-            result['components_needed']['grantor_cluster_role'] = True
-            
-            # Generate grantor ClusterRole rules (treat namespace permissions as cluster-scoped)
-            namespace_rules = self._generate_namespace_rules(bundle_metadata)
-            bundled_cluster_rules_grantor = self._generate_bundled_cluster_resource_rules_for_grantor(bundle_metadata)
-            combined_rules = namespace_rules + bundled_cluster_rules_grantor
-            
-            if combined_rules:
-                result['rules']['grantor_cluster_role'] = combined_rules
-            else:
-                result['components_needed']['grantor_cluster_role'] = False
-                
+            return NamespaceAsClusterStrategy(self)
         else:
-            # Scenario 4: No permissions defined (unusual case)
-            # - installer ClusterRole: operator management + bundled cluster resources only
-            # - No grantor ClusterRole needed
-            # - Add empty namespace Role for Helm compatibility
-            result['permission_scenario'] = 'no_permissions'
-            # grantor_cluster_role already False
-            # For Helm compatibility, we might need an empty Role
-            result['components_needed']['namespace_role'] = True  # Empty role for Helm
-            result['components_needed']['role_bindings'] = True
-            result['rules']['namespace_role'] = []  # Empty rules
-        
-        return result
+            return NoPermissionsStrategy(self)
     
     def _format_rules_for_flow_style(self, rules: List[Dict[str, Any]], 
                                    use_copy: bool = True, 

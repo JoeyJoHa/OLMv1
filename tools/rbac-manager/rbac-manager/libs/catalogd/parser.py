@@ -107,6 +107,97 @@ class NDJSONParser:
         
         return sorted(list(values))
     
+    def _extract_data_with_mapping(self, source: Dict[str, Any], mapping_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Data-driven helper function that extracts data from a source dictionary using a mapping configuration
+        
+        This eliminates repetitive .get() calls by using a declarative mapping approach.
+        
+        Args:
+            source: Source dictionary to extract data from
+            mapping_config: Configuration dictionary defining the extraction mapping
+                Format: {
+                    'output_key': {
+                        'path': 'source.path.to.value',  # Dot notation path
+                        'default': default_value,        # Optional default value
+                        'transform': callable,           # Optional transformation function
+                        'condition': callable            # Optional condition function
+                    }
+                }
+                
+        Returns:
+            Dictionary with extracted data based on mapping configuration
+        """
+        result = {}
+        
+        for output_key, config in mapping_config.items():
+            try:
+                # Handle different configuration formats
+                if isinstance(config, str):
+                    # Simple string path
+                    path = config
+                    default = None
+                    transform = None
+                    condition = None
+                elif isinstance(config, dict):
+                    # Full configuration object
+                    path = config.get('path', output_key)
+                    default = config.get('default')
+                    transform = config.get('transform')
+                    condition = config.get('condition')
+                else:
+                    # Direct value
+                    result[output_key] = config
+                    continue
+                
+                # Extract value using dot notation path
+                value = self._get_nested_value(source, path, default)
+                
+                # Apply condition if specified
+                if condition and not condition(value):
+                    value = default
+                
+                # Apply transformation if specified
+                if transform and value is not None:
+                    value = transform(value)
+                
+                result[output_key] = value
+                
+            except Exception as e:
+                logger.debug(f"Error extracting {output_key} from path {config}: {e}")
+                # Use default value or None if extraction fails
+                default_val = config.get('default') if isinstance(config, dict) else None
+                result[output_key] = default_val
+        
+        return result
+    
+    def _get_nested_value(self, data: Dict[str, Any], path: str, default: Any = None) -> Any:
+        """
+        Get nested value from dictionary using dot notation path
+        
+        Args:
+            data: Source dictionary
+            path: Dot notation path (e.g., 'spec.provider.name')
+            default: Default value if path not found
+            
+        Returns:
+            Value at the specified path or default
+        """
+        try:
+            current = data
+            for key in path.split('.'):
+                if isinstance(current, dict):
+                    current = current.get(key)
+                else:
+                    return default
+                
+                if current is None:
+                    return default
+            
+            return current
+        except Exception:
+            return default
+    
     def extract_packages(self, items: List[Dict[str, Any]]) -> List[str]:
         """
         Extract package names from parsed catalog data
@@ -321,69 +412,82 @@ class NDJSONParser:
         return install_modes
     
     def _extract_csv_metadata(self, bundle_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract CSV metadata from bundle data (olm.bundle.object)"""
+        """Extract CSV metadata from bundle data (olm.bundle.object) using data-driven mapping"""
         try:
-            metadata = bundle_data.get('metadata', {})
-            spec = bundle_data.get('spec', {})
-            
-            return {
-                'name': metadata.get('name'),
-                'namespace': metadata.get('namespace'),
-                'display_name': spec.get('displayName'),
-                'description': spec.get('description'),
-                'version': spec.get('version'),
-                'provider': spec.get('provider', {}).get('name'),
-                'maturity': spec.get('maturity'),
-                'keywords': spec.get('keywords', []),
-                'maintainers': spec.get('maintainers', []),
-                'links': spec.get('links', []),
-                'icon': spec.get('icon', [{}])[0] if spec.get('icon') else {}
+            # Define extraction mapping configuration
+            csv_mapping = {
+                'name': 'metadata.name',
+                'namespace': 'metadata.namespace', 
+                'display_name': 'spec.displayName',
+                'description': 'spec.description',
+                'version': 'spec.version',
+                'provider': 'spec.provider.name',
+                'maturity': 'spec.maturity',
+                'keywords': {'path': 'spec.keywords', 'default': []},
+                'maintainers': {'path': 'spec.maintainers', 'default': []},
+                'links': {'path': 'spec.links', 'default': []},
+                'icon': {
+                    'path': 'spec.icon',
+                    'default': {},
+                    'transform': lambda icons: icons[0] if icons else {}
+                }
             }
+            
+            return self._extract_data_with_mapping(bundle_data, csv_mapping)
+            
         except Exception as e:
             logger.debug(f"Error extracting CSV metadata: {e}")
             return {}
     
     def _extract_csv_from_metadata(self, csv_metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract CSV metadata from olm.csv.metadata property"""
+        """Extract CSV metadata from olm.csv.metadata property using data-driven mapping"""
         try:
-            return {
-                'display_name': csv_metadata.get('displayName'),
-                'description': csv_metadata.get('description'),
-                'version': csv_metadata.get('version'),
-                'provider': csv_metadata.get('provider', {}).get('name') if csv_metadata.get('provider') else None,
-                'maturity': csv_metadata.get('maturity'),
-                'keywords': csv_metadata.get('keywords', []),
-                'maintainers': csv_metadata.get('maintainers', []),
-                'links': csv_metadata.get('links', []),
-                'annotations': csv_metadata.get('annotations', {}),
-                'labels': csv_metadata.get('labels', {}),
-                'capabilities': csv_metadata.get('annotations', {}).get('capabilities'),
-                'categories': csv_metadata.get('annotations', {}).get('categories'),
-                'container_image': csv_metadata.get('annotations', {}).get('containerImage'),
-                'repository': csv_metadata.get('annotations', {}).get('repository'),
-                'created_at': csv_metadata.get('annotations', {}).get('createdAt')
+            # Define extraction mapping configuration
+            metadata_mapping = {
+                'display_name': 'displayName',
+                'description': 'description',
+                'version': 'version',
+                'provider': 'provider.name',
+                'maturity': 'maturity',
+                'keywords': {'path': 'keywords', 'default': []},
+                'maintainers': {'path': 'maintainers', 'default': []},
+                'links': {'path': 'links', 'default': []},
+                'annotations': {'path': 'annotations', 'default': {}},
+                'labels': {'path': 'labels', 'default': {}},
+                'capabilities': 'annotations.capabilities',
+                'categories': 'annotations.categories',
+                'container_image': 'annotations.containerImage',
+                'repository': 'annotations.repository',
+                'created_at': 'annotations.createdAt'
             }
+            
+            return self._extract_data_with_mapping(csv_metadata, metadata_mapping)
+            
         except Exception as e:
             logger.debug(f"Error extracting CSV from metadata: {e}")
             return {}
     
     def _extract_webhook_info_minimal(self, spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract minimal webhook information from bundle spec"""
+        """Extract minimal webhook information from bundle spec using data-driven mapping"""
         try:
-            webhooks = spec.get('webhookdefinitions', [])
-            webhook_types = []
-            
-            for webhook in webhooks:
-                webhook_type = webhook.get('type', 'unknown')
-                webhook_types.append(webhook_type)
-            
-            # Remove duplicates
-            webhook_types = list(set(webhook_types))
-            
-            return {
-                'has_webhooks': len(webhooks) > 0,
-                'webhook_types': webhook_types
+            # Define extraction mapping configuration
+            webhook_mapping = {
+                'has_webhooks': {
+                    'path': 'webhookdefinitions',
+                    'default': False,
+                    'transform': lambda webhooks: len(webhooks) > 0 if webhooks else False
+                },
+                'webhook_types': {
+                    'path': 'webhookdefinitions',
+                    'default': [],
+                    'transform': lambda webhooks: list(set(
+                        webhook.get('type', 'unknown') for webhook in webhooks
+                    )) if webhooks else []
+                }
             }
+            
+            return self._extract_data_with_mapping(spec, webhook_mapping)
+            
         except Exception as e:
             logger.debug(f"Error extracting webhook info: {e}")
             return {'has_webhooks': False, 'webhook_types': []}

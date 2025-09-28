@@ -332,7 +332,6 @@ class OPMClient:
             BundleProcessingError: If image validation fails
         """
         try:
-            # Use centralized helper method (DRY principle)
             result = self._run_opm_command(image, registry_token)
             
             if result.returncode == 0:
@@ -405,7 +404,6 @@ class OPMClient:
             BundleProcessingError: If extraction fails
         """
         try:
-            # Use centralized helper method (DRY principle)
             result = self._run_opm_command(image, registry_token)
             
             if result.returncode != 0:

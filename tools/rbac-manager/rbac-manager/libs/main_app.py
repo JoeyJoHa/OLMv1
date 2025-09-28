@@ -1,7 +1,8 @@
 """
 Main Application
 
-Orchestrates the microservice-like architecture with core, catalogd, and opm libraries.
+Orchestrates the microservice-like architecture with core, catalogd, and opm 
+libraries.
 """
 
 import argparse
@@ -13,9 +14,11 @@ import time
 from typing import Dict, Any, Optional
 
 # Core libraries
-from .core import OpenShiftAuth, ConfigManager, setup_logging, disable_ssl_warnings
+from .core import OpenShiftAuth, ConfigManager, setup_logging
 from .core.exceptions import AuthenticationError, ConfigurationError
-from .core.protocols import AuthProvider, ConfigProvider, BundleProvider, CatalogdProvider, HelpProvider
+from .core.protocols import (
+    AuthProvider, ConfigProvider, BundleProvider, CatalogdProvider, HelpProvider
+)
 from .core.constants import ErrorMessages, KubernetesConstants
 
 # Catalogd libraries  
@@ -59,19 +62,21 @@ class RBACManager:
         # Set up logging
         setup_logging(debug)
         
-        if skip_tls:
-            disable_ssl_warnings()
         
         # Inject dependencies with defaults
         self.auth = auth_provider or OpenShiftAuth(skip_tls=skip_tls)
         self.config_manager = config_provider or ConfigManager()
         self.help_manager = help_provider or HelpManager()
-        self.bundle_processor = bundle_provider or BundleProcessor(skip_tls=skip_tls, debug=debug)
+        self.bundle_processor = bundle_provider or BundleProcessor(
+            skip_tls=skip_tls, debug=debug
+        )
         
         # Initialize catalogd service (will be configured with auth when needed)
         self.catalogd_service: Optional[CatalogdProvider] = None
     
-    def configure_authentication(self, openshift_url: str = None, openshift_token: str = None) -> bool:
+    def configure_authentication(
+        self, openshift_url: str = None, openshift_token: str = None
+    ) -> bool:
         """
         Configure authentication and initialize services
         
@@ -482,6 +487,19 @@ def create_argument_parser():
     )
     # No additional arguments needed - all inherited from parents
     
+    # generate-config subcommand: promoted to top-level command
+    generate_config_parser = subparsers.add_parser(
+        'generate-config',
+        parents=[common_parser, auth_parser, output_parser],
+        help='Generate configuration file',
+        description='Generate configuration file for RBAC extraction'
+    )
+    # Add generate-config-specific arguments
+    generate_config_parser.add_argument('--catalog-name', help='Catalog name')
+    generate_config_parser.add_argument('--package', help='Package name')
+    generate_config_parser.add_argument('--channel', help='Channel name')
+    generate_config_parser.add_argument('--version', help='Version')
+    
     # catalogd subcommand: inherits from common_parser, auth_parser, and output_parser
     catalogd_parser = subparsers.add_parser(
         'catalogd',
@@ -489,12 +507,11 @@ def create_argument_parser():
         help='Query catalogd service',
         description='Query catalogd service for package information'
     )
-    # Add catalogd-specific arguments
+    # Add catalogd-specific arguments (removed --generate-config)
     catalogd_parser.add_argument('--catalog-name', help='Catalog name')
     catalogd_parser.add_argument('--package', help='Package name')
     catalogd_parser.add_argument('--channel', help='Channel name')
     catalogd_parser.add_argument('--version', help='Version')
-    catalogd_parser.add_argument('--generate-config', action='store_true', help='Generate configuration file (stdout by default, use --output to save to file)')
     
     # opm subcommand: inherits from common_parser and output_parser (no auth needed for local operations)
     opm_parser = subparsers.add_parser(
@@ -522,30 +539,54 @@ def handle_examples(command_name: str) -> bool:
     return True
 
 
+def _setup_authentication_for_command(rbac_manager, args, command_name: str = "command", 
+                                      exit_on_failure: bool = True):
+    """
+    Helper to setup authentication for commands that require it.
+    
+    Centralizes authentication setup logic to eliminate code duplication
+    across command handlers.
+    
+    Args:
+        rbac_manager: RBACManager instance
+        args: Parsed command arguments
+        command_name: Name of command for error messages
+        exit_on_failure: Whether to exit on authentication failure
+        
+    Returns:
+        bool: True if authentication successful, False if failed
+    """
+    # Extract authentication parameters
+    openshift_url = getattr(args, 'openshift_url', None)
+    openshift_token = getattr(args, 'openshift_token', None)
+    
+    # Attempt authentication
+    if not rbac_manager.configure_authentication(openshift_url, openshift_token):
+        if exit_on_failure:
+            print(f"Error: Failed to configure authentication for {command_name}", 
+                  file=sys.stderr)
+            sys.exit(1)
+        return False
+    
+    return True
+
+
 def configure_authentication_from_args(rbac_manager, args):
     """
-    Configure authentication using centralized auth logic from OpenShiftAuth.
+    Legacy wrapper for backward compatibility.
     
     Args:
         rbac_manager: RBACManager instance
         args: Parsed command-line arguments
     """
-    if hasattr(args, 'openshift_url') and hasattr(args, 'openshift_token') and args.openshift_url and args.openshift_token:
-        if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
-            print("Failed to configure OpenShift authentication")
-            sys.exit(1)
-    else:
-        # Try to configure with default context
-        if not rbac_manager.configure_authentication():
-            print("Failed to configure authentication from context")
-            sys.exit(1)
+    return _setup_authentication_for_command(rbac_manager, args)
 
 
 
 
 def generate_config_file(args, extracted_data=None, output_path=None, stdout=False):
     """
-    Generate configuration file using ConfigManager (DRY principle).
+    Generate configuration file using ConfigManager.
     
     Args:
         args: Parsed command-line arguments
@@ -558,7 +599,7 @@ def generate_config_file(args, extracted_data=None, output_path=None, stdout=Fal
     """
     config_manager = ConfigManager()
     
-    # Calculate configuration values once to eliminate duplication (DRY principle)
+    # Calculate configuration values once to eliminate duplication
     output_mode = 'file' if (hasattr(args, 'output') and args.output) else 'stdout'
     output_type = 'helm' if (hasattr(args, 'helm') and args.helm) else 'yaml'
     namespace = getattr(args, 'namespace', 'default')
@@ -672,79 +713,80 @@ def handle_list_catalogs_command(args, rbac_manager, config):
     # Merge configuration file values with command-line arguments
     merge_config_with_args(args, config, 'list-catalogs')
     
-    configure_authentication_from_args(rbac_manager, args)
-    
     exit_code = rbac_manager.list_catalogs()
     sys.exit(exit_code)
 
 
-def handle_catalogd_command(args, rbac_manager, config):
-    """Handle catalogd command execution."""
+def handle_generate_config_command(args, rbac_manager, config):
+    """Handle generate-config command execution."""
     if hasattr(args, 'examples') and args.examples:
-        return handle_examples('catalogd')
+        return handle_examples('generate-config')
     
-    # Handle generate-config flag
-    if hasattr(args, 'generate_config') and args.generate_config:
-        # Determine output mode: stdout by default, file if --output is specified
-        output_to_stdout = not (hasattr(args, 'output') and args.output)
-        
-        # If no other flags provided, generate template
-        if not any([args.catalog_name, args.package, args.channel, args.version]):
-            config_file = generate_config_file(args, stdout=output_to_stdout)
-            if not output_to_stdout:
-                print(f"Configuration template generated: {config_file}")
-            return
-        
-        # Otherwise, extract data first, then generate config
-        # Merge configuration file values with command-line arguments
-        merge_config_with_args(args, config, 'catalogd')
-        
-        # Try to get real data from catalogd if authentication is provided
-        extracted_data = {
-            'bundle_image': 'bundle-image-from-catalogd',  # Default placeholder
-            'channel': args.channel or 'channel-name',
-            'package': args.package or 'package-name',
-            'version': args.version or 'version'
-        }
-        
-        # Attempt to query catalogd if authentication is available
-        if hasattr(args, 'openshift_url') and args.openshift_url and hasattr(args, 'openshift_token') and args.openshift_token:
-            try:
-                # Configure authentication using centralized auth logic (optional for generate-config)
-                if not rbac_manager.configure_authentication(args.openshift_url, args.openshift_token):
-                    raise Exception("Failed to configure OpenShift authentication")
-                
-                # Try to get real bundle metadata from catalogd
-                if args.catalog_name and args.package and args.channel and args.version:
-                    bundle_data = rbac_manager.catalogd_service.get_version_metadata(
-                        args.catalog_name, args.package, args.channel, args.version,
-                        rbac_manager.auth.get_auth_headers()
-                    )
-                    if bundle_data and 'bundle_image' in bundle_data and bundle_data['bundle_image']:
-                        extracted_data['bundle_image'] = bundle_data['bundle_image']
-                        if not output_to_stdout:
-                            print("Successfully extracted bundle image from catalogd")
-                    else:
-                        if not output_to_stdout:
-                            print("Note: Could not extract bundle image from catalogd, using placeholder")
+    # Determine output mode: stdout by default, file if --output is specified
+    output_to_stdout = not (hasattr(args, 'output') and args.output)
+    
+    # If no other flags provided, generate template
+    if not any([args.catalog_name, args.package, args.channel, args.version]):
+        config_file = generate_config_file(args, stdout=output_to_stdout)
+        if not output_to_stdout:
+            print(f"Configuration template generated: {config_file}")
+        return
+    
+    # Otherwise, extract data first, then generate config
+    # Merge configuration file values with command-line arguments
+    merge_config_with_args(args, config, 'generate-config')
+    
+    # Try to get real data from catalogd if authentication is provided
+    extracted_data = {
+        'bundle_image': 'bundle-image-from-catalogd',  # Default placeholder
+        'channel': args.channel or 'channel-name',
+        'package': args.package or 'package-name',
+        'version': args.version or 'version'
+    }
+    
+    # Attempt to query catalogd if authentication is available
+    if hasattr(args, 'openshift_url') and args.openshift_url and hasattr(args, 'openshift_token') and args.openshift_token:
+        try:
+            # Check if authentication was successful by verifying catalogd service is available
+            if not rbac_manager.catalogd_service:
+                raise Exception("Catalogd service not initialized - authentication may have failed")
+            
+            # Try to get real bundle metadata from catalogd
+            if args.catalog_name and args.package and args.channel and args.version:
+                bundle_data = rbac_manager.catalogd_service.get_version_metadata(
+                    args.catalog_name, args.package, args.channel, args.version,
+                    rbac_manager.auth.get_auth_headers()
+                )
+                if bundle_data and 'bundle_image' in bundle_data and bundle_data['bundle_image']:
+                    extracted_data['bundle_image'] = bundle_data['bundle_image']
+                    if not output_to_stdout:
+                        print("Successfully extracted bundle image from catalogd")
                 else:
                     if not output_to_stdout:
-                        print("Note: --catalog-name required with authentication for real bundle data")
-            except Exception as e:
-                if not output_to_stdout:
-                    print(f"Note: Could not query catalogd ({e}), using placeholder values")
-        else:
-            if not output_to_stdout:
-                print("Note: Use --openshift-url and --openshift-token with --catalog-name for real bundle data")
-        
-        config_file = generate_config_file(args, extracted_data, stdout=output_to_stdout)
-        if not output_to_stdout:
-            if extracted_data['bundle_image'] == 'bundle-image-from-catalogd':
-                print(f"Configuration template generated with provided values: {config_file}")
-                print("Note: Bundle image URL should be updated with actual value from catalogd query.")
+                        print("Note: Could not extract bundle image from catalogd, using placeholder")
             else:
-                print(f"Configuration generated with extracted bundle data: {config_file}")
-        return
+                if not output_to_stdout:
+                    print("Note: --catalog-name required with authentication for real bundle data")
+        except Exception as e:
+            if not output_to_stdout:
+                print(f"Note: Could not query catalogd ({e}), using placeholder values")
+    else:
+        if not output_to_stdout:
+            print("Note: Use --openshift-url and --openshift-token with --catalog-name for real bundle data")
+    
+    config_file = generate_config_file(args, extracted_data, stdout=output_to_stdout)
+    if not output_to_stdout:
+        if extracted_data['bundle_image'] == 'bundle-image-from-catalogd':
+            print(f"Configuration template generated with provided values: {config_file}")
+            print("Note: Bundle image URL should be updated with actual value from catalogd query.")
+        else:
+            print(f"Configuration generated with extracted bundle data: {config_file}")
+
+
+def handle_catalogd_command(args, rbac_manager, config):
+    """Handle catalogd command execution (simplified to only handle catalog queries)."""
+    if hasattr(args, 'examples') and args.examples:
+        return handle_examples('catalogd')
     
     # Check if any operational flags are provided
     if not any([args.catalog_name, args.package, args.channel, args.version]):
@@ -754,14 +796,14 @@ def handle_catalogd_command(args, rbac_manager, config):
     # Merge configuration file values with command-line arguments
     merge_config_with_args(args, config, 'catalogd')
     
-    configure_authentication_from_args(rbac_manager, args)
-    
     rbac_manager.query_catalogd(
         catalog_name=args.catalog_name,
         package=args.package,
         channel=args.channel,
         version=args.version
     )
+
+
 
 
 def handle_opm_command(args, rbac_manager, config):
@@ -800,64 +842,122 @@ def handle_opm_command(args, rbac_manager, config):
 # Command dispatcher mapping
 COMMAND_HANDLERS = {
     'list-catalogs': handle_list_catalogs_command,
+    'generate-config': handle_generate_config_command,
     'catalogd': handle_catalogd_command,
     'opm': handle_opm_command,
 }
 
 
+def handle_early_exit_flags(args):
+    """Handle early-exit flags like --help and --examples"""
+    # Handle special case where no arguments are provided
+    if len(sys.argv) == 1:
+        help_manager = HelpManager()
+        help_manager.show_help()
+        return True
+    
+    # Handle custom help behavior - show main_help.txt when --help used without subcommand
+    if hasattr(args, 'help') and args.help and not args.command:
+        help_manager = HelpManager()
+        help_manager.show_help()
+        return True
+    
+    return False
+
+
+def load_and_merge_configuration(args):
+    """Load configuration file and merge with command-line arguments"""
+    config = None
+    if hasattr(args, 'config') and args.config:
+        rbac_manager_temp = create_rbac_manager()
+        config = rbac_manager_temp.load_config(args.config)
+    
+    # Handle openshift-namespace (alias for namespace) if available
+    if hasattr(args, 'openshift_namespace') and args.openshift_namespace:
+        args.namespace = args.openshift_namespace
+    
+    return config
+
+
+def configure_rbac_manager(args, config):
+    """Configure RBAC Manager with settings from args and config"""
+    # Apply configuration overrides (some commands may not have all flags)
+    skip_tls = getattr(args, 'skip_tls', False)
+    debug = getattr(args, 'debug', False)
+    
+    if config:
+        # Look for skip_tls and debug in the global section of config
+        global_config = config.get('global', {})
+        skip_tls = skip_tls or global_config.get('skip_tls', False)
+        debug = debug or global_config.get('debug', False)
+    
+    return create_rbac_manager(skip_tls=skip_tls, debug=debug)
+
+
+def requires_authentication(command):
+    """Determine if a command requires authentication"""
+    # Commands that need authentication
+    auth_required_commands = {'list-catalogs', 'catalogd', 'generate-config'}
+    return command in auth_required_commands
+
+
+def dispatch_command(args, rbac_manager, config):
+    """Dispatch to the appropriate command handler"""
+    handler = COMMAND_HANDLERS.get(args.command)
+    if handler:
+        handler(args, rbac_manager, config)
+    else:
+        print(f"Unknown command: {args.command}")
+        sys.exit(1)
+
+
+def configure_ssl_warnings(skip_tls: bool = False):
+    """Configure SSL warnings to show user-friendly message once"""
+    if skip_tls:
+        # Log user-friendly message once
+        logger.warning(ErrorMessages.SSLError.VERIFICATION_DISABLED_WARNING)
+
+
 def main():
-    """Main entry point"""
+    """Main entry point with unified execution flow"""
     try:
-        # Handle special case where no arguments are provided
-        if len(sys.argv) == 1:
-            help_manager = HelpManager()
-            help_manager.show_help()
-            return
-        
+        # Step 1: Parse arguments
         parser = create_argument_parser()
         args = parser.parse_args()
         
-        # Handle custom help behavior - show main_help.txt when --help used without subcommand
-        if hasattr(args, 'help') and args.help and not args.command:
-            help_manager = HelpManager()
-            help_manager.show_help()
+        # Step 2: Handle early-exit flags like --help and --examples
+        if handle_early_exit_flags(args):
             return
         
-        # Handle openshift-namespace (alias for namespace) if available
-        if hasattr(args, 'openshift_namespace') and args.openshift_namespace:
-            args.namespace = args.openshift_namespace
-        
-        # Load configuration if provided (only opm command has --config)
-        config = None
-        if hasattr(args, 'config') and args.config:
-            rbac_manager_temp = create_rbac_manager()
-            config = rbac_manager_temp.load_config(args.config)
-        
-        # Check if a command was specified
+        # Step 3: Validate command was specified
         if not args.command:
             print("Error: No command specified. Use --help for usage information.")
             sys.exit(1)
         
-        # Apply configuration overrides (some commands may not have all flags)
-        skip_tls = getattr(args, 'skip_tls', False)
+        # Step 4: Set up logging early (before SSL warnings and API calls)
         debug = getattr(args, 'debug', False)
+        setup_logging(debug)
         
-        if config:
-            # Fix: Look for skip_tls and debug in the global section of config
-            global_config = config.get('global', {})
-            skip_tls = skip_tls or global_config.get('skip_tls', False)
-            debug = debug or global_config.get('debug', False)
+        # Step 5: Configure SSL warnings early (after logging is set up)
+        skip_tls = getattr(args, 'skip_tls', False)
+        configure_ssl_warnings(skip_tls)
         
-        rbac_manager = create_rbac_manager(skip_tls=skip_tls, debug=debug)
+        # Step 6: Load and merge configuration
+        config = load_and_merge_configuration(args)
         
+        # Step 7: Configure RBAC Manager
+        rbac_manager = configure_rbac_manager(args, config)
+        
+        # Step 8: Conditionally configure authentication based on command requirements
+        if requires_authentication(args.command):
+            # Centralized authentication setup for all commands that require it
+            # generate-config uses non-exiting mode to allow graceful fallback
+            exit_on_failure = args.command != 'generate-config'
+            _setup_authentication_for_command(rbac_manager, args, args.command, exit_on_failure)
+        
+        # Step 9: Dispatch to simplified handler that executes core business logic
         try:
-            # Use dispatcher pattern to execute commands
-            handler = COMMAND_HANDLERS.get(args.command)
-            if handler:
-                handler(args, rbac_manager, config)
-            else:
-                print(f"Unknown command: {args.command}")
-                sys.exit(1)
+            dispatch_command(args, rbac_manager, config)
             
         except KeyboardInterrupt:
             print("\nOperation cancelled by user.")

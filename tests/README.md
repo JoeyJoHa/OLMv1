@@ -11,7 +11,7 @@ Tests catalogd functionality including:
 - Authentication and port-forwarding
 - Catalog listing and selection (new `list-catalogs` subcommand)
 - Package, channel, and version queries
-- Config generation with `--generate-config` flag
+- Config generation with `generate-config` subcommand
 - Real cluster data extraction and placeholder fallback
 - Config file output to stdout and files
 - Error handling and edge cases
@@ -30,6 +30,7 @@ Tests OPM functionality including:
 - Bundle image processing and metadata extraction
 - RBAC generation (Helm values and YAML manifests)
 - Config file functionality with `--config` flag
+- Registry authentication with `--registry-token` flag
 - Clean YAML formatting for Helm output
 - Channel placeholder and guidance comments
 - Config validation and error handling
@@ -49,7 +50,7 @@ Tests OPM functionality including:
 
 Tests complete end-to-end workflow including:
 
-- **Complete Workflow:** `catalogd --generate-config` → `opm --config`
+- **Complete Workflow:** `generate-config` → `opm --config`
 - Real cluster authentication and data extraction
 - YAML and Helm workflow validation
 - Config file generation and consumption
@@ -78,6 +79,9 @@ python3 tests/test_catalogd.py
 # Run OPM tests (no authentication required)
 python3 tests/test_opm.py
 
+# Run OPM tests with registry authentication
+python3 tests/test_opm.py --registry-token your-registry-token
+
 # Run complete workflow tests (requires cluster authentication)
 python3 tests/test_workflow.py
 ```
@@ -93,8 +97,10 @@ python3 tests/test_workflow.py
 #### OPM Tests
 
 - **Bundle Images**: Tests use real operator bundle images
+- **Registry Authentication**: Optional `--registry-token` for private registries
 - **Skip TLS**: Tests run with `--skip-tls` by default
 - **Output**: Tests create temporary directories for output validation
+- **Security**: Registry tokens are only passed via command-line flags, never stored in config files
 
 ## Test Coverage
 
@@ -104,7 +110,7 @@ python3 tests/test_workflow.py
 - ✅ Package discovery and filtering
 - ✅ Channel and version queries
 - ✅ Authentication handling
-- ✅ Config template generation (`--generate-config`)
+- ✅ Config template generation (`generate-config` subcommand)
 - ✅ Config generation with real cluster data
 - ✅ Config file output (stdout and file modes)
 - ✅ Error scenarios and edge cases
@@ -118,6 +124,7 @@ python3 tests/test_workflow.py
 - ✅ YAML manifest generation
 - ✅ Helm values generation
 - ✅ Config file functionality (`--config` flag)
+- ✅ Registry authentication (`--registry-token` flag)
 - ✅ Clean YAML formatting
 - ✅ Channel placeholder and guidance
 - ✅ Config validation and error handling
@@ -129,10 +136,11 @@ python3 tests/test_workflow.py
 - ✅ Efficient loop-based test execution
 - ✅ Consistent patterns using existing infrastructure
 - ✅ Maintainable centralized test execution
+- ✅ Security best practices for sensitive data handling
 
 ### Complete Workflow Test Coverage
 
-- ✅ **End-to-end workflow:** `catalogd --generate-config` → `opm --config`
+- ✅ **End-to-end workflow:** `generate-config` → `opm --config`
 - ✅ **Real cluster integration:** Live data extraction and validation
 - ✅ **YAML workflow:** Config generation and YAML manifest creation
 - ✅ **Helm workflow:** Config generation and Helm values creation
@@ -213,6 +221,18 @@ Enable debug logging for detailed output:
 test_suite = OPMTestSuite(debug=True)
 ```
 
+### Registry Authentication
+
+For testing with private container registries:
+
+```bash
+# Command line usage
+python3 tests/test_opm.py --registry-token "your-token"
+
+# Programmatic usage
+test_suite = OPMTestSuite(registry_token="your-token")
+```
+
 ### Manual Testing
 
 Individual test methods can be run manually:
@@ -224,6 +244,11 @@ Individual test methods can be run manually:
 from tests.test_opm import OPMTestSuite
 suite = OPMTestSuite()
 result = suite.test_bundle_processing("test", "bundle-image-url")
+print(result)
+
+# OPM tests with registry authentication
+suite_with_auth = OPMTestSuite(registry_token="your-registry-token")
+result = suite_with_auth.run_all_tests()
 print(result)
 
 # Workflow tests (requires authentication)

@@ -14,7 +14,7 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 
 from ..core.exceptions import CatalogdError
-from ..core.utils import handle_ssl_error, handle_api_error
+from ..core.utils import handle_api_error
 from ..core.constants import KubernetesConstants
 from ..core.utils import is_output_piped
 from .client import CatalogdClient

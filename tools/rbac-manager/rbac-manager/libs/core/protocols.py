@@ -5,8 +5,12 @@ Defines protocols (interfaces) for dependency injection and type hints.
 """
 
 from typing import Protocol, Dict, Any, Optional, Tuple
-from kubernetes import client
 from .constants import KubernetesConstants
+
+try:
+    from kubernetes import client
+except ImportError:
+    raise ImportError("kubernetes library is required. Install with: pip install kubernetes")
 
 
 class AuthProvider(Protocol):

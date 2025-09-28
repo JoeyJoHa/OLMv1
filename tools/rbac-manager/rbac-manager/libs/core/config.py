@@ -5,9 +5,20 @@ Handles loading and managing configuration files for the RBAC Manager tool.
 """
 
 import logging
-import yaml
 from pathlib import Path
 from typing import Dict, Any
+
+try:
+    import yaml
+except ImportError:
+    raise ImportError("PyYAML is required. Install with: pip install PyYAML")
+
+try:
+    from ruamel.yaml import YAML
+    from ruamel.yaml.comments import CommentedMap
+    HAS_RUAMEL_YAML = True
+except ImportError:
+    HAS_RUAMEL_YAML = False
 
 from .exceptions import ConfigurationError
 from .constants import KubernetesConstants, FileConstants
@@ -251,37 +262,85 @@ class ConfigManager:
     
     def _dict_to_yaml_with_comments(self, data: Dict[str, Any], indent: int = 0) -> str:
         """
-        Convert dictionary to YAML string preserving comments
+        Convert dictionary to YAML string preserving comments using ruamel.yaml
         
         Args:
             data: Dictionary to convert
-            indent: Current indentation level
+            indent: Current indentation level (unused with ruamel.yaml)
+            
+        Returns:
+            str: YAML string with comments preserved
+        """
+        if HAS_RUAMEL_YAML:
+            return self._ruamel_yaml_with_comments(data)
+        else:
+            # Simple fallback using standard yaml library if ruamel.yaml is not available
+            # Filter out comment keys for basic YAML generation
+            clean_data = {k: v for k, v in data.items() if not k.startswith("#") and k != ""}
+            return yaml.dump(clean_data, default_flow_style=False, sort_keys=False)
+    
+    def _ruamel_yaml_with_comments(self, data: Dict[str, Any]) -> str:
+        """
+        Use ruamel.yaml to generate YAML with comments preserved
+        
+        Args:
+            data: Dictionary to convert
             
         Returns:
             str: YAML string with comments
         """
-        yaml_lines = []
-        indent_str = "  " * indent
+        yaml_processor = YAML()
+        yaml_processor.preserve_quotes = True
+        yaml_processor.width = 4096  # Prevent line wrapping
+        yaml_processor.indent(mapping=2, sequence=4, offset=2)
+        
+        # Convert the data to CommentedMap for comment support
+        commented_data = CommentedMap()
         
         for key, value in data.items():
-            if key.startswith("#") or key == "":
-                # Handle comments and empty lines
-                if key.startswith("#"):
-                    yaml_lines.append(f"{indent_str}{key}")
-                else:
-                    yaml_lines.append("")
+            if key.startswith("#"):
+                # Handle comment keys by adding them as comments to the previous item
+                continue
+            elif key == "":
+                # Handle empty lines - skip for now as ruamel.yaml handles spacing
+                continue
             elif isinstance(value, dict):
-                yaml_lines.append(f"{indent_str}{key}:")
-                yaml_lines.append(self._dict_to_yaml_with_comments(value, indent + 1))
-            elif isinstance(value, str):
-                if value:
-                    yaml_lines.append(f'{indent_str}{key}: "{value}"')
-                else:
-                    yaml_lines.append(f'{indent_str}{key}: ""')
+                commented_data[key] = CommentedMap(value)
             else:
-                yaml_lines.append(f"{indent_str}{key}: {value}")
+                commented_data[key] = value
         
-        return "\n".join(yaml_lines)
+        # Add comments for special keys
+        self._add_yaml_comments(commented_data, data)
+        
+        # Generate YAML string
+        from io import StringIO
+        stream = StringIO()
+        yaml_processor.dump(commented_data, stream)
+        return stream.getvalue()
+    
+    def _add_yaml_comments(self, commented_data: CommentedMap, original_data: Dict[str, Any]) -> None:
+        """
+        Add comments to CommentedMap based on comment keys in original data
+        
+        Args:
+            commented_data: CommentedMap to add comments to
+            original_data: Original data with comment keys
+        """
+        comment_keys = [k for k in original_data.keys() if k.startswith("#")]
+        
+        # Add header comments
+        if comment_keys:
+            # Combine all comment lines into a single start comment
+            comment_lines = []
+            for comment_key in comment_keys[:2]:  # First two comments as header
+                comment_text = comment_key[1:].strip()  # Remove # and whitespace
+                comment_lines.append(comment_text)
+            
+            if comment_lines:
+                # Set the combined comment as start comment
+                combined_comment = '\n'.join(comment_lines)
+                commented_data.yaml_set_start_comment(combined_comment)
+    
     
     def _create_config_template_structure(self, header_comment: str = None, 
                                         operator_image: str = None, operator_namespace: str = None,
@@ -375,7 +434,7 @@ class ConfigManager:
     
     def _generate_config_filename(self, package_name: str = None) -> str:
         """
-        Generate configuration filename based on operator name (DRY helper).
+        Generate configuration filename based on operator name.
         
         Args:
             package_name: Name of the operator package
@@ -422,7 +481,7 @@ class ConfigManager:
             namespace=namespace
         )
         
-        # Generate filename based on package name (DRY approach)
+        # Generate filename based on package name
         # Try both 'packageName' (from config file) and 'package' (from command args)
         package_name = extracted_data.get('packageName') or extracted_data.get('package')
         config_filename = self._generate_config_filename(package_name)

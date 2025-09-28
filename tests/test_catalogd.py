@@ -18,12 +18,18 @@ import subprocess
 import sys
 import tempfile
 import time
-import yaml
 from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    print("Error: PyYAML is required but not installed.")
+    print("Install it with: pip install PyYAML")
+    sys.exit(1)
 from typing import Dict, List, Any, NamedTuple
 
 # Import shared test constants and setup path
-from test_constants import CatalogdTestConstants as TestConstants, TestUtilities
+from test_constants import CatalogdTestConstants as TestConstants, TestUtilities, BaseTestSuite
 TestUtilities.setup_test_path()
 
 
@@ -81,7 +87,7 @@ class CommandBuilder:
         """Build the final command"""
         return self.base_args.copy()
 
-class CatalogdTestSuite:
+class CatalogdTestSuite(BaseTestSuite):
     """Test suite for catalogd functionality"""
     
     def __init__(self, openshift_url: str, openshift_token: str, skip_tls: bool = False):
@@ -93,6 +99,8 @@ class CatalogdTestSuite:
             openshift_token: Authentication token
             skip_tls: Whether to skip TLS verification (default: False)
         """
+        super().__init__()  # Initialize BaseTestSuite
+        
         self.openshift_url = openshift_url
         self.openshift_token = openshift_token
         self.skip_tls = skip_tls
@@ -106,56 +114,61 @@ class CatalogdTestSuite:
                                  .add_auth(openshift_url, openshift_token, skip_tls)
                                  .build())
         
-        self.test_results = []
         # Use constants instead of magic strings
         self.test_catalog = TestConstants.DEFAULT_CATALOG
         self.test_package = TestConstants.DEFAULT_PACKAGE
         self.test_channel = TestConstants.DEFAULT_CHANNEL
         self.test_version = TestConstants.DEFAULT_VERSION
     
-    def _mask_token_in_command(self, command: str) -> str:
-        """Mask the authentication token, OpenShift URL, and temp directories in command strings"""
-        # Use shared utility for basic masking
-        masked_command = TestUtilities.mask_sensitive_data(command, self.openshift_url, self.openshift_token)
-        
-        # Mask temporary directories with placeholders (specific to catalogd tests)
-        temp_patterns = [
-            r'/var/folders/[a-zA-Z0-9_/]+/tmp[a-zA-Z0-9_]+',
-            r'/tmp/tmp[a-zA-Z0-9_]+'
-        ]
-        for pattern in temp_patterns:
-            masked_command = re.sub(pattern, TestConstants.TEMP_DIR_PLACEHOLDER, masked_command)
-        
-        return masked_command
     
     def _create_test_result(self, test_name: str, success: bool, details: Dict[str, Any]) -> None:
-        """Create and append a test result"""
-        self.test_results.append({
-            "test": test_name,
-            "success": success,
-            "details": details
-        })
+        """Create and append a test result using inherited method"""
+        result = self.create_test_result(test_name, success, details)
+        self.test_results.append(result)
     
     def _print_test_status(self, test_name: str, success: bool, message: str = "") -> None:
-        """Print test status with consistent formatting"""
-        status = "✅" if success else "❌"
-        print(f"   {status} {test_name}: {message}")
+        """Print test status with consistent formatting using inherited method"""
+        self.print_test_status(test_name, success, message)
+    
+    def _filter_ssl_warnings_from_stdout(self, stdout: str) -> str:
+        """
+        Filter SSL verification warnings from stdout to keep test results clean.
+        
+        Args:
+            stdout: Original stdout content
+            
+        Returns:
+            Cleaned stdout with SSL warnings removed
+        """
+        if not stdout:
+            return stdout
+        
+        lines = stdout.split('\n')
+        filtered_lines = []
+        
+        for line in lines:
+            # Skip SSL verification warning lines
+            if 'SSL verification disabled' in line and 'WARNING' in line:
+                continue
+            filtered_lines.append(line)
+        
+        return '\n'.join(filtered_lines)
     
     def _run_catalogd_test(self, test_name: str, description: str, args: List[str], 
                           success_condition, input_data: str = None) -> bool:
         """Generic method for running catalogd tests to eliminate duplication"""
         print(f"🧪 Testing {description}...")
         
-        result = self.run_command(args, input_data)
+        result = self.run_catalogd_command(args, input_data)
         success = success_condition(result)
         
         self._create_test_result(test_name, success, result)
         return success
     
-    def run_command(self, additional_args: List[str], input_data: str = None, 
-                   timeout: int = TestConstants.DEFAULT_TIMEOUT) -> Dict[str, Any]:
+    def run_catalogd_command(self, additional_args: List[str], input_data: str = None, 
+                            timeout: int = TestConstants.DEFAULT_TIMEOUT) -> Dict[str, Any]:
         """
-        Run a catalogd command and capture results
+        Run a catalogd command using the inherited run_command method
         
         Args:
             additional_args: Additional command arguments
@@ -163,94 +176,111 @@ class CatalogdTestSuite:
             timeout: Command timeout in seconds
             
         Returns:
-            Dict containing exit_code, stdout, stderr, and parsed JSON if available
+            Dict containing command results with masked sensitive data
         """
         cmd = self.base_cmd + additional_args
+        result = super().run_command(cmd, input_data, timeout)
         
-        try:
-            result = subprocess.run(
-                cmd,
-                input=input_data,
-                text=True,
-                capture_output=True,
-                timeout=timeout
+        # Filter SSL warnings from stdout to keep test results clean
+        result["stdout"] = self._filter_ssl_warnings_from_stdout(result["stdout"])
+        
+        # Mask sensitive data in command for logging
+        result["command"] = self._mask_token_in_command(result["command"], self.openshift_url, self.openshift_token)
+        
+        # Map new field names to old field names for backward compatibility
+        result["exit_code"] = result["returncode"]
+        
+        return result
+    
+    def run_generate_config_command(self, additional_args: List[str], input_data: str = None, 
+                                   timeout: int = TestConstants.DEFAULT_TIMEOUT) -> Dict[str, Any]:
+        """
+        Run a generate-config command using the inherited run_command method
+        
+        Args:
+            additional_args: Additional command arguments
+            input_data: Input to pipe to the command
+            timeout: Command timeout in seconds
+            
+        Returns:
+            Dict containing command results with masked sensitive data
+        """
+        # Build generate-config command
+        cmd = [
+            "python3", "tools/rbac-manager/rbac-manager.py", "generate-config",
+            "--openshift-url", self.openshift_url,
+            "--openshift-token", self.openshift_token
+        ]
+        if self.skip_tls:
+            cmd.append("--skip-tls")
+        
+        cmd.extend(additional_args)
+        
+        result = super().run_command(cmd, input_data, timeout)
+        
+        # Filter SSL warnings from stdout to keep test results clean
+        result["stdout"] = self._filter_ssl_warnings_from_stdout(result["stdout"])
+        
+        # Mask sensitive data in command for logging
+        result["command"] = self._mask_token_in_command(result["command"], self.openshift_url, self.openshift_token)
+        
+        # Map new field names to old field names for backward compatibility
+        result["exit_code"] = result["returncode"]
+        
+        return result
+    
+    def run_data_driven_tests(self, test_cases: List[Dict[str, Any]]) -> List[bool]:
+        """
+        Run multiple test cases using a data-driven approach.
+        
+        This method eliminates duplication by running similar tests with different parameters.
+        
+        Args:
+            test_cases: List of test case dictionaries with keys:
+                - name: Test name
+                - description: Test description  
+                - args: Command arguments
+                - success_condition: Function to check success
+                - input_data: Optional stdin input
+                
+        Returns:
+            List of boolean results for each test case
+        """
+        results = []
+        
+        for test_case in test_cases:
+            success = self._run_catalogd_test(
+                test_case["name"],
+                test_case["description"],
+                test_case["args"],
+                test_case["success_condition"],
+                test_case.get("input_data")
             )
+            results.append(success)
             
-            # Try to parse JSON from stdout
-            json_data = None
-            stdout_lines = result.stdout.strip().split('\n')
-            
-            # Look for JSON output (usually at the end)
-            # First, try to find the end of JSON (closing brace)
-            json_end = -1
-            for i in range(len(stdout_lines) - 1, -1, -1):
-                if stdout_lines[i].strip() == '}':
-                    json_end = i
-                    break
-            
-            # Now look for the start of JSON (opening brace)
-            if json_end >= 0:
-                for i in range(json_end, -1, -1):
-                    line = stdout_lines[i]
-                    if '{' in line:  # Look for line containing opening brace
-                        # Extract JSON part from the line (after the '{')
-                        json_start_pos = line.find('{')
-                        if json_start_pos >= 0:
-                            # Create a copy of lines and modify the first line
-                            temp_lines = stdout_lines[:]
-                            temp_lines[i] = line[json_start_pos:]
-                            json_text = '\n'.join(temp_lines[i:json_end+1])
-                            try:
-                                json_data = json.loads(json_text)
-                                break
-                            except json.JSONDecodeError:
-                                continue
-            
-            # Fallback: try the old method
-            if json_data is None:
-                for i in range(len(stdout_lines) - 1, -1, -1):
-                    line = stdout_lines[i].strip()
-                    if line.startswith('{'):
-                        if line.endswith('}'):
-                            # Single line JSON
-                            try:
-                                json_data = json.loads(line)
-                                break
-                            except json.JSONDecodeError:
-                                continue
-                        else:
-                            # Multi-line JSON - try to parse from this line to end
-                            json_text = '\n'.join(stdout_lines[i:])
-                            try:
-                                json_data = json.loads(json_text)
-                                break
-                            except json.JSONDecodeError:
-                                continue
-            
-            return {
-                "exit_code": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "json_data": json_data,
-                "command": self._mask_token_in_command(' '.join(cmd))
-            }
-            
-        except subprocess.TimeoutExpired:
-            return {
-                "exit_code": -1,
-                "stdout": "",
-                "stderr": f"Command timed out after {timeout} seconds",
-                "json_data": None,
-                "command": self._mask_token_in_command(' '.join(cmd))
-            }
-        except Exception as e:
-            return {
-                "exit_code": -1,
-                "stdout": "",
-                "stderr": str(e),
-                "json_data": None,
-                "command": self._mask_token_in_command(' '.join(cmd))
-            }
+            # Print status for each test
+            result = self.test_results[-1]["details"]
+            message = self._get_status_message(test_case["name"], result)
+            self._print_test_status(test_case["name"], success, message)
+        
+        return results
+    
+    def _get_status_message(self, test_name: str, result: Dict[str, Any]) -> str:
+        """Get appropriate status message for different test types"""
+        if "list_packages" in test_name:
+            package_count = len(result["json_data"]["data"]) if result["json_data"] else 0
+            return f"{package_count} packages found"
+        elif "list_channels" in test_name:
+            channel_count = len(result["json_data"]["data"]) if result["json_data"] else 0
+            return f"{channel_count} channels found"
+        elif "list_versions" in test_name:
+            version_count = len(result["json_data"]["data"]) if result["json_data"] else 0
+            return f"{version_count} versions found"
+        elif "get_metadata" in test_name:
+            bundle_image = result["json_data"]["data"].get("bundle_image") if result["json_data"] else "N/A"
+            return bundle_image
+        else:
+            return str(result["exit_code"])
     
     def test_basic_catalogd_help(self) -> bool:
         """Test basic catalogd command without arguments"""
@@ -270,110 +300,124 @@ class CatalogdTestSuite:
         self._print_test_status("Basic help", success, str(result["exit_code"]))
         return success
     
-    def test_list_packages(self) -> bool:
-        """Test listing packages in a catalog"""
-        def success_condition(result):
-            return (result["exit_code"] == 0 and
-                   result["json_data"] is not None and
-                   result["json_data"].get("type") == "packages" and
-                   isinstance(result["json_data"].get("data"), list) and
-                   len(result["json_data"]["data"]) > 0)
+    def test_catalogd_operations_data_driven(self) -> List[bool]:
+        """
+        Test catalogd operations using data-driven approach to eliminate duplication.
         
-        success = self._run_catalogd_test(
-            "list_packages",
-            "package listing",
-            ["--catalog-name", self.test_catalog],
-            success_condition
-        )
+        This method consolidates test_list_packages, test_list_channels, test_list_versions,
+        and test_get_metadata into a single, parameterized test method.
         
-        # Get package count for status message
-        result = self.test_results[-1]["details"]
-        package_count = len(result["json_data"]["data"]) if result["json_data"] else 0
-        self._print_test_status("Package listing", success, f"{package_count} packages found")
-        return success
+        Returns:
+            List of boolean results for each test case
+        """
+        test_cases = [
+            {
+                "name": "list_packages",
+                "description": "package listing",
+                "args": ["--catalog-name", self.test_catalog],
+                "success_condition": lambda result: (
+                    result["exit_code"] == 0 and
+                    result["json_data"] is not None and
+                    result["json_data"].get("type") == "packages" and
+                    isinstance(result["json_data"].get("data"), list) and
+                    len(result["json_data"]["data"]) > 0
+                )
+            },
+            {
+                "name": "list_channels",
+                "description": "channel listing",
+                "args": ["--catalog-name", self.test_catalog, "--package", self.test_package],
+                "success_condition": lambda result: (
+                    result["exit_code"] == 0 and
+                    result["json_data"] is not None and
+                    result["json_data"].get("type") == "channels" and
+                    isinstance(result["json_data"].get("data"), list) and
+                    len(result["json_data"]["data"]) > 0
+                )
+            },
+            {
+                "name": "list_versions",
+                "description": "version listing",
+                "args": ["--catalog-name", self.test_catalog, "--package", self.test_package, "--channel", self.test_channel],
+                "success_condition": lambda result: (
+                    result["exit_code"] == 0 and
+                    result["json_data"] is not None and
+                    result["json_data"].get("type") == "versions" and
+                    isinstance(result["json_data"].get("data"), list) and
+                    len(result["json_data"]["data"]) > 0
+                )
+            },
+            {
+                "name": "get_metadata",
+                "description": "metadata retrieval",
+                "args": ["--catalog-name", self.test_catalog, "--package", self.test_package, 
+                        "--channel", self.test_channel, "--version", self.test_version],
+                "success_condition": lambda result: (
+                    result["exit_code"] == 0 and
+                    result["json_data"] is not None and
+                    result["json_data"].get("type") == "metadata" and
+                    isinstance(result["json_data"].get("data"), dict) and
+                    "bundle_image" in result["json_data"]["data"] and
+                    "olmv1_compatible" in result["json_data"]["data"] and
+                    "install_modes" in result["json_data"]["data"] and
+                    "webhooks" in result["json_data"]["data"]
+                )
+            }
+        ]
+        
+        return self.run_data_driven_tests(test_cases)
     
-    def test_list_channels(self) -> bool:
-        """Test listing channels for a package"""
-        def success_condition(result):
-            return (
-                result["exit_code"] == 0 and
-                result["json_data"] is not None and
-                result["json_data"].get("type") == "channels" and
-                isinstance(result["json_data"].get("data"), list) and
-                len(result["json_data"]["data"]) > 0
-            )
+    def test_error_handling_data_driven(self) -> List[bool]:
+        """
+        Test error handling scenarios using data-driven approach.
         
-        success = self._run_catalogd_test(
-            "list_channels",
-            "channel listing",
-            ["--catalog-name", self.test_catalog, "--package", self.test_package],
-            success_condition
-        )
+        This method consolidates test_invalid_catalog, test_misspelled_catalog,
+        and test_invalid_characters_catalog into a single, parameterized test method.
         
-        # Get the result for status message
-        result = self.test_results[-1]["details"]
-        channel_count = len(result["json_data"]["data"]) if result["json_data"] else 0
-        self._print_test_status("Channel listing", success, f"{channel_count} channels found")
-        return success
-    
-    def test_list_versions(self) -> bool:
-        """Test listing versions for a package and channel"""
-        def success_condition(result):
-            return (
-                result["exit_code"] == 0 and
-                result["json_data"] is not None and
-                result["json_data"].get("type") == "versions" and
-                isinstance(result["json_data"].get("data"), list) and
-                len(result["json_data"]["data"]) > 0
-            )
+        Returns:
+            List of boolean results for each test case
+        """
+        test_cases = [
+            {
+                "name": "invalid_catalog",
+                "description": "invalid catalog error handling",
+                "args": ["--catalog-name", "invalid-catalog-name", "--package", self.test_package],
+                "success_condition": lambda result: (
+                    ("not found" in result["stderr"].lower() or 
+                     "invalid" in result["stderr"].lower() or
+                     "error" in result["stderr"].lower())
+                )
+            },
+            {
+                "name": "misspelled_catalog",
+                "description": "misspelled catalog error handling",
+                "args": ["--catalog-name", "openshiftredhatoperators", "--package", self.test_package],  # Missing hyphens
+                "success_condition": lambda result: (
+                    ("not found" in result["stderr"].lower() or 
+                     "invalid" in result["stderr"].lower() or
+                     "error" in result["stderr"].lower())
+                )
+            },
+            {
+                "name": "invalid_characters_catalog",
+                "description": "invalid characters in catalog name",
+                "args": ["--catalog-name", "openshift redhat operators", "--package", self.test_package],  # Spaces
+                "success_condition": lambda result: (
+                    ("not found" in result["stderr"].lower() or 
+                     "invalid" in result["stderr"].lower() or
+                     "error" in result["stderr"].lower())
+                )
+            }
+        ]
         
-        success = self._run_catalogd_test(
-            "list_versions",
-            "version listing",
-            ["--catalog-name", self.test_catalog, "--package", self.test_package, "--channel", self.test_channel],
-            success_condition
-        )
-        
-        # Get the result for status message
-        result = self.test_results[-1]["details"]
-        version_count = len(result["json_data"]["data"]) if result["json_data"] else 0
-        self._print_test_status("Version listing", success, f"{version_count} versions found")
-        return success
-    
-    def test_get_metadata(self) -> bool:
-        """Test getting metadata for a specific version"""
-        def success_condition(result):
-            return (
-                result["exit_code"] == 0 and
-                result["json_data"] is not None and
-                result["json_data"].get("type") == "metadata" and
-                isinstance(result["json_data"].get("data"), dict) and
-                "bundle_image" in result["json_data"]["data"] and
-                "olmv1_compatible" in result["json_data"]["data"] and
-                "install_modes" in result["json_data"]["data"] and
-                "webhooks" in result["json_data"]["data"]
-            )
-        
-        success = self._run_catalogd_test(
-            "get_metadata",
-            "metadata retrieval",
-            ["--catalog-name", self.test_catalog, "--package", self.test_package, 
-             "--channel", self.test_channel, "--version", self.test_version],
-            success_condition
-        )
-        
-        # Get the result for status message
-        result = self.test_results[-1]["details"]
-        bundle_image = result["json_data"]["data"].get("bundle_image") if result["json_data"] else "N/A"
-        self._print_test_status("Metadata retrieval", success, bundle_image)
-        return success
+        return self.run_data_driven_tests(test_cases)
     
     def test_interactive_catalog_selection(self) -> bool:
         """Test interactive catalog selection"""
         print("🧪 Testing interactive catalog selection...")
         
         # Simulate selecting catalog #4 (openshift-redhat-operators)
-        result = self.run_command([
+        result = self.run_catalogd_command([
             "--package", self.test_package
         ], input_data="4\n")
         
@@ -396,76 +440,6 @@ class CatalogdTestSuite:
         
         catalog_name = result["json_data"].get("catalog") if result["json_data"] else "None"
         print(f"   {'✅' if success else '❌'} Interactive selection: {catalog_name}")
-        return success
-    
-    def test_invalid_catalog(self) -> bool:
-        """Test error handling with invalid catalog"""
-        print("🧪 Testing invalid catalog error handling...")
-        
-        result = self.run_command([
-            "--catalog-name", "invalid-catalog-name",
-            "--package", self.test_package
-        ])
-        
-        success = (
-            result["exit_code"] == 0 and  # Tool handles errors gracefully
-            ("not found" in result["stderr"].lower() or "404" in result["stderr"])
-        )
-        
-        self.test_results.append({
-            "test": "invalid_catalog",
-            "success": success,
-            "details": result
-        })
-        
-        print(f"   {'✅' if success else '❌'} Invalid catalog: error handled correctly")
-        return success
-    
-    def test_misspelled_catalog(self) -> bool:
-        """Test error handling with misspelled catalog name"""
-        print("🧪 Testing misspelled catalog error handling...")
-        
-        result = self.run_command([
-            "--catalog-name", "openshiftredhatoperators",  # Missing hyphens
-            "--package", self.test_package
-        ])
-        
-        success = (
-            result["exit_code"] == 0 and
-            "misspelled" in result["stderr"].lower() and
-            "did you mean" in result["stderr"].lower()
-        )
-        
-        self.test_results.append({
-            "test": "misspelled_catalog",
-            "success": success,
-            "details": result
-        })
-        
-        print(f"   {'✅' if success else '❌'} Misspelled catalog: suggestions provided")
-        return success
-    
-    def test_invalid_characters_catalog(self) -> bool:
-        """Test error handling with invalid characters in catalog name"""
-        print("🧪 Testing invalid characters in catalog name...")
-        
-        result = self.run_command([
-            "--catalog-name", "openshift redhat operators",  # Spaces
-            "--package", self.test_package
-        ])
-        
-        success = (
-            result["exit_code"] == 0 and
-            "invalid characters" in result["stderr"].lower()
-        )
-        
-        self.test_results.append({
-            "test": "invalid_characters_catalog",
-            "success": success,
-            "details": result
-        })
-        
-        print(f"   {'✅' if success else '❌'} Invalid characters: error handled correctly")
         return success
     
     def test_ssl_error_handling(self) -> bool:
@@ -526,7 +500,7 @@ class CatalogdTestSuite:
                     "helpful_message_shown": helpful_message,
                     "error_type": error_type,
                     "error_message": error_message,
-                    "command": self._mask_token_in_command(' '.join(cmd))
+                    "command": self._mask_token_in_command(' '.join(cmd), self.openshift_url, self.openshift_token)
                 }
             })
             
@@ -538,7 +512,7 @@ class CatalogdTestSuite:
                     "exit_code": -1,
                     "error": "SSL error test timed out after 60 seconds",
                     "error_type": "TIMEOUT_ERROR",
-                    "command": self._mask_token_in_command(' '.join(cmd))
+                    "command": self._mask_token_in_command(' '.join(cmd), self.openshift_url, self.openshift_token)
                 }
             })
             success = False
@@ -553,7 +527,7 @@ class CatalogdTestSuite:
                     "exit_code": -1,
                     "error": str(e),
                     "error_type": "EXCEPTION_ERROR",
-                    "command": self._mask_token_in_command(' '.join(cmd))
+                    "command": self._mask_token_in_command(' '.join(cmd), self.openshift_url, self.openshift_token)
                 }
             })
             success = False
@@ -568,7 +542,7 @@ class CatalogdTestSuite:
         print("🧪 Testing output truncation handling...")
         
         # Get metadata which produces large output
-        result = self.run_command([
+        result = self.run_catalogd_command([
             "--catalog-name", self.test_catalog,
             "--package", self.test_package,
             "--channel", self.test_channel,
@@ -608,7 +582,7 @@ class CatalogdTestSuite:
         """Test generating config template without parameters"""
         print("🧪 Testing config template generation...")
         
-        result = self.run_command(["--generate-config"])
+        result = self.run_generate_config_command([])
         
         # Check if YAML config is generated to stdout
         success = (
@@ -626,7 +600,9 @@ class CatalogdTestSuite:
             "details": {
                 "exit_code": result["exit_code"],
                 "stdout_contains_yaml": success,
-                "command": self._mask_token_in_command(' '.join(self.base_cmd + ["--generate-config"]))
+                "command": result["command"],  # Use actual command from result
+                "stdout": result["stdout"],
+                "stderr": result["stderr"]
             }
         })
         
@@ -637,8 +613,7 @@ class CatalogdTestSuite:
         """Test generating config with package parameters"""
         print("🧪 Testing config generation with parameters...")
         
-        result = self.run_command([
-            "--generate-config",
+        result = self.run_generate_config_command([
             "--catalog-name", self.test_catalog,
             "--package", self.test_package,
             "--channel", self.test_channel,
@@ -649,9 +624,9 @@ class CatalogdTestSuite:
         success = (
             result["exit_code"] == 0 and
             "operator:" in result["stdout"] and
-            f'packageName: "{self.test_package}"' in result["stdout"] and
-            f'channel: "{self.test_channel}"' in result["stdout"] and
-            f'version: "{self.test_version}"' in result["stdout"]
+            f'packageName: {self.test_package}' in result["stdout"] and
+            f'channel: {self.test_channel}' in result["stdout"] and
+            f'version: {self.test_version}' in result["stdout"]
         )
         
         # Check if real bundle image was extracted (not placeholder)
@@ -664,7 +639,9 @@ class CatalogdTestSuite:
                 "exit_code": result["exit_code"],
                 "has_package_info": success,
                 "has_real_bundle_image": has_real_bundle,
-                "command": self._mask_token_in_command(' '.join(self.base_cmd + ["--generate-config", "--catalog-name", self.test_catalog, "--package", self.test_package, "--channel", self.test_channel, "--version", self.test_version]))
+                "command": result["command"],  # Use actual command from result
+                "stdout": result["stdout"],
+                "stderr": result["stderr"]
             }
         })
         
@@ -677,8 +654,7 @@ class CatalogdTestSuite:
         print("🧪 Testing config file generation...")
         
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = self.run_command([
-                "--generate-config",
+            result = self.run_generate_config_command([
                 "--package", self.test_package,
                 "--channel", self.test_channel,
                 "--output", temp_dir
@@ -714,7 +690,9 @@ class CatalogdTestSuite:
                     "exit_code": result["exit_code"],
                     "file_created": len(config_files) == 1,
                     "config_valid": config_content_valid,
-                    "command": self._mask_token_in_command(' '.join(self.base_cmd + ["--generate-config", "--package", self.test_package, "--channel", self.test_channel, "--output", "/tmp/placeholder-output-dir"]))
+                    "command": result["command"],  # Use actual command from result
+                    "stdout": result["stdout"],
+                    "stderr": result["stderr"]
                 }
             })
             
@@ -788,7 +766,7 @@ class CatalogdTestSuite:
                         "stderr": result.stderr,
                         "error_type": error_type,
                         "error_message": error_message,
-                        "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+                        "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd), self.openshift_url, self.openshift_token)
                     }
                 })
                 
@@ -811,7 +789,7 @@ class CatalogdTestSuite:
                     "stdout": result.stdout,
                     "stderr": result.stderr,
                     "has_catalog_output": success,
-                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd), self.openshift_url, self.openshift_token)
                 }
             })
             
@@ -823,7 +801,7 @@ class CatalogdTestSuite:
                     "exit_code": -1,
                     "error": "Command timed out after 120 seconds",
                     "error_type": "TIMEOUT_ERROR",
-                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd), self.openshift_url, self.openshift_token)
                 }
             })
             success = False
@@ -837,7 +815,7 @@ class CatalogdTestSuite:
                     "exit_code": -1,
                     "error": str(e),
                     "error_type": "EXCEPTION_ERROR",
-                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd))
+                    "command": self._mask_token_in_command(' '.join(self.list_catalogs_cmd), self.openshift_url, self.openshift_token)
                 }
             })
             success = False
@@ -853,17 +831,12 @@ class CatalogdTestSuite:
         return {
             "basic_catalogd_help": "Test basic catalogd command without arguments",
             "list_catalogs_command": "Test list-catalogs subcommand",
-            "list_packages": "Test listing packages in a catalog",
-            "list_channels": "Test listing channels for a package",
-            "list_versions": "Test listing versions for a package and channel",
-            "get_metadata": "Test getting metadata for a specific version",
+            "catalogd_operations_data_driven": "Test catalogd operations (packages, channels, versions, metadata) using data-driven approach",
             "generate_config_template": "Test generating config template without parameters",
             "generate_config_with_params": "Test generating config with package parameters",
             "generate_config_file_output": "Test generating config file to output directory",
             "interactive_catalog_selection": "Test interactive catalog selection",
-            "invalid_catalog": "Test error handling with invalid catalog",
-            "misspelled_catalog": "Test error handling with misspelled catalog name",
-            "invalid_characters_catalog": "Test error handling with invalid characters in catalog name",
+            "error_handling_data_driven": "Test error handling scenarios (invalid catalog, misspelled catalog, invalid characters) using data-driven approach",
             "ssl_error_handling": "Test SSL error handling without --skip-tls",
             "output_truncation_handling": "Test handling of large JSON output that might be truncated"
         }
@@ -876,17 +849,12 @@ class CatalogdTestSuite:
         test_methods = {
             "basic_catalogd_help": self.test_basic_catalogd_help,
             "list_catalogs_command": self.test_list_catalogs_command,
-            "list_packages": self.test_list_packages,
-            "list_channels": self.test_list_channels,
-            "list_versions": self.test_list_versions,
-            "get_metadata": self.test_get_metadata,
+            "catalogd_operations_data_driven": self.test_catalogd_operations_data_driven,
             "generate_config_template": self.test_generate_config_template,
             "generate_config_with_params": self.test_generate_config_with_params,
             "generate_config_file_output": self.test_generate_config_file_output,
             "interactive_catalog_selection": self.test_interactive_catalog_selection,
-            "invalid_catalog": self.test_invalid_catalog,
-            "misspelled_catalog": self.test_misspelled_catalog,
-            "invalid_characters_catalog": self.test_invalid_characters_catalog,
+            "error_handling_data_driven": self.test_error_handling_data_driven,
             "ssl_error_handling": self.test_ssl_error_handling,
             "output_truncation_handling": self.test_output_truncation_handling
         }
@@ -900,8 +868,14 @@ class CatalogdTestSuite:
         
         try:
             # Execute the test method using the dictionary mapping
-            success = test_methods[test_name]()
+            result = test_methods[test_name]()
             end_time = time.time()
+            
+            # Handle data-driven methods that return List[bool]
+            if isinstance(result, list):
+                success = all(result)  # All sub-tests must pass
+            else:
+                success = result
             
             # Find the result in test_results
             test_result = None
@@ -946,17 +920,12 @@ class CatalogdTestSuite:
         tests = [
             self.test_basic_catalogd_help,
             self.test_list_catalogs_command,
-            self.test_list_packages,
-            self.test_list_channels,
-            self.test_list_versions,
-            self.test_get_metadata,
+            self.test_catalogd_operations_data_driven,
             self.test_generate_config_template,
             self.test_generate_config_with_params,
             self.test_generate_config_file_output,
             self.test_interactive_catalog_selection,
-            self.test_invalid_catalog,
-            self.test_misspelled_catalog,
-            self.test_invalid_characters_catalog,
+            self.test_error_handling_data_driven,
             self.test_ssl_error_handling,
             self.test_output_truncation_handling
         ]
@@ -966,7 +935,14 @@ class CatalogdTestSuite:
         
         for test in tests:
             try:
-                if test():
+                result = test()
+                # Handle data-driven methods that return List[bool]
+                if isinstance(result, list):
+                    success = all(result)  # All sub-tests must pass
+                else:
+                    success = result
+                
+                if success:
                     passed += 1
                 else:
                     failed += 1

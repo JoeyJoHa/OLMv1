@@ -262,6 +262,12 @@ python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle
 python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --output ./rbac-files
 ```
 
+**With registry authentication:**
+
+```bash
+python3 rbac-manager.py opm --image registry.redhat.io/quay/quay-operator-bundle@sha256:c431ad9dfd69c049e6d9583928630c06b8612879eeed57738fa7be206061fee2 --registry-token your-registry-token
+```
+
 ### Configuration-Based Workflow (Recommended)
 
 ```bash
